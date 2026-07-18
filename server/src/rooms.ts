@@ -1,3 +1,5 @@
+import { randomInt } from "node:crypto";
+
 export interface Peer {
   send(data: string): void;
 }
@@ -21,7 +23,7 @@ export class RoomManager {
   private generateCode(): string {
     let code = "";
     for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
-      code += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
+      code += ROOM_CODE_ALPHABET[randomInt(ROOM_CODE_ALPHABET.length)];
     }
     return code;
   }

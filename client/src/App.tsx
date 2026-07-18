@@ -29,10 +29,14 @@ export default function App() {
         return;
       }
       if (envelope.type === "pubkey") {
-        const peerPublicKey = await fromBase64(envelope.payload);
-        await deriveSessionKeys(own, peerPublicKey, role);
-        const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey);
-        setScreen({ name: "safety-number", safetyNumber });
+        try {
+          const peerPublicKey = await fromBase64(envelope.payload);
+          await deriveSessionKeys(own, peerPublicKey, role);
+          const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey);
+          setScreen({ name: "safety-number", safetyNumber });
+        } catch {
+          setScreen({ name: "error", message: "Key exchange failed." });
+        }
       }
     });
 
@@ -42,13 +46,21 @@ export default function App() {
   async function handleStart() {
     const own = await generateKeypair();
     const client = new RelayClient(RELAY_URL);
-    await client.waitForOpen();
+    try {
+      await client.waitForOpen();
+    } catch {
+      setScreen({ name: "error", message: "Could not connect to the relay." });
+      return;
+    }
     client.onMessage((envelope) => {
       if (envelope.type === "created") {
         setScreen({ name: "waiting", roomCode: envelope.roomCode });
       }
       if (envelope.type === "peer-connected") {
         void exchangeKeys(client, own, "initiator");
+      }
+      if (envelope.type === "error") {
+        setScreen({ name: "error", message: envelope.message });
       }
     });
     client.send({ type: "create" });
@@ -57,7 +69,12 @@ export default function App() {
   async function handleJoin(roomCode: string) {
     const own = await generateKeypair();
     const client = new RelayClient(RELAY_URL);
-    await client.waitForOpen();
+    try {
+      await client.waitForOpen();
+    } catch {
+      setScreen({ name: "error", message: "Could not connect to the relay." });
+      return;
+    }
     client.onMessage((envelope) => {
       if (envelope.type === "error") {
         setScreen({ name: "error", message: envelope.message });

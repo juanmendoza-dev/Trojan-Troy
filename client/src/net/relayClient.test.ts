@@ -9,6 +9,7 @@ function fakeSocket(): MinimalWebSocket & { sent: string[] } {
     close: () => {},
     onopen: null,
     onmessage: null,
+    onerror: null,
     onclose: null,
   };
 }
@@ -65,5 +66,53 @@ describe("RelayClient", () => {
     socket.onmessage?.({ data: "not json" });
 
     expect(received).toEqual([]);
+  });
+
+  it("rejects waitForOpen when the socket errors before opening", async () => {
+    const socket = fakeSocket();
+    const client = new RelayClient("ws://test", () => socket);
+
+    const opened = client.waitForOpen();
+    socket.onerror?.();
+
+    await expect(opened).rejects.toThrow();
+  });
+
+  it("rejects waitForOpen when the socket closes before opening", async () => {
+    const socket = fakeSocket();
+    const client = new RelayClient("ws://test", () => socket);
+
+    const opened = client.waitForOpen();
+    socket.onclose?.();
+
+    await expect(opened).rejects.toThrow();
+  });
+
+  it("notifies listeners with an error envelope when the socket closes after opening", async () => {
+    const socket = fakeSocket();
+    const client = new RelayClient("ws://test", () => socket);
+    const opened = client.waitForOpen();
+    socket.onopen?.();
+    await opened;
+
+    const received: unknown[] = [];
+    client.onMessage((envelope) => received.push(envelope));
+    socket.onclose?.();
+
+    expect(received).toEqual([{ type: "error", message: "Relay connection closed." }]);
+  });
+
+  it("notifies listeners with an error envelope when the socket errors after opening", async () => {
+    const socket = fakeSocket();
+    const client = new RelayClient("ws://test", () => socket);
+    const opened = client.waitForOpen();
+    socket.onopen?.();
+    await opened;
+
+    const received: unknown[] = [];
+    client.onMessage((envelope) => received.push(envelope));
+    socket.onerror?.();
+
+    expect(received).toEqual([{ type: "error", message: "Relay connection error." }]);
   });
 });
