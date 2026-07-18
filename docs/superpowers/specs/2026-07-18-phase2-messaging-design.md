@@ -22,6 +22,9 @@ In scope for this spec:
 - Gating chat access behind safety-number verification.
 - Per-message decryption-failure handling (corrupted/tampered ciphertext).
 
+Still 1:1 only — Phase 1's room model pairs exactly two peers, and Phase 2
+doesn't change that. Group chat is not in scope for any phase of Version A.
+
 Out of scope (later phases / explicitly deferred):
 - Message history persistence — chat state is in-memory only, same as
   Phase 1's ephemeral session keys. Refreshing the page ends the session;
@@ -86,7 +89,8 @@ Presentational component, no network/crypto logic — matches Phase 1's
 screen components exactly:
 ```ts
 interface ChatMessage {
-  id: string;
+  id: string;               // crypto.randomUUID() — React list key only,
+                             // never sent over the wire
   from: "me" | "peer" | "decryption-error";
   text: string;
 }
