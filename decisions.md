@@ -8,6 +8,34 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-18 — Phase 1 architecture locked in** (full design in
+  `docs/superpowers/specs/2026-07-18-phase1-foundation-design.md`):
+  - **Client is a single web app (React + Vite + TypeScript).** Desktop
+    comes later as an Electron wrapper around the same app (the Discord
+    model) — not a separate build track. Mobile is not in scope for
+    Version A.
+  - **Crypto library: libsodium.js**, not the Web Crypto API. Purpose-built
+    API for key exchange (`crypto_kx`) and authenticated encryption
+    (`crypto_box`), and it behaves identically in the browser and in Node,
+    unlike Web Crypto's less consistent X25519 support.
+  - **Relay server: Node.js + WebSocket (`ws`)**, in-memory only, no
+    database. Same language as the client, so libsodium.js and any shared
+    types work the same on both sides — one runtime for a 2-person team.
+  - **Pairing is room/invite-link based — no user accounts.** One person
+    starts a session, gets a shareable code, the other joins with it. No
+    usernames, passwords, or user database. Much less to build than
+    Discord-style accounts, and the "share a link, instantly E2E
+    encrypted" story is a stronger hackathon demo anyway.
+  - **Session keys are ephemeral (fresh per session), not a persistent
+    identity.** Simplest option for Version A. Trade-off: the safety
+    number verifies *this session*, not "this person forever" the way
+    Signal's does. Revisit if we want persistent identity keys later —
+    that's a bigger scope add (local key storage, rotation UI).
+  - **Repo layout is two independent packages, `/client` and `/server`,
+    no monorepo tooling.** Simplest thing that works; not worth the extra
+    tooling for two packages and two people.
+  (Decided by: Jay)
+
 - **2026-07-18 — Two working-process rules added before starting Phase 1:**
   (1) commit messages must be short, plain-language, and human-sounding —
   no AI-flavored verbosity; (2) if an agent thinks part of the roadmap is
