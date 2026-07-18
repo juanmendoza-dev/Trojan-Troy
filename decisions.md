@@ -8,6 +8,12 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-18 — Two working-process rules added before starting Phase 1:**
+  (1) commit messages must be short, plain-language, and human-sounding —
+  no AI-flavored verbosity; (2) if an agent thinks part of the roadmap is
+  inefficient, it asks before deviating — roadmap only changes by agreement,
+  logged here. (Decided by: Jay)
+
 - **2026-07-18 — Multi-agent docs use the standard `AGENTS.md` filename**,
   not a custom `agent.md`. Many coding agents/tools auto-discover
   `AGENTS.md` specifically, so future agents pick up the rules without

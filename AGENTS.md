@@ -18,6 +18,17 @@ anyone else brought in later. Read this before touching anything.
    hackathon is judged on time tracked, and Hackatime reads from commit
    activity. Don't batch work into one big commit at the end of a session —
    commit each meaningful step as you go.
+4. **Commit messages must read as human-written: short and sweet.** One
+   plain-language line describing what changed (imperative mood, e.g. "Add
+   safety number screen"), no AI-generated verbosity, no bullet-point essays,
+   no trailers beyond what's required by rule 1.
+
+## Roadmap Changes
+
+If something in `roadmap.md` looks inefficient or wrong once you're actually
+building it, **don't just deviate — ask first.** Flag it, explain why, and
+wait for a decision. Once agreed, update `roadmap.md` (and log the change in
+`decisions.md`) before continuing.
 
 ## Project Docs — Read Before Working
 
