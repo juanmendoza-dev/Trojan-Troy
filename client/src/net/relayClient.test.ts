@@ -55,4 +55,15 @@ describe("RelayClient", () => {
 
     await expect(opened).resolves.toBeUndefined();
   });
+
+  it("silently drops malformed messages without notifying listeners", () => {
+    const socket = fakeSocket();
+    const client = new RelayClient("ws://test", () => socket);
+    const received: unknown[] = [];
+    client.onMessage((envelope) => received.push(envelope));
+
+    socket.onmessage?.({ data: "not json" });
+
+    expect(received).toEqual([]);
+  });
 });

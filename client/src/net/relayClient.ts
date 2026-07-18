@@ -27,9 +27,13 @@ export class RelayClient {
   constructor(url: string, createWebSocket: WebSocketFactory = defaultFactory) {
     this.ws = createWebSocket(url);
     this.ws.onmessage = (event) => {
-      const envelope = JSON.parse(event.data) as Envelope;
-      for (const listener of this.listeners) {
-        listener(envelope);
+      try {
+        const envelope = JSON.parse(event.data) as Envelope;
+        for (const listener of this.listeners) {
+          listener(envelope);
+        }
+      } catch {
+        // Silently drop malformed messages
       }
     };
   }
