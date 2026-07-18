@@ -10,8 +10,16 @@ export function startRelay(port: number): WebSocketServer {
   const rooms = new RoomManager();
   const wss = new WebSocketServer({ port });
 
+  wss.on("error", (err) => {
+    console.error("WebSocketServer error:", err);
+  });
+
   wss.on("connection", (ws: WebSocket) => {
     const peer: Peer = { send: (data: string) => ws.send(data) };
+
+    ws.on("error", (err) => {
+      console.error("WebSocket connection error:", err);
+    });
 
     ws.on("message", (raw) => {
       let envelope: Envelope;
