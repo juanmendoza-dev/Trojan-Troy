@@ -8,6 +8,33 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-19 — Phase 5.1 overrides the original no-accounts/
+  ephemeral-identity decision**: users now get a long-term identity keypair
+  persisted client-side (IndexedDB), plus a self-chosen display name. This
+  is *not* a server-side account system — no login, no password, no central
+  user database; the relay still only ever forwards opaque envelopes. Full
+  design in
+  `docs/superpowers/specs/2026-07-19-persistent-identity-design.md`.
+  (Decided by: Jay)
+
+- **2026-07-19 — Roadmap restructured: Phase 4 is now UI design (handled
+  externally, not built by an agent in this repo); Phase 5 is now a
+  sequence of new-feature sub-projects instead of the marketing/landing
+  site; Phase 6 is a new phase for polishing whatever Phase 5 builds.**
+  Rationale: this is a Hackatime-tracked hackathon — around 4 hours were
+  logged against a ~35-hour target, so Phase 5's scope was deliberately
+  expanded well beyond the original Version A plan to sustain that much
+  real engineering work, split across both deepening the crypto/security
+  design (persistent identity, forward secrecy, offline delivery) and
+  broadening user-facing features (group chat, file sharing, disappearing
+  messages, local history). The landing page originally planned for Phase 5
+  is deferred/unscheduled — it can still be picked up independently later
+  since it doesn't depend on the app's internals. Build order for Phase 5's
+  sub-projects is dependency-driven: persistent identity and the
+  forward-secrecy ratchet come first since later sub-projects (offline
+  delivery, group chat) build on top of them. See `roadmap.md`. (Decided
+  by: Jay)
+
 - **2026-07-18 — Message encryption uses `crypto_secretbox`, not
   `crypto_box`** (corrects the earlier crypto note below; full design in
   `docs/superpowers/specs/2026-07-18-phase2-messaging-design.md`).

@@ -23,15 +23,41 @@ one works.
 - [ ] Async voice messages only — record a clip, encrypt it, send it,
       recipient decrypts and plays it. NOT live/streaming calling.
 
-## Phase 4 — UI polish
-- [ ] A genuinely clean, beautiful interface. Comes after the plumbing
-      works, not before.
+## Phase 4 — UI design
+- [ ] A genuinely clean, beautiful interface. Handled externally via a
+      separate design tool/process, not built by an agent in this repo.
+      Comes after the plumbing works, not before.
 
-## Phase 5 — Marketing / landing site (parallel track)
-- [ ] Short, well-designed landing page explaining what Trojan Troy is and
-      why the encryption approach matters — understandable by a
-      non-technical reader in one pass. Can be built independently of
-      Phases 1–4.
+## Phase 5 — New features
+Substantially expands project scope/complexity beyond Version A's original
+plan (see `decisions.md` for why). Built as a sequence of independent
+sub-projects, each with its own spec in `docs/superpowers/specs/` and its
+own plan/implementation cycle. Build in this order — later items depend on
+earlier ones:
+
+- [ ] 5.1 — Persistent identity keys. Long-term keypair per user (replacing
+      the ephemeral-only model), display names, a local contacts list that
+      recognizes returning peers and warns on key changes, identity
+      export/import via a recovery code. Spec:
+      `docs/superpowers/specs/2026-07-19-persistent-identity-design.md`.
+- [ ] 5.2 — Forward-secrecy ratchet (Double Ratchet-style per-message key
+      rotation), built on top of 5.1's identity/ephemeral key split.
+- [ ] 5.3 — Encrypted offline delivery: server holds ciphertext for a peer
+      who isn't currently connected, addressed via 5.1's persistent
+      identity, instead of dropping it.
+- [ ] 5.4 — Local encrypted message history/search (client-side storage,
+      encrypted at rest), sharing a storage layer with 5.3's delivery
+      mailbox.
+- [ ] 5.5 — Group chats (3+ people). Requires group-key encryption (e.g.
+      sender-keys), built on top of 5.2's ratchet.
+- [ ] 5.6 — Encrypted file/image sharing, extending the voice-message
+      encryption pattern to arbitrary files.
+- [ ] 5.7 — Disappearing messages (self-destruct timer).
+
+## Phase 6 — Polish
+- [ ] Harden and polish whatever Phase 5 sub-projects actually get built —
+      UX rough edges, error states, edge cases — once the new feature set
+      is in place.
 
 ## Hard constraints (apply to every phase)
 - Never implement custom cryptographic primitives — audited libraries only.
