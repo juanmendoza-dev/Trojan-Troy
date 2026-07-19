@@ -10,7 +10,7 @@ and `decisions.md` for why things were done a certain way.
 |---|---|
 | 1 — Foundation (key gen/exchange, safety number) | Complete — key exchange + safety number screen working end-to-end |
 | 2 — Encrypted messaging (relay + real-time text) | Complete — encrypted text messaging working end-to-end |
-| 3 — Encrypted voice messages | Not started |
+| 3 — Encrypted voice messages | Complete — async encrypted voice messages working end-to-end |
 | 4 — UI polish | Not started |
 | 5 — Marketing/landing site | Not started |
 
@@ -32,3 +32,12 @@ and `decisions.md` for why things were done a certain way.
   (`ciphertext`) and no server changes. Verified end-to-end with two
   browser windows exchanging messages after safety-number verification.
   See `docs/superpowers/plans/2026-07-18-phase2-messaging.md`.
+
+- **2026-07-18** — Phase 3 complete: async end-to-end encrypted voice
+  messages (`crypto_secretbox_easy` on raw audio bytes via a shared
+  `secretbox.ts` primitive, reused from Phase 2's text encryption), one new
+  pass-through envelope type (`voice`) and no server changes. Record →
+  preview → send/discard flow with a 60-second cap, native `<audio>`
+  playback, interleaved with text messages in the same chat list. Verified
+  end-to-end with two browser windows recording, sending, and playing back
+  voice clips. See `docs/superpowers/plans/2026-07-18-phase3-voice-messages.md`.
