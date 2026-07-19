@@ -168,6 +168,20 @@ generically.
   encrypt them. A refresh loses the whole conversation, same as Phase 1's
   existing "no reconnect" behavior.
 
+## Known limitation: no replay/reordering protection
+
+`crypto_secretbox`'s MAC guarantees a message wasn't forged or tampered
+with, but it does not guarantee a message wasn't duplicated, dropped, or
+reordered by the relay. An untrusted relay could replay an earlier
+ciphertext and it would decrypt cleanly, appearing as a duplicate message.
+Considered out of scope for this phase — a hackathon 1:1 chat over a
+short-lived session — but noted here rather than left implicit, since this
+is a security-weighted phase. A future version wanting replay protection
+would need a per-direction sequence number authenticated alongside the
+ciphertext (bigger scope: requires synchronized counters, which Phase 2's
+design proposal explicitly avoided for message *encryption* — the same
+trade-off would need revisiting).
+
 ## Testing
 
 - **`crypto/messages.ts`** (pure functions, no network/UI, same style as
