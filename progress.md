@@ -9,7 +9,7 @@ and `decisions.md` for why things were done a certain way.
 | Phase | Status |
 |---|---|
 | 1 — Foundation (key gen/exchange, safety number) | Complete — key exchange + safety number screen working end-to-end |
-| 2 — Encrypted messaging (relay + real-time text) | Not started |
+| 2 — Encrypted messaging (relay + real-time text) | Complete — encrypted text messaging working end-to-end |
 | 3 — Encrypted voice messages | Not started |
 | 4 — UI polish | Not started |
 | 5 — Marketing/landing site | Not started |
@@ -25,3 +25,10 @@ and `decisions.md` for why things were done a certain way.
   (`/client`). Verified end-to-end with two browser windows landing on a
   matching safety number. See
   `docs/superpowers/plans/2026-07-18-phase1-foundation.md`.
+
+- **2026-07-18** — Phase 2 complete: real-time end-to-end encrypted text
+  messaging (`crypto_secretbox_easy` with Phase 1's session keys), reusing
+  the same relay and envelope pattern with one new pass-through type
+  (`ciphertext`) and no server changes. Verified end-to-end with two
+  browser windows exchanging messages after safety-number verification.
+  See `docs/superpowers/plans/2026-07-18-phase2-messaging.md`.

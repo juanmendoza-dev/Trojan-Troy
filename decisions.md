@@ -8,6 +8,16 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-18 — Message encryption uses `crypto_secretbox`, not
+  `crypto_box`** (corrects the earlier crypto note below; full design in
+  `docs/superpowers/specs/2026-07-18-phase2-messaging-design.md`).
+  `crypto_box` is libsodium's public-key encryption primitive; Phase 1's
+  actual implementation derives symmetric session keys via `crypto_kx`
+  instead, so the two sides already share a secret before any message is
+  sent. `crypto_secretbox_easy` is libsodium's standard primitive for
+  exactly that situation — authenticate and encrypt with a symmetric key
+  you already have. (Decided by: Jay)
+
 - **2026-07-18 — Phase 1 architecture locked in** (full design in
   `docs/superpowers/specs/2026-07-18-phase1-foundation-design.md`):
   - **Client is a single web app (React + Vite + TypeScript).** Desktop
