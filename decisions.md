@@ -117,3 +117,34 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
   progress get prioritized over the crypto/messaging core actually working.
   Landing site (Phase 5) is the one exception — it can run in parallel
   since it doesn't depend on the app's internals. (Decided by: Jay)
+
+- **2026-07-19 — Phase 4 UI redesign: implement all three chat themes
+  (Apple, Iris Glass, Pulse Slate) behind a runtime switcher, not just the
+  "final" Apple direction.** More build surface than picking one, but the
+  design handoff explicitly approved all three and the user wanted them
+  available to demo. `StartJoinScreen`, `WaitingScreen`, and
+  `SafetyNumberScreen` stay unstyled for this pass — the handoff only
+  specced the loading and chat screens. (Decided by: Jay)
+
+- **2026-07-19 — Phase 4 UI redesign deviates from the design handoff in
+  five ways** (full rationale in
+  `docs/superpowers/plans/2026-07-19-phase4-ui-redesign.md`'s "Design
+  deviations" section):
+  1. No fixed 1180×740 mock window / macOS traffic-light dots — the real
+     app is a resizable browser tab, not Electron/Tauri, so the chat and
+     loading screens fill the real viewport instead.
+  2. No typing indicator — there's no "peer is typing" relay event
+     (would be a protocol change, out of scope for a UI-only phase).
+  3. The loading screen always renders in the Apple light/dark style
+     (5a/5b) regardless of which chat theme is selected — the handoff
+     calls it "the final loading screen," not theme-specific, and a white
+     loader before a near-black Iris/Pulse chat would look broken.
+  4. The checklist/percent-counter choreography is driven by a JS timer
+     plus real key-exchange completion (transition once both are done),
+     not the mockup's infinite CSS loop — the handoff itself calls those
+     timings "demo stand-ins."
+  5. Kinetic-wordmark letter-column widths are measured at runtime via
+     `canvas.measureText()` instead of hardcoded — the mockup's hardcoded
+     widths are tuned to SF Pro Display (macOS/Safari-only), which would
+     clip letters in the fallback font on Windows/Linux/Chrome.
+  (Decided by: Jay + Claude, while writing the implementation plan)
