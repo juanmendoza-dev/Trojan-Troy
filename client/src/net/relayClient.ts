@@ -6,6 +6,7 @@ export type Envelope =
   | { type: "peer-disconnected" }
   | { type: "pubkey"; payload: string }
   | { type: "ciphertext"; payload: string }
+  | { type: "voice"; payload: string; mimeType: string }
   | { type: "error"; message: string };
 
 export interface MinimalWebSocket {

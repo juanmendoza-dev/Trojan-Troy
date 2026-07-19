@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RelayClient, type Envelope } from "./net/relayClient";
 import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
 import { encryptMessage, decryptMessage } from "./crypto/messages";
+import { encryptVoiceClip, decryptVoiceClip } from "./crypto/media";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
 import { WaitingScreen } from "./screens/WaitingScreen";
 import { SafetyNumberScreen } from "./screens/SafetyNumberScreen";
@@ -23,6 +24,16 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const sessionKeysRef = useRef<SessionKeys | null>(null);
   const clientRef = useRef<RelayClient | null>(null);
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  messagesRef.current = messages;
+
+  useEffect(() => {
+    return () => {
+      for (const message of messagesRef.current) {
+        if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
+      }
+    };
+  }, []);
 
   async function exchangeKeys(
     client: RelayClient,
@@ -50,12 +61,27 @@ export default function App() {
         if (!keys) return;
         try {
           const text = await decryptMessage(keys.rx, envelope.payload);
-          setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "peer", text }]);
-        } catch {
           setMessages((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), from: "decryption-error", text: "" },
+            { id: crypto.randomUUID(), from: "peer", kind: "text", text },
           ]);
+        } catch {
+          setMessages((prev) => [...prev, { id: crypto.randomUUID(), kind: "decryption-error" }]);
+        }
+        return;
+      }
+      if (envelope.type === "voice") {
+        const keys = sessionKeysRef.current;
+        if (!keys) return;
+        try {
+          const blob = await decryptVoiceClip(keys.rx, envelope.payload, envelope.mimeType);
+          const audioUrl = URL.createObjectURL(blob);
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), from: "peer", kind: "voice", audioUrl },
+          ]);
+        } catch {
+          setMessages((prev) => [...prev, { id: crypto.randomUUID(), kind: "decryption-error" }]);
         }
       }
     });
@@ -114,7 +140,20 @@ export default function App() {
     if (!keys || !client) return;
     const payload = await encryptMessage(keys.tx, text);
     client.send({ type: "ciphertext", payload });
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "me", text }]);
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "me", kind: "text", text }]);
+  }
+
+  async function handleSendVoice(blob: Blob, mimeType: string) {
+    const keys = sessionKeysRef.current;
+    const client = clientRef.current;
+    if (!keys || !client) return;
+    const payload = await encryptVoiceClip(keys.tx, blob);
+    client.send({ type: "voice", payload, mimeType });
+    const audioUrl = URL.createObjectURL(blob);
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), from: "me", kind: "voice", audioUrl },
+    ]);
   }
 
   if (screen.name === "start") {
@@ -132,7 +171,7 @@ export default function App() {
     );
   }
   if (screen.name === "chat") {
-    return <ChatScreen messages={messages} onSend={handleSend} />;
+    return <ChatScreen messages={messages} onSend={handleSend} onSendVoice={handleSendVoice} />;
   }
   return (
     <div>
