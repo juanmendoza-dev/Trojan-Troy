@@ -38,6 +38,8 @@ and `decisions.md` for why things were done a certain way.
   `secretbox.ts` primitive, reused from Phase 2's text encryption), one new
   pass-through envelope type (`voice`) and no server changes. Record →
   preview → send/discard flow with a 60-second cap, native `<audio>`
-  playback, interleaved with text messages in the same chat list. Verified
-  end-to-end with two browser windows recording, sending, and playing back
-  voice clips. See `docs/superpowers/plans/2026-07-18-phase3-voice-messages.md`.
+  playback, interleaved with text messages in the same chat list. Crypto and
+  relay transport verified via an automated round-trip script (real relay,
+  real crypto, both directions, tamper rejection); manual two-browser
+  recording/playback verification still pending. See
+  `docs/superpowers/plans/2026-07-18-phase3-voice-messages.md`.

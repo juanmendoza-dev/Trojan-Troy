@@ -76,6 +76,7 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
   function handleSend() {
     if (state.status !== "preview") return;
     onSend(state.blob, state.mimeType);
+    URL.revokeObjectURL(state.audioUrl);
     setState({ status: "idle" });
   }
 
