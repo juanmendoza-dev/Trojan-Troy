@@ -183,8 +183,9 @@ One additive change to the existing `Envelope` union:
   message.
 - Nothing persists to disk — recorded blobs and object URLs live only in
   React state/memory for the session, same ephemeral model as everything
-  else so far. Object URLs are revoked on message-list cleanup/unmount to
-  avoid leaking memory during a long session.
+  else so far. Object URLs are revoked when `ChatScreen` unmounts (session
+  ends) to avoid leaking memory, via a `useEffect` cleanup over the current
+  message list's `audioUrl`s.
 
 ## Known limitations
 
