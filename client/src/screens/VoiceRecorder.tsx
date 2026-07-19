@@ -21,6 +21,9 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
   const [state, setState] = useState<RecorderState>({ status: "idle" });
   const [elapsedMs, setElapsedMs] = useState(0);
   const handleRef = useRef<RecordingHandle | null>(null);
+  const isStartingRef = useRef(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     if (state.status !== "recording") return;
@@ -28,7 +31,18 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
     return () => clearInterval(interval);
   }, [state.status]);
 
+  useEffect(() => {
+    return () => {
+      handleRef.current?.stop();
+      if (stateRef.current.status === "preview") {
+        URL.revokeObjectURL(stateRef.current.audioUrl);
+      }
+    };
+  }, []);
+
   async function handleStart() {
+    if (isStartingRef.current || state.status !== "idle") return;
+    isStartingRef.current = true;
     try {
       const handle = await startRecording();
       handleRef.current = handle;
@@ -45,6 +59,8 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
             ? "Voice recording isn't supported in this browser."
             : "Could not start recording.";
       setState({ status: "error", message });
+    } finally {
+      isStartingRef.current = false;
     }
   }
 
