@@ -1,0 +1,19 @@
+.cipher-word {
+  display: flex;
+}
+.cipher-word__column {
+  display: inline-block;
+  overflow: hidden;
+  text-align: center;
+}
+@keyframes slotDropReel {
+  from { transform: translateY(0); }
+  to { transform: translateY(-75%); }
+}
+.cipher-word__reel {
+  display: block;
+  animation: slotDropReel 0.9s cubic-bezier(0.85, 0, 0.15, 1) both;
+}
+.cipher-word__glyph {
+  display: block;
+}
