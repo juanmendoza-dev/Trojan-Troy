@@ -24,6 +24,32 @@ describe("RelayClient", () => {
     expect(socket.sent).toEqual([JSON.stringify({ type: "create" })]);
   });
 
+  it("includes messageId when sending a ciphertext envelope", () => {
+    const socket = fakeSocket();
+    const client = new RelayClient("ws://test", () => socket);
+
+    client.send({ type: "ciphertext", payload: "encrypted", messageId: "abc-123" });
+
+    expect(socket.sent).toEqual([
+      JSON.stringify({ type: "ciphertext", payload: "encrypted", messageId: "abc-123" }),
+    ]);
+  });
+
+  it("passes through delivered and read acks", () => {
+    const socket = fakeSocket();
+    const client = new RelayClient("ws://test", () => socket);
+    const received: unknown[] = [];
+    client.onMessage((envelope) => received.push(envelope));
+
+    socket.onmessage?.({ data: JSON.stringify({ type: "delivered", messageId: "abc-123" }) });
+    socket.onmessage?.({ data: JSON.stringify({ type: "read", messageId: "abc-123" }) });
+
+    expect(received).toEqual([
+      { type: "delivered", messageId: "abc-123" },
+      { type: "read", messageId: "abc-123" },
+    ]);
+  });
+
   it("notifies listeners when a message arrives", () => {
     const socket = fakeSocket();
     const client = new RelayClient("ws://test", () => socket);
