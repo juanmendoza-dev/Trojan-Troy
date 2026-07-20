@@ -82,7 +82,12 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
 
   if (state.status === "idle") {
     return (
-      <button className="composer__mic" onClick={handleStart} aria-label="Record voice message">
+      <button
+        type="button"
+        className="composer__mic"
+        onClick={handleStart}
+        aria-label="Record voice message"
+      >
         🎙
       </button>
     );
@@ -93,7 +98,7 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
         <span className="composer__recording-time">
           {Math.floor(elapsedMs / 1000)}s / {MAX_RECORDING_MS / 1000}s
         </span>
-        <button className="composer__stop" onClick={handleStop}>
+        <button type="button" className="composer__stop" onClick={handleStop}>
           Stop
         </button>
       </div>
@@ -103,10 +108,10 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
     return (
       <div className="composer__preview">
         <audio src={state.audioUrl} controls />
-        <button className="composer__send" onClick={handleSend}>
+        <button type="button" className="composer__send" onClick={handleSend}>
           Send
         </button>
-        <button className="composer__discard" onClick={handleDiscard}>
+        <button type="button" className="composer__discard" onClick={handleDiscard}>
           Discard
         </button>
       </div>
@@ -115,7 +120,9 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
   return (
     <div className="composer__error">
       <span>{state.message}</span>
-      <button onClick={() => setState({ status: "idle" })}>Dismiss</button>
+      <button type="button" onClick={() => setState({ status: "idle" })}>
+        Dismiss
+      </button>
     </div>
   );
 }
