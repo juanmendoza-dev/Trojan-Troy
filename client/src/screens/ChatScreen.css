@@ -1,0 +1,34 @@
+.chat-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+}
+.chat-screen__body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.chat-screen__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.chat-screen__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.chat-screen__day-divider {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
