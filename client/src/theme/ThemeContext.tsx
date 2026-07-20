@@ -43,7 +43,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(next);
   }
 
-  const value = useMemo(() => ({ theme, setTheme }), [theme, systemScheme]);
+  const value = useMemo(() => ({ theme, setTheme }), [theme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

@@ -8,6 +8,24 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-20 — Phase 4.5's implementation plan dropped the design spec's
+  requested Vitest coverage for `App.tsx`'s `"chat"` screen `safetyNumber`
+  field and `handleLeave` reset logic; caught by the final whole-branch
+  review, not fixed.** The spec's Testing section asked for unit tests
+  "following the pattern already used for `theme.test.ts` /
+  `screenOverride.test.ts`," but `handleLeave` closes over refs and
+  component state rather than being a pure function, and `App.tsx` — like
+  every other top-level screen/component in this codebase
+  (`ChatScreen.tsx`, `Sidebar.tsx`, `TitleBar.tsx`) — has no test file at
+  all; only extracted pure-logic modules get Vitest coverage here. Both
+  behaviors were verified for real via the Phase 4.5 Playwright
+  verification pass (paired-session leave/disconnect flow — see
+  `progress.md`'s 2026-07-20 entry) instead. Extracting `handleLeave` into
+  a testable pure helper purely to satisfy this would be premature
+  abstraction for a hackathon prototype with no second caller. Revisit if
+  `handleLeave`-equivalent logic grows more complex in a later phase.
+  (Decided by: Claude, confirmed via final whole-branch review)
+
 - **2026-07-19 — Phase 4.5 design calls, made during brainstorming**
   (full design in `docs/superpowers/specs/2026-07-19-phase4.5-design.md`):
   1. The loading screen drops its "always Apple-style" behavior in favor
