@@ -24,7 +24,8 @@ interface CipherWordProps {
 }
 
 export function CipherWord({ text, fontSizePx, startDelayS, staggerS, windowHeightPx = 132 }: CipherWordProps) {
-  const font = `600 ${fontSizePx}px var(--font-display)`;
+  const resolvedFontDisplay = getComputedStyle(document.documentElement).getPropertyValue("--font-display").trim();
+  const font = `600 ${fontSizePx}px ${resolvedFontDisplay}`;
   const letters = useMemo(
     () =>
       text.split("").map((letter) => ({
