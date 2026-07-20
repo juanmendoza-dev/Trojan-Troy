@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: trojan-troy-relay
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
