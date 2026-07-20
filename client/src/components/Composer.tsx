@@ -7,8 +7,11 @@ interface ComposerProps {
   onSendVoice: (blob: Blob, mimeType: string) => void;
 }
 
+const SENT_ANIMATION_MS = 300;
+
 export function Composer({ onSend, onSendVoice }: ComposerProps) {
   const [value, setValue] = useState("");
+  const [justSent, setJustSent] = useState(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -16,11 +19,13 @@ export function Composer({ onSend, onSendVoice }: ComposerProps) {
     if (!text) return;
     onSend(text);
     setValue("");
+    setJustSent(true);
+    setTimeout(() => setJustSent(false), SENT_ANIMATION_MS);
   }
 
   return (
     <form className="composer" onSubmit={handleSubmit}>
-      <div className="composer__input-wrap">
+      <div className={`composer__input-wrap${justSent ? " composer__input-wrap--sent" : ""}`}>
         <input
           className="composer__input"
           value={value}

@@ -134,3 +134,6 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
 }
+.composer__input-wrap--sent {
+  animation: composerSent 0.3s ease;
+}
