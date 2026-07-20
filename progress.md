@@ -13,8 +13,8 @@ and `decisions.md` for why things were done a certain way.
 | 3 — Encrypted voice messages | Complete — async encrypted voice messages working end-to-end |
 | 4 — UI polish | Complete — kinetic-cipher loading screen and all three chat themes (Apple, Iris Glass, Pulse Slate) built and verified end-to-end |
 | 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
+| — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | Complete — verified end-to-end |
 | 5 — Marketing/landing site | Not started |
-| — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | In progress — 5/8 plan tasks done + reviewed, 1 done but unreviewed, on branch `handshake-chat-transition`, not yet merged to `main` |
 
 ## Log
 
@@ -160,7 +160,7 @@ and `decisions.md` for why things were done a certain way.
   `.worktrees/phase4.5-working-prototype/.superpowers/sdd/` for the per-task
   ledger and this task's full verification report.
 
-- **2026-07-20** — Continuous handshake-to-chat transition kicked off. Not a
+- **2026-07-20** — Continuous handshake-to-chat transition kicked off (superseded by the "complete" entry below — kept for historical resume-point record). Not a
   scheduled roadmap phase — a user-requested polish item (make the loading
   screen smoothly carry into the safety-number and chat screens instead of
   hard-cutting between them, with the ambient orb backdrop persisting the
@@ -205,3 +205,32 @@ and `decisions.md` for why things were done a certain way.
   time has passed. `main` itself is untouched throughout (still at the
   "Plan continuous handshake-to-chat transition" commit) — all of this work
   is isolated on the `handshake-chat-transition` branch/worktree.
+
+- **2026-07-20** — Continuous handshake-to-chat transition complete: a
+  `crossfadeState.ts` pure state module (unit-tested), a generic `Crossfade`
+  component built on it, and a `HandshakeJourney` wrapper that owns one
+  `<AmbientOrbs />` for the lifetime of the `handshake` → `safety-number` →
+  `chat` journey and cross-fades each screen's foreground content into the
+  next (350ms, opacity + `translateY(8px)`). `LoadingScreen` and `ChatScreen`
+  no longer render their own orbs/background (moved up to
+  `HandshakeJourney`); `SafetyNumberScreen` got a small CSS file for
+  legible text against the shared dark backdrop, with its markup/copy/button
+  unchanged. `App.tsx`'s `Screen` union and state-transition logic
+  (`handleStart`/`handleJoin`/`exchangeKeys`/etc.) are untouched — only the
+  render layer changes, now wrapping the three screen states (plus both dev
+  `?screen=` overrides) in one `HandshakeJourney` instead of three separate
+  early returns. Verified end-to-end with the same scratch-Playwright
+  pattern used for Phase 4/4.5 (no browser-automation tool available in this
+  environment): a real two-browser-context paired session confirmed zero
+  console/page errors, the ambient orbs animating throughout the
+  handshake/safety-number screens (`animation-duration: 9s`, matching
+  `AmbientOrbs.css`), orbs still visible (`display: block`) once chat
+  renders under the Iris Glass default theme (the "never resets" goal), and
+  orbs correctly hidden (`display: none`) once chat renders under the Apple
+  theme (the accepted discontinuity case from the spec — Apple's opaque chat
+  background covers the exiting layer, so no visual glitch, just no orb
+  continuity). Screenshots taken mid cross-fade (~180ms into the 350ms
+  transition) for both themes visually confirm real overlapping content
+  during the transition, not a hard cut. See
+  `docs/superpowers/specs/2026-07-20-handshake-chat-transition-design.md`
+  and `docs/superpowers/plans/2026-07-20-handshake-chat-transition.md`.

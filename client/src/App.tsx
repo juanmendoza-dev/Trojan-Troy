@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RelayClient, type Envelope } from "./net/relayClient";
 import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
@@ -11,6 +11,7 @@ import { SafetyNumberScreen } from "./screens/SafetyNumberScreen";
 import { ChatScreen, type ChatMessage } from "./screens/ChatScreen";
 import { useTheme } from "./theme/ThemeContext";
 import { LoadingScreen } from "./screens/loading/LoadingScreen";
+import { HandshakeJourney } from "./screens/HandshakeJourney";
 import { parseScreenOverride } from "./dev/screenOverride";
 
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
@@ -193,22 +194,28 @@ export default function App() {
   }
 
   if (devOverride?.screen === "loading") {
-    return <LoadingScreen roomCode="K7F-2QX" />;
+    return (
+      <HandshakeJourney activeKey="handshake">
+        <LoadingScreen roomCode="K7F-2QX" />
+      </HandshakeJourney>
+    );
   }
   if (devOverride?.screen === "chat") {
     return (
-      <ChatScreen
-        roomCode="K7F-2QX"
-        safetyNumber="21934 07741 66012"
-        messages={[
-          { id: "1", from: "peer", kind: "text", text: "did you check the safety number?" },
-          { id: "2", from: "me", kind: "text", text: "yep — 21934 07741 66012 — matches on my end" },
-          { id: "3", from: "me", kind: "text", text: "got it — nothing between us but ciphertext." },
-        ]}
-        onSend={() => {}}
-        onSendVoice={() => {}}
-        onLeave={() => {}}
-      />
+      <HandshakeJourney activeKey="chat">
+        <ChatScreen
+          roomCode="K7F-2QX"
+          safetyNumber="21934 07741 66012"
+          messages={[
+            { id: "1", from: "peer", kind: "text", text: "did you check the safety number?" },
+            { id: "2", from: "me", kind: "text", text: "yep — 21934 07741 66012 — matches on my end" },
+            { id: "3", from: "me", kind: "text", text: "got it — nothing between us but ciphertext." },
+          ]}
+          onSend={() => {}}
+          onSendVoice={() => {}}
+          onLeave={() => {}}
+        />
+      </HandshakeJourney>
     );
   }
   if (screen.name === "start") {
@@ -217,30 +224,32 @@ export default function App() {
   if (screen.name === "waiting") {
     return <WaitingScreen roomCode={screen.roomCode} />;
   }
-  if (screen.name === "handshake") {
-    return <LoadingScreen roomCode={screen.roomCode} />;
-  }
-  if (screen.name === "safety-number") {
-    return (
-      <SafetyNumberScreen
-        safetyNumber={screen.safetyNumber}
-        onVerified={() =>
-          setScreen({ name: "chat", roomCode: screen.roomCode, safetyNumber: screen.safetyNumber })
-        }
-      />
-    );
-  }
-  if (screen.name === "chat") {
-    return (
-      <ChatScreen
-        roomCode={screen.roomCode}
-        safetyNumber={screen.safetyNumber}
-        messages={messages}
-        onSend={handleSend}
-        onSendVoice={handleSendVoice}
-        onLeave={handleLeave}
-      />
-    );
+  if (screen.name === "handshake" || screen.name === "safety-number" || screen.name === "chat") {
+    let content: ReactNode;
+    if (screen.name === "handshake") {
+      content = <LoadingScreen roomCode={screen.roomCode} />;
+    } else if (screen.name === "safety-number") {
+      content = (
+        <SafetyNumberScreen
+          safetyNumber={screen.safetyNumber}
+          onVerified={() =>
+            setScreen({ name: "chat", roomCode: screen.roomCode, safetyNumber: screen.safetyNumber })
+          }
+        />
+      );
+    } else {
+      content = (
+        <ChatScreen
+          roomCode={screen.roomCode}
+          safetyNumber={screen.safetyNumber}
+          messages={messages}
+          onSend={handleSend}
+          onSendVoice={handleSendVoice}
+          onLeave={handleLeave}
+        />
+      );
+    }
+    return <HandshakeJourney activeKey={screen.name}>{content}</HandshakeJourney>;
   }
   return (
     <div>

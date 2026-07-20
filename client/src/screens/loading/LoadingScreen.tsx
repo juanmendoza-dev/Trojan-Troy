@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { AmbientOrbs } from "../../components/AmbientOrbs";
 import { CipherWord } from "./CipherWord";
 import { percentAt } from "./percent";
 import "./LoadingScreen.css";
@@ -29,7 +28,6 @@ export function LoadingScreen({ roomCode, durationMs = 2600 }: LoadingScreenProp
 
   return (
     <div className="loading-screen">
-      <AmbientOrbs />
       <div className="loading-screen__top-row">
         <div className="loading-screen__status">
           <span className="loading-screen__status-dot" />

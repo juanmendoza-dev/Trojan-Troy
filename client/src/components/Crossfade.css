@@ -1,0 +1,18 @@
+/* client/src/components/Crossfade.css */
+.crossfade {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+.crossfade__layer {
+  position: absolute;
+  inset: 0;
+}
+.crossfade__layer--current {
+  animation: crossfadeIn 350ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.crossfade__layer--exiting {
+  animation: crossfadeOut 350ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  pointer-events: none;
+}

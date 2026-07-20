@@ -1,11 +1,14 @@
 .chat-screen {
-  position: fixed;
-  inset: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--bg);
   color: var(--text-primary);
   font-family: var(--font-ui);
+}
+:root[data-theme="iris"] .chat-screen {
+  background: transparent;
 }
 .chat-screen__body {
   flex: 1;
@@ -31,15 +34,4 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
-}
-.chat-screen .ambient-orbs__orb {
-  display: none;
-}
-:root[data-theme="iris"] .chat-screen .ambient-orbs__orb {
-  display: block;
-}
-.chat-screen > .title-bar,
-.chat-screen__body {
-  position: relative;
-  z-index: 1;
 }
