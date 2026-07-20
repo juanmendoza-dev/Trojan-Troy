@@ -8,6 +8,21 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-20 — Roadmap inserts Phase 4.6 (style the remaining unstyled
+  screens via Fable) and Phase 4.7 (Fable Ultra code review) before Phase
+  5.** Jay has substantially higher compute availability for about 3 days
+  starting 2026-07-21 and wants to spend it on two things before taking on
+  Phase 5's added scope: (1) designing/styling `StartJoinScreen` (the app's
+  home/entry screen), `WaitingScreen`, and `SafetyNumberScreen` — the three
+  screens explicitly left unstyled by Phase 4's scope cut — via Fable,
+  reusing the same external design-handoff workflow as the original Phase 4
+  design; (2) running an ultra-depth code review of the existing codebase
+  with Fable (the frontier-capability model) to catch improvement
+  opportunities while the codebase is still relatively small, before Phase
+  5 adds more surface area on top. Phase 5 (new features, starting with 5.1
+  persistent identity) now also waits on 4.6 and 4.7 finishing, not just
+  4.5. (Decided by: Jay)
+
 - **2026-07-20 — Phase 4.5's implementation plan dropped the design spec's
   requested Vitest coverage for `App.tsx`'s `"chat"` screen `safetyNumber`
   field and `handleLeave` reset logic; caught by the final whole-branch

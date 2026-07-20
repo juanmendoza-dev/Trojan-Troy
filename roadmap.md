@@ -66,10 +66,43 @@ end-to-end chat prototype solid. Build in this order:
 - Brainstorm additional settings scope beyond the four items Phase 4.5
   builds (theme switcher, room/session info, leave chat, about/security).
 
+## Phase 4.6 — Style the remaining unstyled screens
+Follow-up to Phase 4's design scope cut: `StartJoinScreen` (the app's
+home/entry screen), `WaitingScreen`, and `SafetyNumberScreen` were
+explicitly left unstyled in Phase 4 and 4.5 — the original design handoff
+only specced the loading and chat screens (see `decisions.md`).
+`SafetyNumberScreen` has since gotten a minimal legibility-only CSS pass
+(dark background/text color) as part of the handshake-to-chat transition
+work, but none of the three have real design applied. Jay is designing
+these with Fable (the same external design-tool workflow used for the
+original Phase 4 handoff), taking advantage of a window of substantially
+higher compute availability starting 2026-07-21.
+
+- [ ] Fable design handoff for `StartJoinScreen`, `WaitingScreen`, and
+      `SafetyNumberScreen`, matching the existing chat-theme visual
+      language (Apple / Iris Glass / Pulse Slate) established in Phase 4.
+- [ ] Implement the handoff via this project's usual workflow
+      (superpowers:brainstorming → spec → plan →
+      superpowers:subagent-driven-development) — don't build ahead of the
+      handoff landing.
+
+## Phase 4.7 — Fable Ultra code review
+Jay plans to run an ultra-depth code review of the existing codebase using
+Fable (the frontier-capability model), during the same high-compute window
+as Phase 4.6, to surface improvement opportunities before Phase 5 adds more
+scope on top. This is a review pass, not a rewrite — findings get triaged
+and applied deliberately (see superpowers:receiving-code-review), not
+auto-applied wholesale.
+
+- [ ] Run the review.
+- [ ] Triage findings with Jay; apply agreed fixes as normal follow-up
+      work, logging any resulting non-obvious calls in `decisions.md`.
+
 ## Phase 5 — New features
 Substantially expands project scope/complexity beyond Version A's original
 plan (see `decisions.md` for why). Waits until Phase 4.5's working
-prototype is done — get the chatting version solid before increasing
+prototype, Phase 4.6's screen styling, and Phase 4.7's code review are all
+done — get the chatting version solid and reviewed before increasing
 security complexity (5.2 onward). Built as a sequence of independent
 sub-projects, each with its own spec in `docs/superpowers/specs/` and its
 own plan/implementation cycle. Build in this order — later items depend on
