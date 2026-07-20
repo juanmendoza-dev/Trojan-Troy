@@ -1,3 +1,5 @@
+import "./SafetyNumberScreen.css";
+
 interface SafetyNumberScreenProps {
   safetyNumber: string;
   onVerified: () => void;
@@ -5,7 +7,7 @@ interface SafetyNumberScreenProps {
 
 export function SafetyNumberScreen({ safetyNumber, onVerified }: SafetyNumberScreenProps) {
   return (
-    <div>
+    <div className="safety-number-screen">
       <h1>Verify safety number</h1>
       <p>Compare this number with your friend, out loud or on a separate channel:</p>
       <code>{safetyNumber}</code>
