@@ -14,6 +14,7 @@ and `decisions.md` for why things were done a certain way.
 | 4 — UI polish | Complete — kinetic-cipher loading screen and all three chat themes (Apple, Iris Glass, Pulse Slate) built and verified end-to-end |
 | 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
 | — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | Complete — verified end-to-end |
+| — Chat polish: themed bubble animations, read receipts, Ghost Mode (unscheduled, user-requested) | Complete — verified end-to-end |
 | 5 — Marketing/landing site | Not started |
 
 ## Log
@@ -234,3 +235,41 @@ and `decisions.md` for why things were done a certain way.
   during the transition, not a hard cut. See
   `docs/superpowers/specs/2026-07-20-handshake-chat-transition-design.md`
   and `docs/superpowers/plans/2026-07-20-handshake-chat-transition.md`.
+
+- **2026-07-20** — Chat polish complete: themed bubble entrance animations
+  (Apple: snappy scale+shadow pop; Iris Glass: soft blur/drift resolve plus
+  a one-shot glassy sheen sweep; Pulse Slate: bounce-overshoot plus an
+  accent glow flash — all pure CSS, reusing existing keyframes like
+  `sheen`/`checkPop` where possible), a staggered entrance for rapid-fire
+  message bursts, a send micro-interaction on the composer, and
+  WhatsApp-style delivered/read receipts with a Ghost Mode privacy setting.
+  Protocol: each sent message now carries a cleartext `messageId`
+  (correlation only, not content — see `decisions.md`), the receiving
+  client acks `delivered` immediately on successful decrypt and `read`
+  only once its tab is actually focused/visible, and status only ever
+  advances forward (sent → delivered → read). Only the sender's most
+  recent own message shows a tick (1 grey check / 2 grey / 2 blue). Ghost
+  Mode (Settings → Privacy, persisted in `localStorage`, default off)
+  suppresses the read ack only — delivered is unaffected. Built via
+  `superpowers:brainstorming` → `superpowers:writing-plans` →
+  `superpowers:subagent-driven-development`, 9 tasks, all reviewed clean
+  (two Important findings surfaced and resolved: a duplicated
+  `STATUS_TICKS` constant across two components, accepted as-is with Jay's
+  sign-off as a candidate for the upcoming Phase 4.7 code review rather
+  than fixed now; and a composer timer with no unmount cleanup, fixed to
+  match the existing `Crossfade.tsx` pattern). Verified end-to-end with the
+  same scratch-Playwright pattern used for every prior phase: per-theme dev
+  preview confirmed the right animation name and a single visible tick per
+  theme with zero console errors, then a real two-browser paired session
+  confirmed the delivered→read progression (tick stays grey-double until
+  the peer's tab is focused, then flips blue) and that Ghost Mode keeps it
+  frozen on delivered even after the peer focuses. Two script-only bugs
+  were found and fixed during this pass (not product bugs): the toggle
+  switch's deliberately overlapping visible track over an invisible
+  checkbox tripped Playwright's default actionability check (fixed with a
+  forced click on the actual input), and a race checking the checkbox's
+  state immediately after clicking, before React's re-render committed
+  (fixed by waiting on the DOM condition instead of assuming the click
+  action's own promise resolving meant the state had already updated). See
+  `docs/superpowers/specs/2026-07-20-chat-polish-design.md` and
+  `docs/superpowers/plans/2026-07-20-chat-polish.md`.
