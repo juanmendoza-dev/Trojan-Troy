@@ -69,3 +69,68 @@
 :root[data-theme="pulse"] .composer__send-button {
   border-radius: 14px;
 }
+.composer__recording,
+.composer__preview,
+.composer__error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+}
+.composer__recording-time {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.composer__stop,
+.composer__send,
+.composer__discard {
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.composer__stop:active,
+.composer__send:active,
+.composer__discard:active {
+  transform: scale(0.95);
+}
+.composer__stop,
+.composer__send {
+  background: var(--accent);
+  color: #ffffff;
+}
+.composer__discard {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.composer__preview audio {
+  height: 32px;
+}
+.composer__error {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.composer__error button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 13px;
+}
+:root[data-theme="apple"][data-scheme="dark"] .composer__mic {
+  background: rgba(210, 210, 215, 0.24);
+}
+:root[data-theme="iris"] .composer__mic,
+:root[data-theme="pulse"] .composer__mic {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
