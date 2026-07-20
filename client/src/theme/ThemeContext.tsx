@@ -1,19 +1,18 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { resolveDomAttrs, resolveLoadingScheme, type ThemeName, type Scheme } from "./theme";
+import { resolveDomAttrs, type ThemeName, type Scheme } from "./theme";
 
 const STORAGE_KEY = "trojan-troy-theme";
 
 interface ThemeContextValue {
   theme: ThemeName;
   setTheme: (theme: ThemeName) => void;
-  loadingScheme: Scheme;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readStoredTheme(): ThemeName {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === "apple" || stored === "iris" || stored === "pulse" ? stored : "apple";
+  return stored === "apple" || stored === "iris" || stored === "pulse" ? stored : "iris";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -44,10 +43,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(next);
   }
 
-  const value = useMemo(
-    () => ({ theme, setTheme, loadingScheme: resolveLoadingScheme(theme, systemScheme) }),
-    [theme, systemScheme]
-  );
+  const value = useMemo(() => ({ theme, setTheme }), [theme, systemScheme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

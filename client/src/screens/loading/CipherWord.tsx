@@ -20,12 +20,19 @@ interface CipherWordProps {
   fontSizePx: number;
   startDelayS: number;
   staggerS: number;
+  fontFamily: string;
   windowHeightPx?: number;
 }
 
-export function CipherWord({ text, fontSizePx, startDelayS, staggerS, windowHeightPx = 132 }: CipherWordProps) {
-  const resolvedFontDisplay = getComputedStyle(document.documentElement).getPropertyValue("--font-display").trim();
-  const font = `600 ${fontSizePx}px ${resolvedFontDisplay}`;
+export function CipherWord({
+  text,
+  fontSizePx,
+  startDelayS,
+  staggerS,
+  fontFamily,
+  windowHeightPx = 132,
+}: CipherWordProps) {
+  const font = `600 ${fontSizePx}px ${fontFamily}`;
   const letters = useMemo(
     () =>
       text.split("").map((letter) => ({

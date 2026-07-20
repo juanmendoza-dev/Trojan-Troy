@@ -31,7 +31,7 @@ export default function App() {
   const clientRef = useRef<RelayClient | null>(null);
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
-  const { loadingScheme, setTheme } = useTheme();
+  const { setTheme } = useTheme();
 
   useEffect(() => {
     return () => {
@@ -182,7 +182,7 @@ export default function App() {
   }
 
   if (devOverride?.screen === "loading") {
-    return <LoadingScreen roomCode="K7F-2QX" scheme={loadingScheme} />;
+    return <LoadingScreen roomCode="K7F-2QX" />;
   }
   if (devOverride?.screen === "chat") {
     return (
@@ -205,7 +205,7 @@ export default function App() {
     return <WaitingScreen roomCode={screen.roomCode} />;
   }
   if (screen.name === "handshake") {
-    return <LoadingScreen roomCode={screen.roomCode} scheme={loadingScheme} />;
+    return <LoadingScreen roomCode={screen.roomCode} />;
   }
   if (screen.name === "safety-number") {
     return (

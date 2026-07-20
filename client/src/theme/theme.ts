@@ -8,7 +8,3 @@ export function resolveDomAttrs(
   if (theme === "apple") return { theme, scheme: systemScheme };
   return { theme };
 }
-
-export function resolveLoadingScheme(theme: ThemeName, systemScheme: Scheme): Scheme {
-  return theme === "apple" ? systemScheme : "dark";
-}

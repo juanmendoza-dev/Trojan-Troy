@@ -5,13 +5,16 @@
   flex-direction: column;
   justify-content: space-between;
   padding: 72px 80px 96px;
-  font-family: var(--font-ui);
-  background: #ffffff;
-  color: #1d1d1f;
+  font-family: 'Schibsted Grotesk', sans-serif;
+  background: linear-gradient(160deg, #0D0F18 0%, #101223 100%);
+  color: #E8EAF2;
 }
-.loading-screen[data-scheme="dark"] {
-  background: #000000;
-  color: #ffffff;
+
+.loading-screen__top-row,
+.loading-screen__center,
+.loading-screen__bottom-row {
+  position: relative;
+  z-index: 1;
 }
 
 .loading-screen__top-row {
@@ -37,28 +40,25 @@
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.14em;
-  color: #7a7a7a;
+  color: #9BA1B5;
 }
 .loading-screen__status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #0066cc;
-  animation: bluePulse 2.4s ease-out infinite;
-}
-.loading-screen[data-scheme="dark"] .loading-screen__status-dot {
-  background: #2997ff;
-  animation-name: bluePulseDark;
+  background: #8FA6FF;
+  animation: statusPulse 2.4s ease-out infinite;
 }
 
 .loading-screen__room-code {
   font-size: 12px;
   letter-spacing: -0.12px;
-  color: #7a7a7a;
+  color: #9BA1B5;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .loading-screen__wordmark {
-  font-family: var(--font-display);
+  font-family: 'Schibsted Grotesk', sans-serif;
   font-size: 96px;
   font-weight: 600;
   letter-spacing: -2px;
@@ -70,12 +70,9 @@
   align-items: flex-end;
 }
 .loading-screen__period {
-  color: #0066cc;
+  color: #8FA6FF;
   margin-left: 28px;
   animation: lineRise 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) 1.15s both;
-}
-.loading-screen[data-scheme="dark"] .loading-screen__period {
-  color: #2997ff;
 }
 
 .loading-screen__checklist {
@@ -96,47 +93,36 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #0066cc;
-  color: #ffffff;
+  background: #8FA6FF;
+  color: #0B0C14;
   font-size: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   animation: checkPop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
-.loading-screen[data-scheme="dark"] .loading-screen__check {
-  background: #2997ff;
-  color: #000000;
-}
 .loading-screen__pending {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 1.5px solid #0066cc;
+  border: 1.5px solid #8FA6FF;
   box-sizing: border-box;
-  animation: bluePulse 2.4s ease-out infinite;
-}
-.loading-screen[data-scheme="dark"] .loading-screen__pending {
-  border-color: #2997ff;
-  animation-name: bluePulseDark;
+  animation: statusPulse 2.4s ease-out infinite;
 }
 .loading-screen__row-label--pending {
-  color: #7a7a7a;
+  color: #9BA1B5;
 }
 
 .loading-screen__reassurance {
   font-size: 13px;
   letter-spacing: -0.12px;
-  color: #7a7a7a;
+  color: #9BA1B5;
   max-width: 380px;
   line-height: 1.5;
 }
-.loading-screen[data-scheme="dark"] .loading-screen__reassurance {
-  color: #cccccc;
-}
 
 .loading-screen__percent {
-  font-family: var(--font-display);
+  font-family: 'Schibsted Grotesk', sans-serif;
   font-weight: 300;
   font-size: 120px;
   letter-spacing: -2px;
@@ -144,7 +130,7 @@
 }
 .loading-screen__percent-suffix {
   font-size: 40px;
-  color: #7a7a7a;
+  color: #9BA1B5;
   margin-left: 4px;
 }
 
@@ -156,6 +142,7 @@
   overflow: hidden;
   white-space: nowrap;
   pointer-events: none;
+  z-index: 1;
 }
 .loading-screen__marquee-track {
   display: inline-flex;
@@ -164,10 +151,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.18em;
-  color: #d2d2d7;
-}
-.loading-screen[data-scheme="dark"] .loading-screen__marquee-track {
-  color: #333333;
+  color: #3A3E52;
 }
 .loading-screen__marquee-track span {
   padding-right: 48px;
@@ -179,16 +163,11 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: #f0f0f0;
-}
-.loading-screen[data-scheme="dark"] .loading-screen__progress-track {
-  background: #1d1d1f;
+  background: rgba(255, 255, 255, 0.07);
+  z-index: 1;
 }
 .loading-screen__progress-fill {
   height: 100%;
-  background: #0066cc;
+  background: #8FA6FF;
   transition: width 0.1s linear;
-}
-.loading-screen[data-scheme="dark"] .loading-screen__progress-fill {
-  background: #2997ff;
 }
