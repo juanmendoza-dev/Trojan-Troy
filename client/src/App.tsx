@@ -54,8 +54,10 @@ export default function App() {
     roomCode: string
   ) {
     const handshakeStart = performance.now();
+    let disconnected = false;
     client.onMessage(async (envelope: Envelope) => {
       if (envelope.type === "peer-disconnected") {
+        disconnected = true;
         setScreen({ name: "error", message: "Your friend disconnected." });
         return;
       }
@@ -68,6 +70,7 @@ export default function App() {
           if (elapsed < HANDSHAKE_MIN_MS) {
             await new Promise((resolve) => setTimeout(resolve, HANDSHAKE_MIN_MS - elapsed));
           }
+          if (disconnected) return;
           setScreen({ name: "safety-number", roomCode, safetyNumber });
         } catch {
           setScreen({ name: "error", message: "Key exchange failed." });
