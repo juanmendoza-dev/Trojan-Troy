@@ -17,6 +17,7 @@ import { HandshakeJourney } from "./screens/HandshakeJourney";
 import { parseScreenOverride } from "./dev/screenOverride";
 
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
+const GHOST_MODE_STORAGE_KEY = "trojan-troy-ghost-mode";
 
 function maybeSendReadAck(
   client: RelayClient,
@@ -56,7 +57,16 @@ export default function App() {
   const { setTheme } = useTheme();
 
   const pendingReadIdRef = useRef<string | null>(null);
-  const ghostModeRef = useRef(false);
+  const [ghostMode, setGhostMode] = useState<boolean>(
+    () => localStorage.getItem(GHOST_MODE_STORAGE_KEY) === "true"
+  );
+  const ghostModeRef = useRef(ghostMode);
+  ghostModeRef.current = ghostMode;
+
+  function updateGhostMode(next: boolean) {
+    localStorage.setItem(GHOST_MODE_STORAGE_KEY, String(next));
+    setGhostMode(next);
+  }
 
   useEffect(() => {
     function handleFocusChange() {
@@ -298,6 +308,8 @@ export default function App() {
               status: "read",
             },
           ]}
+          ghostMode={ghostMode}
+          onGhostModeChange={updateGhostMode}
           onSend={() => {}}
           onSendVoice={() => {}}
           onLeave={() => {}}
@@ -330,6 +342,8 @@ export default function App() {
           roomCode={screen.roomCode}
           safetyNumber={screen.safetyNumber}
           messages={messages}
+          ghostMode={ghostMode}
+          onGhostModeChange={updateGhostMode}
           onSend={handleSend}
           onSendVoice={handleSendVoice}
           onLeave={handleLeave}

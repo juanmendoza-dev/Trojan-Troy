@@ -5,11 +5,20 @@ import "./Settings.css";
 interface SettingsProps {
   roomCode: string;
   safetyNumber: string;
+  ghostMode: boolean;
+  onGhostModeChange: (next: boolean) => void;
   onLeave: () => void;
   onClose: () => void;
 }
 
-export function Settings({ roomCode, safetyNumber, onLeave, onClose }: SettingsProps) {
+export function Settings({
+  roomCode,
+  safetyNumber,
+  ghostMode,
+  onGhostModeChange,
+  onLeave,
+  onClose,
+}: SettingsProps) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -47,6 +56,25 @@ export function Settings({ roomCode, safetyNumber, onLeave, onClose }: SettingsP
             <span className="settings__row-label">Status</span>
             <span className="settings__row-value">Connected</span>
           </div>
+        </div>
+
+        <div className="settings__section">
+          <div className="settings__section-label">Privacy</div>
+          <div className="settings__row">
+            <span className="settings__row-label">Ghost mode</span>
+            <label className="settings__toggle">
+              <input
+                type="checkbox"
+                checked={ghostMode}
+                onChange={(event) => onGhostModeChange(event.target.checked)}
+              />
+              <span className="settings__toggle-track" />
+            </label>
+          </div>
+          <p className="settings__about-text">
+            When on, your peer never sees a "read" receipt for messages you open — they'll still see
+            "delivered."
+          </p>
         </div>
 
         <div className="settings__section">

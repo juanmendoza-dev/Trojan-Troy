@@ -17,6 +17,8 @@ interface ChatScreenProps {
   roomCode: string;
   safetyNumber: string;
   messages: ChatMessage[];
+  ghostMode: boolean;
+  onGhostModeChange: (next: boolean) => void;
   onSend: (text: string) => void;
   onSendVoice: (blob: Blob, mimeType: string) => void;
   onLeave: () => void;
@@ -41,6 +43,8 @@ export function ChatScreen({
   roomCode,
   safetyNumber,
   messages,
+  ghostMode,
+  onGhostModeChange,
   onSend,
   onSendVoice,
   onLeave,
@@ -66,6 +70,8 @@ export function ChatScreen({
         <Settings
           roomCode={roomCode}
           safetyNumber={safetyNumber}
+          ghostMode={ghostMode}
+          onGhostModeChange={onGhostModeChange}
           onLeave={onLeave}
           onClose={() => setSettingsOpen(false)}
         />
