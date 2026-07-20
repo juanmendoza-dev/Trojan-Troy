@@ -4,7 +4,6 @@ import { Sidebar } from "../components/Sidebar";
 import { MessageBubble } from "../components/MessageBubble";
 import { VoiceMessageBubble } from "../components/VoiceMessageBubble";
 import { Composer } from "../components/Composer";
-import { AmbientOrbs } from "../components/AmbientOrbs";
 import { Settings } from "../components/Settings";
 import "./ChatScreen.css";
 
@@ -49,7 +48,6 @@ export function ChatScreen({
 
   return (
     <div className="chat-screen">
-      <AmbientOrbs />
       <TitleBar roomCode={roomCode} onOpenSettings={() => setSettingsOpen(true)} />
       <div className="chat-screen__body">
         <Sidebar roomCode={roomCode} onNewChat={() => {}} />
