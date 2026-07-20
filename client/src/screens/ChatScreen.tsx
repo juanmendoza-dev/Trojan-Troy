@@ -5,12 +5,13 @@ import { MessageBubble } from "../components/MessageBubble";
 import { VoiceMessageBubble } from "../components/VoiceMessageBubble";
 import { Composer } from "../components/Composer";
 import { Settings } from "../components/Settings";
+import type { MessageStatus } from "../protocol/messageStatus";
 import "./ChatScreen.css";
 
 export type ChatMessage =
-  | { id: string; from: "me" | "peer"; kind: "text"; text: string }
-  | { id: string; from: "me" | "peer"; kind: "voice"; audioUrl: string }
-  | { id: string; kind: "decryption-error" };
+  | { id: string; timestamp: number; from: "me" | "peer"; kind: "text"; text: string; status?: MessageStatus }
+  | { id: string; timestamp: number; from: "me" | "peer"; kind: "voice"; audioUrl: string; status?: MessageStatus }
+  | { id: string; timestamp: number; kind: "decryption-error" };
 
 interface ChatScreenProps {
   roomCode: string;

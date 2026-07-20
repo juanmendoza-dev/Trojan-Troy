@@ -5,6 +5,8 @@ import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
 import { encryptMessage, decryptMessage } from "./crypto/messages";
 import { encryptVoiceClip, decryptVoiceClip } from "./crypto/media";
+import { advanceStatus } from "./protocol/messageStatus";
+import { shouldSendReadAck } from "./protocol/readAckDecision";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
 import { WaitingScreen } from "./screens/WaitingScreen";
 import { SafetyNumberScreen } from "./screens/SafetyNumberScreen";
@@ -15,6 +17,25 @@ import { HandshakeJourney } from "./screens/HandshakeJourney";
 import { parseScreenOverride } from "./dev/screenOverride";
 
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
+
+function maybeSendReadAck(
+  client: RelayClient,
+  pendingReadIdRef: { current: string | null },
+  ghostModeRef: { current: boolean }
+) {
+  const messageId = pendingReadIdRef.current;
+  if (!messageId) return;
+  const send = shouldSendReadAck({
+    isFocused: document.hasFocus(),
+    isVisible: document.visibilityState === "visible",
+    ghostMode: ghostModeRef.current,
+    alreadyAcked: false,
+  });
+  if (send) {
+    client.send({ type: "read", messageId });
+    pendingReadIdRef.current = null;
+  }
+}
 
 type Screen =
   | { name: "start" }
@@ -33,6 +54,22 @@ export default function App() {
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
   const { setTheme } = useTheme();
+
+  const pendingReadIdRef = useRef<string | null>(null);
+  const ghostModeRef = useRef(false);
+
+  useEffect(() => {
+    function handleFocusChange() {
+      const client = clientRef.current;
+      if (client) maybeSendReadAck(client, pendingReadIdRef, ghostModeRef);
+    }
+    document.addEventListener("visibilitychange", handleFocusChange);
+    window.addEventListener("focus", handleFocusChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleFocusChange);
+      window.removeEventListener("focus", handleFocusChange);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -80,31 +117,55 @@ export default function App() {
       }
       if (envelope.type === "ciphertext") {
         const keys = sessionKeysRef.current;
-        if (!keys) return;
+        const client = clientRef.current;
+        if (!keys || !client) return;
         try {
           const text = await decryptMessage(keys.rx, envelope.payload);
           setMessages((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), from: "peer", kind: "text", text },
+            { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "text", text },
           ]);
+          client.send({ type: "delivered", messageId: envelope.messageId });
+          pendingReadIdRef.current = envelope.messageId;
+          maybeSendReadAck(client, pendingReadIdRef, ghostModeRef);
         } catch {
-          setMessages((prev) => [...prev, { id: crypto.randomUUID(), kind: "decryption-error" }]);
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
+          ]);
         }
         return;
       }
       if (envelope.type === "voice") {
         const keys = sessionKeysRef.current;
-        if (!keys) return;
+        const client = clientRef.current;
+        if (!keys || !client) return;
         try {
           const blob = await decryptVoiceClip(keys.rx, envelope.payload, envelope.mimeType);
           const audioUrl = URL.createObjectURL(blob);
           setMessages((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), from: "peer", kind: "voice", audioUrl },
+            { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
           ]);
+          client.send({ type: "delivered", messageId: envelope.messageId });
+          pendingReadIdRef.current = envelope.messageId;
+          maybeSendReadAck(client, pendingReadIdRef, ghostModeRef);
         } catch {
-          setMessages((prev) => [...prev, { id: crypto.randomUUID(), kind: "decryption-error" }]);
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
+          ]);
         }
+        return;
+      }
+      if (envelope.type === "delivered" || envelope.type === "read") {
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.kind !== "decryption-error" && message.id === envelope.messageId
+              ? { ...message, status: advanceStatus(message.status ?? "sent", envelope.type) }
+              : message
+          )
+        );
       }
     });
 
@@ -165,8 +226,12 @@ export default function App() {
     const client = clientRef.current;
     if (!keys || !client) return;
     const payload = await encryptMessage(keys.tx, text);
-    client.send({ type: "ciphertext", payload });
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "me", kind: "text", text }]);
+    const id = crypto.randomUUID();
+    client.send({ type: "ciphertext", payload, messageId: id });
+    setMessages((prev) => [
+      ...prev,
+      { id, timestamp: Date.now(), from: "me", kind: "text", text, status: "sent" },
+    ]);
   }
 
   async function handleSendVoice(blob: Blob, mimeType: string) {
@@ -174,11 +239,12 @@ export default function App() {
     const client = clientRef.current;
     if (!keys || !client) return;
     const payload = await encryptVoiceClip(keys.tx, blob);
-    client.send({ type: "voice", payload, mimeType });
+    const id = crypto.randomUUID();
+    client.send({ type: "voice", payload, mimeType, messageId: id });
     const audioUrl = URL.createObjectURL(blob);
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), from: "me", kind: "voice", audioUrl },
+      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, status: "sent" },
     ]);
   }
 
@@ -186,6 +252,7 @@ export default function App() {
     clientRef.current?.close();
     clientRef.current = null;
     sessionKeysRef.current = null;
+    pendingReadIdRef.current = null;
     for (const message of messagesRef.current) {
       if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
     }
@@ -207,9 +274,29 @@ export default function App() {
           roomCode="K7F-2QX"
           safetyNumber="21934 07741 66012"
           messages={[
-            { id: "1", from: "peer", kind: "text", text: "did you check the safety number?" },
-            { id: "2", from: "me", kind: "text", text: "yep — 21934 07741 66012 — matches on my end" },
-            { id: "3", from: "me", kind: "text", text: "got it — nothing between us but ciphertext." },
+            {
+              id: "1",
+              timestamp: Date.now() - 3000,
+              from: "peer",
+              kind: "text",
+              text: "did you check the safety number?",
+            },
+            {
+              id: "2",
+              timestamp: Date.now() - 2000,
+              from: "me",
+              kind: "text",
+              text: "yep — 21934 07741 66012 — matches on my end",
+              status: "delivered",
+            },
+            {
+              id: "3",
+              timestamp: Date.now() - 1000,
+              from: "me",
+              kind: "text",
+              text: "got it — nothing between us but ciphertext.",
+              status: "read",
+            },
           ]}
           onSend={() => {}}
           onSendVoice={() => {}}
