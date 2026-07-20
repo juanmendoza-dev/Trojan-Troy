@@ -1,15 +1,30 @@
 import { useRef, useState } from "react";
+import type { MessageStatus } from "../protocol/messageStatus";
 import "./VoiceMessageBubble.css";
 
 interface VoiceMessageBubbleProps {
   from: "me" | "peer";
   audioUrl: string;
   durationLabel: string;
+  status?: MessageStatus;
+  delayMs?: number;
 }
 
 const BAR_HEIGHTS = [10, 20, 14, 24, 12, 22, 9, 18, 13, 21];
 
-export function VoiceMessageBubble({ from, audioUrl, durationLabel }: VoiceMessageBubbleProps) {
+const STATUS_TICKS: Record<MessageStatus, string> = {
+  sent: "✓",
+  delivered: "✓✓",
+  read: "✓✓",
+};
+
+export function VoiceMessageBubble({
+  from,
+  audioUrl,
+  durationLabel,
+  status,
+  delayMs = 0,
+}: VoiceMessageBubbleProps) {
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -25,7 +40,7 @@ export function VoiceMessageBubble({ from, audioUrl, durationLabel }: VoiceMessa
 
   return (
     <div className={from === "me" ? "message-row message-row--outgoing" : "message-row message-row--incoming"}>
-      <div className="voice-bubble">
+      <div className="voice-bubble" style={{ animationDelay: `${delayMs}ms` }}>
         <audio
           ref={audioRef}
           src={audioUrl}
@@ -47,6 +62,7 @@ export function VoiceMessageBubble({ from, audioUrl, durationLabel }: VoiceMessa
         </div>
         <span className="voice-bubble__duration">{durationLabel}</span>
       </div>
+      {status && <span className={`message-status message-status--${status}`}>{STATUS_TICKS[status]}</span>}
     </div>
   );
 }

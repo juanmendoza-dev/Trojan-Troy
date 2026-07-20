@@ -6,6 +6,7 @@ import { VoiceMessageBubble } from "../components/VoiceMessageBubble";
 import { Composer } from "../components/Composer";
 import { Settings } from "../components/Settings";
 import type { MessageStatus } from "../protocol/messageStatus";
+import { staggerDelayMs } from "../components/messageStagger";
 import "./ChatScreen.css";
 
 export type ChatMessage =
@@ -24,7 +25,7 @@ interface ChatScreenProps {
   onLeave: () => void;
 }
 
-function renderMessage(message: ChatMessage): ReactNode {
+function renderMessage(message: ChatMessage, showStatus: boolean, delayMs: number): ReactNode {
   if (message.kind === "decryption-error") {
     return (
       <div className="message-row message-row--incoming">
@@ -32,11 +33,19 @@ function renderMessage(message: ChatMessage): ReactNode {
       </div>
     );
   }
+  const status = showStatus ? message.status : undefined;
   if (message.kind === "voice") {
-    // duration hardcoded — real clip length isn't threaded through ChatMessage yet
-    return <VoiceMessageBubble from={message.from} audioUrl={message.audioUrl} durationLabel="0:23" />;
+    return (
+      <VoiceMessageBubble
+        from={message.from}
+        audioUrl={message.audioUrl}
+        durationLabel="0:23"
+        status={status}
+        delayMs={delayMs}
+      />
+    );
   }
-  return <MessageBubble from={message.from} text={message.text} />;
+  return <MessageBubble from={message.from} text={message.text} status={status} delayMs={delayMs} />;
 }
 
 export function ChatScreen({
@@ -51,6 +60,11 @@ export function ChatScreen({
 }: ChatScreenProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  const lastMeIndex = messages.reduce(
+    (acc, message, index) => (message.kind !== "decryption-error" && message.from === "me" ? index : acc),
+    -1
+  );
+
   return (
     <div className="chat-screen">
       <TitleBar roomCode={roomCode} onOpenSettings={() => setSettingsOpen(true)} />
@@ -59,8 +73,10 @@ export function ChatScreen({
         <div className="chat-screen__main">
           <div className="chat-screen__messages">
             <div className="chat-screen__day-divider">Today</div>
-            {messages.map((message) => (
-              <div key={message.id}>{renderMessage(message)}</div>
+            {messages.map((message, index) => (
+              <div key={message.id}>
+                {renderMessage(message, index === lastMeIndex, staggerDelayMs(messages, index))}
+              </div>
             ))}
           </div>
           <Composer onSend={onSend} onSendVoice={onSendVoice} />
