@@ -1,0 +1,75 @@
+.voice-bubble {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bubble-incoming-bg);
+  border-radius: var(--radius-bubble) var(--radius-bubble) var(--radius-bubble) 5px;
+  padding: 12px 16px;
+}
+.voice-bubble__play {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 12px;
+  cursor: pointer;
+  flex: none;
+  transition: transform 0.12s ease;
+}
+.voice-bubble__play:active {
+  transform: scale(0.95);
+}
+.voice-bubble__waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 26px;
+}
+.voice-bubble__bar {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleY(0.35);
+}
+.voice-bubble__waveform[data-playing="true"] .voice-bubble__bar {
+  animation: waveBar 1.4s ease-in-out infinite alternate;
+}
+.voice-bubble__duration {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Pulse Slate waveform color ramp */
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(1) {
+  background: #A78BFA;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(2) {
+  background: #B584F0;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(3) {
+  background: #C47DE4;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(4) {
+  background: #DC77CD;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(5) {
+  background: #F472B6;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(6) {
+  background: #DC77CD;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(7) {
+  background: #C47DE4;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(8) {
+  background: #B584F0;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(9) {
+  background: #A78BFA;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(10) {
+  background: #B584F0;
+}

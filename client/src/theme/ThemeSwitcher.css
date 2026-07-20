@@ -1,0 +1,25 @@
+.theme-switcher {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  gap: 4px;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 4px;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+}
+.theme-switcher__option {
+  font-size: 11px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+}
+.theme-switcher__option--active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}

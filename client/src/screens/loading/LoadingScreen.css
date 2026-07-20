@@ -1,0 +1,194 @@
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 72px 80px 96px;
+  font-family: var(--font-ui);
+  background: #ffffff;
+  color: #1d1d1f;
+}
+.loading-screen[data-scheme="dark"] {
+  background: #000000;
+  color: #ffffff;
+}
+
+.loading-screen__top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.loading-screen__bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.loading-screen__center {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.loading-screen__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: #7a7a7a;
+}
+.loading-screen__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #0066cc;
+  animation: bluePulse 2.4s ease-out infinite;
+}
+.loading-screen[data-scheme="dark"] .loading-screen__status-dot {
+  background: #2997ff;
+  animation-name: bluePulseDark;
+}
+
+.loading-screen__room-code {
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  color: #7a7a7a;
+}
+
+.loading-screen__wordmark {
+  font-family: var(--font-display);
+  font-size: 96px;
+  font-weight: 600;
+  letter-spacing: -2px;
+  line-height: 132px;
+}
+.loading-screen__wordmark-line--second {
+  margin-top: -16px;
+  display: flex;
+  align-items: flex-end;
+}
+.loading-screen__period {
+  color: #0066cc;
+  margin-left: 28px;
+  animation: lineRise 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) 1.15s both;
+}
+.loading-screen[data-scheme="dark"] .loading-screen__period {
+  color: #2997ff;
+}
+
+.loading-screen__checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 40px;
+}
+.loading-screen__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  letter-spacing: -0.224px;
+  animation: rowIn 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.loading-screen__check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0066cc;
+  color: #ffffff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: checkPop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.loading-screen[data-scheme="dark"] .loading-screen__check {
+  background: #2997ff;
+  color: #000000;
+}
+.loading-screen__pending {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid #0066cc;
+  box-sizing: border-box;
+  animation: bluePulse 2.4s ease-out infinite;
+}
+.loading-screen[data-scheme="dark"] .loading-screen__pending {
+  border-color: #2997ff;
+  animation-name: bluePulseDark;
+}
+.loading-screen__row-label--pending {
+  color: #7a7a7a;
+}
+
+.loading-screen__reassurance {
+  font-size: 13px;
+  letter-spacing: -0.12px;
+  color: #7a7a7a;
+  max-width: 380px;
+  line-height: 1.5;
+}
+.loading-screen[data-scheme="dark"] .loading-screen__reassurance {
+  color: #cccccc;
+}
+
+.loading-screen__percent {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: 120px;
+  letter-spacing: -2px;
+  line-height: 1;
+}
+.loading-screen__percent-suffix {
+  font-size: 40px;
+  color: #7a7a7a;
+  margin-left: 4px;
+}
+
+.loading-screen__marquee {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.loading-screen__marquee-track {
+  display: inline-flex;
+  width: max-content;
+  animation: marqueeX 22s linear infinite;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: #d2d2d7;
+}
+.loading-screen[data-scheme="dark"] .loading-screen__marquee-track {
+  color: #333333;
+}
+.loading-screen__marquee-track span {
+  padding-right: 48px;
+}
+
+.loading-screen__progress-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #f0f0f0;
+}
+.loading-screen[data-scheme="dark"] .loading-screen__progress-track {
+  background: #1d1d1f;
+}
+.loading-screen__progress-fill {
+  height: 100%;
+  background: #0066cc;
+  transition: width 0.1s linear;
+}
+.loading-screen[data-scheme="dark"] .loading-screen__progress-fill {
+  background: #2997ff;
+}

@@ -8,6 +8,18 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-19 — Phase 4 UI redesign: user made three small keep-as-is/
+  fix calls on plan-vs-design-source-file gaps surfaced during task review**:
+  (1) the sidebar's "New chat" button radius — kept the plan's shared 12px
+  for Iris and Pulse rather than matching the design file's distinct 8px for
+  Pulse; (2) the voice-message waveform's per-bar color ramp on Pulse Slate —
+  fixed to match the design file (was flat single-color in the plan's own
+  code sample); (3) the composer's recording/preview/error states and the
+  mic button's dark-theme background — both were missing any CSS anywhere in
+  the plan (a real gap, not a cosmetic mismatch) and were fixed rather than
+  left unstyled, since those states are user-visible mid-conversation.
+  (Decided by: Jay)
+
 - **2026-07-19 — Phase 5.1 overrides the original no-accounts/
   ephemeral-identity decision**: users now get a long-term identity keypair
   persisted client-side (IndexedDB), plus a self-chosen display name. This
@@ -146,5 +158,10 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
   5. Kinetic-wordmark letter-column widths are measured at runtime via
      `canvas.measureText()` instead of hardcoded — the mockup's hardcoded
      widths are tuned to SF Pro Display (macOS/Safari-only), which would
-     clip letters in the fallback font on Windows/Linux/Chrome.
+     clip letters in the fallback font on Windows/Linux/Chrome. Verified
+     end-to-end during Task 13 that this actually renders correctly — an
+     earlier bug in this same measurement code (canvas silently rejecting a
+     literal `var(--font-display)` CSS reference, falling back to a 10px
+     default and clipping every letter) was caught and fixed, see
+     `progress.md`'s 2026-07-19 Phase 4 entry.
   (Decided by: Jay + Claude, while writing the implementation plan)

@@ -11,7 +11,7 @@ and `decisions.md` for why things were done a certain way.
 | 1 — Foundation (key gen/exchange, safety number) | Complete — key exchange + safety number screen working end-to-end |
 | 2 — Encrypted messaging (relay + real-time text) | Complete — encrypted text messaging working end-to-end |
 | 3 — Encrypted voice messages | Complete — async encrypted voice messages working end-to-end |
-| 4 — UI polish | In progress — plan written and committed, worktree set up, no implementation tasks started yet |
+| 4 — UI polish | Complete — kinetic-cipher loading screen and all three chat themes (Apple, Iris Glass, Pulse Slate) built and verified end-to-end |
 | 5 — Marketing/landing site | Not started |
 
 ## Log
@@ -44,10 +44,8 @@ and `decisions.md` for why things were done a certain way.
   recording/playback verification still pending. See
   `docs/superpowers/plans/2026-07-18-phase3-voice-messages.md`.
 
-- **2026-07-19** — Phase 4 UI redesign kicked off, in progress (not merged,
-  not implemented yet). Read this entry fully before touching Phase 4 —
-  it's the resume point for a fresh session/agent with no memory of this
-  work.
+- **2026-07-19** — Phase 4 UI redesign kicked off (superseded by the
+  "complete" entry below — kept for the historical resume-point record).
 
   **What exists so far:**
   - A high-fidelity design handoff (external design work via Claude/Fable)
@@ -95,3 +93,28 @@ and `decisions.md` for why things were done a certain way.
   task-by-task via `superpowers:subagent-driven-development` starting at
   Task 1, checking the SDD ledger above first in case a later session made
   progress this log doesn't know about.
+
+- **2026-07-19** — Phase 4 UI redesign complete: kinetic-cipher loading
+  screen and three runtime-switchable chat themes (Apple, Iris Glass, Pulse
+  Slate) built on top of Phases 1-3's unchanged crypto/relay/audio layers —
+  `TitleBar`, `Sidebar`, `MessageBubble`, `VoiceMessageBubble`, and `Composer`
+  components, a rewritten `ChatScreen`, and a `handshake` screen state wired
+  into `App.tsx`'s state machine between "waiting" and "safety-number".
+  `StartJoinScreen`, `WaitingScreen`, and `SafetyNumberScreen` stay unstyled
+  per the agreed scope cut. Verified end-to-end with a real two-browser-context
+  run (headless Chromium via Playwright, not the manual click-through the plan
+  assumed): room pairing, handshake animation, matching safety numbers,
+  themed chat screen, text messages both directions, and a recorded/sent/
+  received voice message, across all three themes and both light/dark
+  schemes — zero console errors. One real bug was found and fixed during this
+  verification pass (not present in the reviewed Task 8-12 diffs, inherited
+  from Task 5's original implementation): `CipherWord.tsx`'s letter-width
+  measurement built a canvas font string containing a literal
+  `var(--font-display)` CSS reference, which the Canvas 2D API silently
+  rejects (falling back to its default `10px sans-serif`) — every letter
+  column was measured far too narrow, clipping almost the entire glyph and
+  making the "Trojan Troy" wordmark unreadable on the loading screen in every
+  theme/scheme. Fixed by resolving the custom property via `getComputedStyle`
+  before building the canvas font string. See
+  `docs/superpowers/plans/2026-07-19-phase4-ui-redesign.md` and
+  `decisions.md` for the design deviations from the handoff.

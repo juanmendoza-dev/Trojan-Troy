@@ -1,5 +1,10 @@
-import type { FormEvent, ReactNode } from "react";
-import { VoiceRecorder } from "./VoiceRecorder";
+import type { ReactNode } from "react";
+import { TitleBar } from "../components/TitleBar";
+import { Sidebar } from "../components/Sidebar";
+import { MessageBubble } from "../components/MessageBubble";
+import { VoiceMessageBubble } from "../components/VoiceMessageBubble";
+import { Composer } from "../components/Composer";
+import "./ChatScreen.css";
 
 export type ChatMessage =
   | { id: string; from: "me" | "peer"; kind: "text"; text: string }
@@ -7,6 +12,7 @@ export type ChatMessage =
   | { id: string; kind: "decryption-error" };
 
 interface ChatScreenProps {
+  roomCode: string;
   messages: ChatMessage[];
   onSend: (text: string) => void;
   onSendVoice: (blob: Blob, mimeType: string) => void;
@@ -14,42 +20,35 @@ interface ChatScreenProps {
 
 function renderMessage(message: ChatMessage): ReactNode {
   if (message.kind === "decryption-error") {
-    return "[Message could not be decrypted]";
-  }
-  const who = message.from === "me" ? "You" : "Them";
-  if (message.kind === "voice") {
     return (
-      <>
-        {who}: <audio src={message.audioUrl} controls />
-      </>
+      <div className="message-row message-row--incoming">
+        <div className="message-bubble message-bubble--incoming">[Message could not be decrypted]</div>
+      </div>
     );
   }
-  return `${who}: ${message.text}`;
+  if (message.kind === "voice") {
+    // duration hardcoded — real clip length isn't threaded through ChatMessage yet
+    return <VoiceMessageBubble from={message.from} audioUrl={message.audioUrl} durationLabel="0:23" />;
+  }
+  return <MessageBubble from={message.from} text={message.text} />;
 }
 
-export function ChatScreen({ messages, onSend, onSendVoice }: ChatScreenProps) {
-  const handleSend = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const text = String(data.get("message") ?? "").trim();
-    if (text) onSend(text);
-    form.reset();
-  };
-
+export function ChatScreen({ roomCode, messages, onSend, onSendVoice }: ChatScreenProps) {
   return (
-    <div>
-      <h1>Chat</h1>
-      <ul>
-        {messages.map((message) => (
-          <li key={message.id}>{renderMessage(message)}</li>
-        ))}
-      </ul>
-      <form onSubmit={handleSend}>
-        <input name="message" placeholder="Type a message" autoComplete="off" />
-        <button type="submit">Send</button>
-      </form>
-      <VoiceRecorder onSend={onSendVoice} />
+    <div className="chat-screen">
+      <TitleBar roomCode={roomCode} />
+      <div className="chat-screen__body">
+        <Sidebar roomCode={roomCode} onNewChat={() => {}} />
+        <div className="chat-screen__main">
+          <div className="chat-screen__messages">
+            <div className="chat-screen__day-divider">Today</div>
+            {messages.map((message) => (
+              <div key={message.id}>{renderMessage(message)}</div>
+            ))}
+          </div>
+          <Composer onSend={onSend} onSendVoice={onSendVoice} />
+        </div>
+      </div>
     </div>
   );
 }

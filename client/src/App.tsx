@@ -9,23 +9,29 @@ import { StartJoinScreen } from "./screens/StartJoinScreen";
 import { WaitingScreen } from "./screens/WaitingScreen";
 import { SafetyNumberScreen } from "./screens/SafetyNumberScreen";
 import { ChatScreen, type ChatMessage } from "./screens/ChatScreen";
+import { useTheme } from "./theme/ThemeContext";
+import { LoadingScreen } from "./screens/loading/LoadingScreen";
+import { parseScreenOverride } from "./dev/screenOverride";
 
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
 
 type Screen =
   | { name: "start" }
   | { name: "waiting"; roomCode: string }
-  | { name: "safety-number"; safetyNumber: string }
-  | { name: "chat" }
+  | { name: "handshake"; roomCode: string }
+  | { name: "safety-number"; roomCode: string; safetyNumber: string }
+  | { name: "chat"; roomCode: string }
   | { name: "error"; message: string };
 
 export default function App() {
+  const devOverride = import.meta.env.DEV ? parseScreenOverride(window.location.search) : null;
   const [screen, setScreen] = useState<Screen>({ name: "start" });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const sessionKeysRef = useRef<SessionKeys | null>(null);
   const clientRef = useRef<RelayClient | null>(null);
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
+  const { loadingScheme, setTheme } = useTheme();
 
   useEffect(() => {
     return () => {
@@ -35,13 +41,23 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (devOverride?.theme) setTheme(devOverride.theme);
+  }, []);
+
+  const HANDSHAKE_MIN_MS = 2600;
+
   async function exchangeKeys(
     client: RelayClient,
     own: Keypair,
-    role: "initiator" | "responder"
+    role: "initiator" | "responder",
+    roomCode: string
   ) {
+    const handshakeStart = performance.now();
+    let disconnected = false;
     client.onMessage(async (envelope: Envelope) => {
       if (envelope.type === "peer-disconnected") {
+        disconnected = true;
         setScreen({ name: "error", message: "Your friend disconnected." });
         return;
       }
@@ -50,7 +66,12 @@ export default function App() {
           const peerPublicKey = await fromBase64(envelope.payload);
           sessionKeysRef.current = await deriveSessionKeys(own, peerPublicKey, role);
           const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey);
-          setScreen({ name: "safety-number", safetyNumber });
+          const elapsed = performance.now() - handshakeStart;
+          if (elapsed < HANDSHAKE_MIN_MS) {
+            await new Promise((resolve) => setTimeout(resolve, HANDSHAKE_MIN_MS - elapsed));
+          }
+          if (disconnected) return;
+          setScreen({ name: "safety-number", roomCode, safetyNumber });
         } catch {
           setScreen({ name: "error", message: "Key exchange failed." });
         }
@@ -99,12 +120,15 @@ export default function App() {
       setScreen({ name: "error", message: "Could not connect to the relay." });
       return;
     }
+    let currentRoomCode = "";
     client.onMessage((envelope) => {
       if (envelope.type === "created") {
+        currentRoomCode = envelope.roomCode;
         setScreen({ name: "waiting", roomCode: envelope.roomCode });
       }
       if (envelope.type === "peer-connected") {
-        void exchangeKeys(client, own, "initiator");
+        setScreen({ name: "handshake", roomCode: currentRoomCode });
+        void exchangeKeys(client, own, "initiator", currentRoomCode);
       }
       if (envelope.type === "error") {
         setScreen({ name: "error", message: envelope.message });
@@ -128,7 +152,8 @@ export default function App() {
         setScreen({ name: "error", message: envelope.message });
       }
       if (envelope.type === "peer-connected") {
-        void exchangeKeys(client, own, "responder");
+        setScreen({ name: "handshake", roomCode });
+        void exchangeKeys(client, own, "responder", roomCode);
       }
     });
     client.send({ type: "join", roomCode });
@@ -156,22 +181,49 @@ export default function App() {
     ]);
   }
 
+  if (devOverride?.screen === "loading") {
+    return <LoadingScreen roomCode="K7F-2QX" scheme={loadingScheme} />;
+  }
+  if (devOverride?.screen === "chat") {
+    return (
+      <ChatScreen
+        roomCode="K7F-2QX"
+        messages={[
+          { id: "1", from: "peer", kind: "text", text: "did you check the safety number?" },
+          { id: "2", from: "me", kind: "text", text: "yep — 21934 07741 66012 — matches on my end" },
+          { id: "3", from: "me", kind: "text", text: "got it — nothing between us but ciphertext." },
+        ]}
+        onSend={() => {}}
+        onSendVoice={() => {}}
+      />
+    );
+  }
   if (screen.name === "start") {
     return <StartJoinScreen onStart={handleStart} onJoin={handleJoin} />;
   }
   if (screen.name === "waiting") {
     return <WaitingScreen roomCode={screen.roomCode} />;
   }
+  if (screen.name === "handshake") {
+    return <LoadingScreen roomCode={screen.roomCode} scheme={loadingScheme} />;
+  }
   if (screen.name === "safety-number") {
     return (
       <SafetyNumberScreen
         safetyNumber={screen.safetyNumber}
-        onVerified={() => setScreen({ name: "chat" })}
+        onVerified={() => setScreen({ name: "chat", roomCode: screen.roomCode })}
       />
     );
   }
   if (screen.name === "chat") {
-    return <ChatScreen messages={messages} onSend={handleSend} onSendVoice={handleSendVoice} />;
+    return (
+      <ChatScreen
+        roomCode={screen.roomCode}
+        messages={messages}
+        onSend={handleSend}
+        onSendVoice={handleSendVoice}
+      />
+    );
   }
   return (
     <div>

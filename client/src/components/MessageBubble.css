@@ -1,0 +1,41 @@
+.message-row {
+  display: flex;
+  animation: msgIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.message-row--incoming {
+  justify-content: flex-start;
+}
+.message-row--outgoing {
+  justify-content: flex-end;
+}
+.message-bubble {
+  max-width: 420px;
+  padding: 11px 16px;
+  font-size: 15px;
+  line-height: 1.47;
+  letter-spacing: -0.224px;
+  border-radius: var(--radius-bubble);
+  transition: transform 0.2s ease;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.message-bubble--incoming {
+  background: var(--bubble-incoming-bg);
+  color: var(--text-primary);
+  border-radius: var(--radius-bubble) var(--radius-bubble) var(--radius-bubble) 5px;
+}
+.message-bubble--outgoing {
+  background: var(--bubble-outgoing-bg);
+  color: var(--bubble-outgoing-text);
+  border-radius: var(--radius-bubble) var(--radius-bubble) 5px var(--radius-bubble);
+}
+:root[data-theme="iris"] .message-bubble,
+:root[data-theme="pulse"] .message-bubble {
+  border: 1px solid var(--border);
+  font-size: 14px;
+  line-height: 1.5;
+}
+:root[data-theme="iris"] .message-bubble:hover,
+:root[data-theme="pulse"] .message-bubble:hover {
+  transform: translateY(-2px);
+}
