@@ -8,6 +8,18 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-19 — New Phase 4.5 inserted before Phase 5: a working, hosted
+  prototype (fixed Iris Glass animation, Iris Glass as the standard design,
+  loading screen unified with the chat theme, a settings tab, Vercel
+  hosting) comes before any of Phase 5's scope, including 5.2's
+  forward-secrecy complexity increase.** Rationale: get the core chatting
+  experience fully solid and demoable before layering on more security
+  complexity. This also revises deviation #3 from the Phase 4 entry below
+  (loading screen always Apple-style) — once Iris Glass's background-orb
+  animation is fixed, the loading screen should match the (now Iris-Glass-
+  default) chat theme instead of always rendering Apple. See `roadmap.md`.
+  (Decided by: Jay)
+
 - **2026-07-19 — Phase 4 UI redesign: user made three small keep-as-is/
   fix calls on plan-vs-design-source-file gaps surfaced during task review**:
   (1) the sidebar's "New chat" button radius — kept the plan's shared 12px

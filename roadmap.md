@@ -27,10 +27,39 @@ one works.
 - [ ] A genuinely clean, beautiful interface. Handled externally via a
       separate design tool/process, not built by an agent in this repo.
       Comes after the plumbing works, not before.
+- [ ] Known gap found during preview: Iris Glass and Pulse Slate are both
+      missing their background animations from the design handoff — Iris
+      Glass's two drifting ambient orbs (`floatOrb`), Pulse Slate's central
+      ambient glow pulse (`glowPulse`). Both keyframes already exist in
+      `client/src/styles/keyframes.css` but aren't applied to any element
+      yet. Iris Glass's fix is now the blocking first task of Phase 4.5
+      below; Pulse Slate's is backlog — not on the critical path now that
+      Iris Glass is the standard design.
+
+## Phase 4.5 — Working prototype: unify design, add settings, host it
+Before touching Phase 5's expanded scope, get one polished, hosted,
+end-to-end chat prototype solid. Build in this order:
+
+- [ ] Fix Iris Glass's missing background-orb animation (`floatOrb` — see
+      Phase 4 gap above). Blocking prerequisite for everything else in this
+      phase.
+- [ ] Make Iris Glass the standard/default design and unify the loading
+      screen with the chat screen so they share one consistent visual
+      language. Today the loading screen always renders Apple-style
+      regardless of the selected chat theme (a deliberate Phase 4 deviation,
+      see `decisions.md`) — revisit that now that Iris Glass is becoming the
+      default instead of Apple.
+- [ ] Settings tab so users can change app settings. Brainstorm scope
+      before building (`superpowers:brainstorming`) — what belongs in it
+      hasn't been decided yet.
+- [ ] Host the prototype on Vercel so there's one persistent shareable
+      link instead of ad-hoc localhost link-sharing.
 
 ## Phase 5 — New features
 Substantially expands project scope/complexity beyond Version A's original
-plan (see `decisions.md` for why). Built as a sequence of independent
+plan (see `decisions.md` for why). Waits until Phase 4.5's working
+prototype is done — get the chatting version solid before increasing
+security complexity (5.2 onward). Built as a sequence of independent
 sub-projects, each with its own spec in `docs/superpowers/specs/` and its
 own plan/implementation cycle. Build in this order — later items depend on
 earlier ones:
