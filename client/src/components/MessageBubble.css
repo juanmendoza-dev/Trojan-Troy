@@ -16,6 +16,8 @@
   letter-spacing: -0.224px;
   border-radius: var(--radius-bubble);
   transition: transform 0.2s ease;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .message-bubble--incoming {
   background: var(--bubble-incoming-bg);
