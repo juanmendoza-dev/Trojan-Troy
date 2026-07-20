@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { VoiceRecorder } from "../screens/VoiceRecorder";
 import "./Composer.css";
 
@@ -13,6 +13,12 @@ export function Composer({ onSend, onSendVoice }: ComposerProps) {
   const [value, setValue] = useState("");
   const [justSent, setJustSent] = useState(false);
 
+  useEffect(() => {
+    if (!justSent) return;
+    const timer = setTimeout(() => setJustSent(false), SENT_ANIMATION_MS);
+    return () => clearTimeout(timer);
+  }, [justSent]);
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = value.trim();
@@ -20,7 +26,6 @@ export function Composer({ onSend, onSendVoice }: ComposerProps) {
     onSend(text);
     setValue("");
     setJustSent(true);
-    setTimeout(() => setJustSent(false), SENT_ANIMATION_MS);
   }
 
   return (
