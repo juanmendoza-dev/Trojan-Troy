@@ -20,7 +20,7 @@ type Screen =
   | { name: "waiting"; roomCode: string }
   | { name: "handshake"; roomCode: string }
   | { name: "safety-number"; roomCode: string; safetyNumber: string }
-  | { name: "chat"; roomCode: string }
+  | { name: "chat"; roomCode: string; safetyNumber: string }
   | { name: "error"; message: string };
 
 export default function App() {
@@ -181,6 +181,17 @@ export default function App() {
     ]);
   }
 
+  function handleLeave() {
+    clientRef.current?.close();
+    clientRef.current = null;
+    sessionKeysRef.current = null;
+    for (const message of messagesRef.current) {
+      if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
+    }
+    setMessages([]);
+    setScreen({ name: "start" });
+  }
+
   if (devOverride?.screen === "loading") {
     return <LoadingScreen roomCode="K7F-2QX" />;
   }
@@ -188,6 +199,7 @@ export default function App() {
     return (
       <ChatScreen
         roomCode="K7F-2QX"
+        safetyNumber="21934 07741 66012"
         messages={[
           { id: "1", from: "peer", kind: "text", text: "did you check the safety number?" },
           { id: "2", from: "me", kind: "text", text: "yep — 21934 07741 66012 — matches on my end" },
@@ -195,6 +207,7 @@ export default function App() {
         ]}
         onSend={() => {}}
         onSendVoice={() => {}}
+        onLeave={() => {}}
       />
     );
   }
@@ -211,7 +224,9 @@ export default function App() {
     return (
       <SafetyNumberScreen
         safetyNumber={screen.safetyNumber}
-        onVerified={() => setScreen({ name: "chat", roomCode: screen.roomCode })}
+        onVerified={() =>
+          setScreen({ name: "chat", roomCode: screen.roomCode, safetyNumber: screen.safetyNumber })
+        }
       />
     );
   }
@@ -219,9 +234,11 @@ export default function App() {
     return (
       <ChatScreen
         roomCode={screen.roomCode}
+        safetyNumber={screen.safetyNumber}
         messages={messages}
         onSend={handleSend}
         onSendVoice={handleSendVoice}
+        onLeave={handleLeave}
       />
     );
   }

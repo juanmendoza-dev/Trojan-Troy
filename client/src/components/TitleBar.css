@@ -66,3 +66,16 @@
   background: var(--verified);
   animation-name: statusPulse;
 }
+.title-bar__settings-button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-pill);
+}
+.title-bar__settings-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-alt, rgba(255, 255, 255, 0.06));
+}

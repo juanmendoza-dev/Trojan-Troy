@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { TitleBar } from "../components/TitleBar";
 import { Sidebar } from "../components/Sidebar";
 import { MessageBubble } from "../components/MessageBubble";
 import { VoiceMessageBubble } from "../components/VoiceMessageBubble";
 import { Composer } from "../components/Composer";
 import { AmbientOrbs } from "../components/AmbientOrbs";
+import { Settings } from "../components/Settings";
 import "./ChatScreen.css";
 
 export type ChatMessage =
@@ -14,9 +15,11 @@ export type ChatMessage =
 
 interface ChatScreenProps {
   roomCode: string;
+  safetyNumber: string;
   messages: ChatMessage[];
   onSend: (text: string) => void;
   onSendVoice: (blob: Blob, mimeType: string) => void;
+  onLeave: () => void;
 }
 
 function renderMessage(message: ChatMessage): ReactNode {
@@ -34,11 +37,20 @@ function renderMessage(message: ChatMessage): ReactNode {
   return <MessageBubble from={message.from} text={message.text} />;
 }
 
-export function ChatScreen({ roomCode, messages, onSend, onSendVoice }: ChatScreenProps) {
+export function ChatScreen({
+  roomCode,
+  safetyNumber,
+  messages,
+  onSend,
+  onSendVoice,
+  onLeave,
+}: ChatScreenProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   return (
     <div className="chat-screen">
       <AmbientOrbs />
-      <TitleBar roomCode={roomCode} />
+      <TitleBar roomCode={roomCode} onOpenSettings={() => setSettingsOpen(true)} />
       <div className="chat-screen__body">
         <Sidebar roomCode={roomCode} onNewChat={() => {}} />
         <div className="chat-screen__main">
@@ -51,6 +63,14 @@ export function ChatScreen({ roomCode, messages, onSend, onSendVoice }: ChatScre
           <Composer onSend={onSend} onSendVoice={onSendVoice} />
         </div>
       </div>
+      {settingsOpen && (
+        <Settings
+          roomCode={roomCode}
+          safetyNumber={safetyNumber}
+          onLeave={onLeave}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }
