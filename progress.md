@@ -12,6 +12,7 @@ and `decisions.md` for why things were done a certain way.
 | 2 — Encrypted messaging (relay + real-time text) | Complete — encrypted text messaging working end-to-end |
 | 3 — Encrypted voice messages | Complete — async encrypted voice messages working end-to-end |
 | 4 — UI polish | Complete — kinetic-cipher loading screen and all three chat themes (Apple, Iris Glass, Pulse Slate) built and verified end-to-end |
+| 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
 | 5 — Marketing/landing site | Not started |
 
 ## Log
@@ -118,3 +119,42 @@ and `decisions.md` for why things were done a certain way.
   before building the canvas font string. See
   `docs/superpowers/plans/2026-07-19-phase4-ui-redesign.md` and
   `decisions.md` for the design deviations from the handoff.
+
+- **2026-07-20** — Phase 4.5 complete: a shared `AmbientOrbs` component wired
+  into the chat screen (visible under the Iris Glass theme), Iris Glass
+  promoted to the default theme for new users, the loading/handshake screen
+  now always renders in Iris Glass style regardless of the selected theme
+  (previously always Apple-styled), a floating `Settings` modal (gear icon in
+  the chat screen's title bar, replacing the old always-on floating theme
+  switcher) with theme switcher, room/safety-number info, a "leave chat"
+  action, and about/security copy, plus `render.yaml` + README deployment
+  docs for Vercel hosting. Verified end-to-end using the same scratch
+  Playwright pattern as Phase 4 (no browser-automation tool available in this
+  environment): a real two-browser-context paired session (fresh
+  `localStorage` on both sides, confirming Iris Glass is the new-user
+  default — 2 ambient orbs and `data-theme="iris"` on first load), Settings
+  modal opened/closed (Escape) with room code, safety number, and "Connected"
+  status all present, theme switcher exercised (Apple → Iris Glass) from
+  inside Settings, and "Leave chat" verified both sides (initiator returns to
+  the start screen, peer sees a disconnect) — zero console/page errors
+  throughout. Also a cold `?screen=loading` page load in a fresh browser
+  context (no prior paint to warm the `Schibsted Grotesk` web font) screenshotted
+  and visually confirmed: "Trojan Troy." wordmark fully readable with no
+  clipped letters, both ambient orbs visible, dark-gradient/periwinkle Iris
+  Glass styling — confirmed this holds even with `localStorage`'s theme key
+  explicitly set to `"apple"` beforehand (same visual result, proving the
+  loading screen is genuinely theme-independent rather than defaulting to
+  iris by coincidence). One gap found in the plan's verification script during this
+  pass (not a product bug): it waited for `.chat-screen` right after the
+  handshake screen, but the app has an explicit `SafetyNumberScreen` with a
+  "Verified" button between handshake and chat that's a local-only gesture on
+  each side (not synchronized with the peer) — the script needed an added
+  click on "Verified" on both pages before chat screen assertions would ever
+  resolve. Also bumped the loading-screenshot script's settle wait from the
+  plan's 500ms to 2500ms: `CipherWord`'s reel animation for "Troy" doesn't
+  finish until roughly 1.82s (`startDelayS` 0.68s + 3-letter stagger 0.24s +
+  0.9s animation), so 500ms was catching the wordmark mid-scramble, not a
+  rendering bug. See
+  `docs/superpowers/plans/2026-07-19-phase4.5-working-prototype.md` and
+  `.worktrees/phase4.5-working-prototype/.superpowers/sdd/` for the per-task
+  ledger and this task's full verification report.
