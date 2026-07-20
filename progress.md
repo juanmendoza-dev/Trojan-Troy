@@ -14,6 +14,7 @@ and `decisions.md` for why things were done a certain way.
 | 4 — UI polish | Complete — kinetic-cipher loading screen and all three chat themes (Apple, Iris Glass, Pulse Slate) built and verified end-to-end |
 | 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
 | 5 — Marketing/landing site | Not started |
+| — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | In progress — 5/8 plan tasks done + reviewed, 1 done but unreviewed, on branch `handshake-chat-transition`, not yet merged to `main` |
 
 ## Log
 
@@ -158,3 +159,49 @@ and `decisions.md` for why things were done a certain way.
   `docs/superpowers/plans/2026-07-19-phase4.5-working-prototype.md` and
   `.worktrees/phase4.5-working-prototype/.superpowers/sdd/` for the per-task
   ledger and this task's full verification report.
+
+- **2026-07-20** — Continuous handshake-to-chat transition kicked off. Not a
+  scheduled roadmap phase — a user-requested polish item (make the loading
+  screen smoothly carry into the safety-number and chat screens instead of
+  hard-cutting between them, with the ambient orb backdrop persisting the
+  whole way through instead of resetting per screen). Went through the full
+  `superpowers:brainstorming` → `superpowers:writing-plans` →
+  `superpowers:subagent-driven-development` cycle:
+  - Spec: `docs/superpowers/specs/2026-07-20-handshake-chat-transition-design.md`.
+  - Plan (8 tasks): `docs/superpowers/plans/2026-07-20-handshake-chat-transition.md`.
+  - Branch/worktree: `handshake-chat-transition`, worktree at
+    `.worktrees/handshake-chat-transition/` (this repo's convention). Client
+    deps installed there; baseline verified clean (35/35 tests, typecheck
+    clean) before Task 1.
+
+  **Exact resume point (session ran out of usage mid-Task-6):** Tasks 1-5 are
+  complete, implemented, and reviewed clean (Approved) — commits `ecb96cb`
+  (crossfade state logic), `e84eb7c` (Crossfade component), `4db0048`
+  (HandshakeJourney wrapper), `1b6588d` (loading screen orbs/bg moved to the
+  wrapper), `47be198` (chat screen orbs/bg moved to the wrapper), all pushed
+  to `origin/handshake-chat-transition`. **Task 6's code is also already
+  committed** (`d559f1e`, "Style safety-number screen for the dark
+  backdrop") and verified byte-for-byte identical to
+  `.worktrees/handshake-chat-transition/.superpowers/sdd/task-6-brief.md`'s
+  specified code — but it was never reviewed: the controller session was
+  interrupted (out of usage) right as the Task 6 implementer subagent was
+  dispatched, so no `task-6-report.md` exists and no task-reviewer subagent
+  ran. **Do not re-implement Task 6** — the code is correct and already on
+  the branch. To resume: follow `superpowers:subagent-driven-development`
+  starting from generating the review package for Task 6
+  (`scripts/review-package 47be198065c69e004e61251e9e7fcb9d2ee05fe7 HEAD`
+  from the worktree) and dispatching a task reviewer against
+  `task-6-brief.md` + that diff (note to the reviewer that no implementer
+  report exists — the diff is tiny, 2 files/8 lines, reviewable without
+  one). Then continue with Tasks 7 (wire `HandshakeJourney` into `App.tsx`)
+  and 8 (manual Playwright verification) exactly as planned, followed by the
+  final whole-branch review and `superpowers:finishing-a-development-branch`
+  to merge to `main` — per this project's judge-visibility convention,
+  merge promptly once the branch review is clean rather than leaving it
+  open. The per-task progress ledger at
+  `.worktrees/handshake-chat-transition/.superpowers/sdd/progress.md` is the
+  authoritative source of truth for exactly which tasks are done/reviewed —
+  check it (and `git log` on the branch) before trusting this summary if
+  time has passed. `main` itself is untouched throughout (still at the
+  "Plan continuous handshake-to-chat transition" commit) — all of this work
+  is isolated on the `handshake-chat-transition` branch/worktree.
