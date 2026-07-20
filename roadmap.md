@@ -23,6 +23,13 @@ one works.
 - [ ] Async voice messages only — record a clip, encrypt it, send it,
       recipient decrypts and plays it. NOT live/streaming calling.
 
+**Backlog (not blocking, come back to later):**
+- Known bug (flagged by Jay, 2026-07-20): recorded voice message duration
+  is inaccurate on playback — e.g. a ~5s recording shows/sends as ~23s.
+  Needs investigation into how clip duration is measured/stored (likely
+  timing the record/encode/send pipeline instead of the actual audio
+  length).
+
 ## Phase 4 — UI design
 - [ ] A genuinely clean, beautiful interface. Handled externally via a
       separate design tool/process, not built by an agent in this repo.
@@ -65,6 +72,10 @@ end-to-end chat prototype solid. Build in this order:
   styled once Phase 4.5 lands.
 - Brainstorm additional settings scope beyond the four items Phase 4.5
   builds (theme switcher, room/session info, leave chat, about/security).
+- Redesign the delivered/read receipt indicator — Jay's feedback
+  (2026-07-20) on the shipped Chat polish work is that it currently reads
+  as too generic/"AI vibe coded." Revisit the visual treatment (tick
+  icons, styling, animation) once back in a design/polish pass.
 
 ## Phase 4.6 — Style the remaining unstyled screens
 Follow-up to Phase 4's design scope cut: `StartJoinScreen` (the app's
@@ -134,6 +145,10 @@ earlier ones:
   `decisions.md`, 2026-07-20). Revisit embedding it inside the encrypted
   payload instead once back in a security-hardening phase — see the chat
   UI polish spec's design for the exact current mechanism.
+- Add a "peer is typing" indicator. Explicitly cut from Phase 4's UI-only
+  scope because it needs a new relay event/protocol change (see
+  `decisions.md`, 2026-07-19) — Jay requested it be picked back up,
+  2026-07-20.
 
 ## Phase 6 — Polish
 - [ ] Harden and polish whatever Phase 5 sub-projects actually get built —
