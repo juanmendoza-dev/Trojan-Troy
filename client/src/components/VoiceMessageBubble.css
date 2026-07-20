@@ -41,3 +41,35 @@
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+/* Pulse Slate waveform color ramp */
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(1) {
+  background: #A78BFA;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(2) {
+  background: #B584F0;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(3) {
+  background: #C47DE4;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(4) {
+  background: #DC77CD;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(5) {
+  background: #F472B6;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(6) {
+  background: #DC77CD;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(7) {
+  background: #C47DE4;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(8) {
+  background: #B584F0;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(9) {
+  background: #A78BFA;
+}
+:root[data-theme="pulse"] .voice-bubble__bar:nth-child(10) {
+  background: #B584F0;
+}
