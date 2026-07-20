@@ -8,6 +8,42 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-19 — Phase 4 UI redesign: user made three small keep-as-is/
+  fix calls on plan-vs-design-source-file gaps surfaced during task review**:
+  (1) the sidebar's "New chat" button radius — kept the plan's shared 12px
+  for Iris and Pulse rather than matching the design file's distinct 8px for
+  Pulse; (2) the voice-message waveform's per-bar color ramp on Pulse Slate —
+  fixed to match the design file (was flat single-color in the plan's own
+  code sample); (3) the composer's recording/preview/error states and the
+  mic button's dark-theme background — both were missing any CSS anywhere in
+  the plan (a real gap, not a cosmetic mismatch) and were fixed rather than
+  left unstyled, since those states are user-visible mid-conversation.
+  (Decided by: Jay)
+
+- **2026-07-19 — Phase 4 UI redesign deviates from the handoff in five ways**
+  (full rationale in
+  `docs/superpowers/plans/2026-07-19-phase4-ui-redesign.md`'s "Design
+  deviations" section):
+  1. No fixed 1180×740 mock window / macOS traffic-light dots — the real
+     app is a resizable browser tab, not Electron/Tauri, so the chat and
+     loading screens fill the real viewport instead.
+  2. No typing indicator — there's no "peer is typing" relay event
+     (would be a protocol change, out of scope for a UI-only phase).
+  3. The loading screen always renders in the Apple light/dark style
+     (5a/5b) regardless of which chat theme is selected — the handoff
+     calls it "the final loading screen," not theme-specific.
+  4. The checklist/percent-counter choreography is driven by a JS timer
+     plus real key-exchange completion, not the mockup's infinite CSS loop.
+  5. Kinetic-wordmark letter-column widths are measured at runtime via
+     `canvas.measureText()` instead of hardcoded, so they're correct on any
+     platform/font instead of only SF Pro Display (macOS/Safari). Verified
+     end-to-end during Task 13 that this actually renders correctly — an
+     earlier bug in this same measurement code (canvas silently rejecting a
+     literal `var(--font-display)` CSS reference, falling back to a 10px
+     default and clipping every letter) was caught and fixed, see
+     `progress.md`'s 2026-07-19 Phase 4 entry.
+  (Decided by: Jay + Claude, while writing the implementation plan)
+
 - **2026-07-19 — Phase 5.1 overrides the original no-accounts/
   ephemeral-identity decision**: users now get a long-term identity keypair
   persisted client-side (IndexedDB), plus a self-chosen display name. This
