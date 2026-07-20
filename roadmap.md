@@ -127,6 +127,14 @@ earlier ones:
       encryption pattern to arbitrary files.
 - [ ] 5.7 — Disappearing messages (self-destruct timer).
 
+**Backlog (not in this phase, come back to later):**
+- Harden the read/delivered-receipt protocol's metadata privacy: the
+  `messageId` used to correlate delivery/read acks to a specific message is
+  currently sent as a cleartext envelope field, visible to the relay (see
+  `decisions.md`, 2026-07-20). Revisit embedding it inside the encrypted
+  payload instead once back in a security-hardening phase — see the chat
+  UI polish spec's design for the exact current mechanism.
+
 ## Phase 6 — Polish
 - [ ] Harden and polish whatever Phase 5 sub-projects actually get built —
       UX rough edges, error states, edge cases — once the new feature set

@@ -8,6 +8,28 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-20 — Read/delivered-receipt protocol (spec being written) uses a
+  cleartext `messageId` field alongside the ciphertext, not one embedded
+  inside the encrypted payload — deliberately deferred for now, revisit
+  later.** A message needs a shared ID both sides agree on before either
+  side can ack "this specific message was delivered/read" — today the
+  receiver generates its own random `id` on arrival (`App.tsx:87`),
+  unrelated to the sender's `id` (`App.tsx:168`), so no such reference
+  exists yet. Sending the ID in cleartext alongside the ciphertext (the
+  same category as the already-cleartext `mimeType` field voice messages
+  send today) is simplest and doesn't touch the "relay must never see
+  plaintext" hard constraint, since a random correlation ID isn't message
+  content. The more airtight alternative — embedding the ID inside the
+  encrypted payload itself, hiding it from the relay entirely — would
+  require reshaping `encryptMessage`/`decryptMessage` to carry a JSON
+  envelope instead of raw text/bytes, which is more invasive than a field
+  with no actual confidentiality requirement justifies right now. Jay
+  explicitly wants to revisit hiding this (and any similar correlation
+  metadata) from the relay once back in a higher-security-focus phase with
+  more compute — Phase 5's security hardening work is exactly where this
+  belongs; flag it there when Phase 5 starts. (Decided by: Jay + Claude,
+  during brainstorming)
+
 - **2026-07-20 — Roadmap inserts Phase 4.6 (style the remaining unstyled
   screens via Fable) and Phase 4.7 (Fable Ultra code review) before Phase
   5.** Jay has substantially higher compute availability for about 3 days
