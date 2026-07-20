@@ -4,6 +4,7 @@ import { Sidebar } from "../components/Sidebar";
 import { MessageBubble } from "../components/MessageBubble";
 import { VoiceMessageBubble } from "../components/VoiceMessageBubble";
 import { Composer } from "../components/Composer";
+import { AmbientOrbs } from "../components/AmbientOrbs";
 import "./ChatScreen.css";
 
 export type ChatMessage =
@@ -36,6 +37,7 @@ function renderMessage(message: ChatMessage): ReactNode {
 export function ChatScreen({ roomCode, messages, onSend, onSendVoice }: ChatScreenProps) {
   return (
     <div className="chat-screen">
+      <AmbientOrbs />
       <TitleBar roomCode={roomCode} />
       <div className="chat-screen__body">
         <Sidebar roomCode={roomCode} onNewChat={() => {}} />

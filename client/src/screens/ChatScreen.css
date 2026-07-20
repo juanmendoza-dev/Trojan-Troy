@@ -32,3 +32,14 @@
   font-weight: 600;
   color: var(--text-secondary);
 }
+.chat-screen .ambient-orbs__orb {
+  display: none;
+}
+:root[data-theme="iris"] .chat-screen .ambient-orbs__orb {
+  display: block;
+}
+.chat-screen > .title-bar,
+.chat-screen__body {
+  position: relative;
+  z-index: 1;
+}
