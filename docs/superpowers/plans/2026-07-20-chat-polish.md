@@ -1403,7 +1403,16 @@ async function pairSession(browser) {
   const s2 = await pairSession(browser);
   await s2.joiner.click('[aria-label="Settings"]');
   await s2.joiner.waitForSelector(".settings__panel");
-  await s2.joiner.locator('.settings__toggle input[type="checkbox"]').check();
+  // The visible track sibling intentionally overlaps the (opacity: 0) checkbox
+  // input for the toggle-switch visual, which trips Playwright's default
+  // actionability check — force the click directly on the input instead, then
+  // wait for React's re-render rather than assuming the click's own promise
+  // resolving means the DOM has already reflected the new checked state.
+  await s2.joiner.locator('.settings__toggle input[type="checkbox"]').click({ force: true });
+  await s2.joiner.waitForFunction(
+    () => document.querySelector('.settings__toggle input[type="checkbox"]')?.checked === true,
+    { timeout: 3000 }
+  );
   await s2.joiner.keyboard.press("Escape");
 
   await s2.initiator.fill(".composer__input", "checking ghost mode");
