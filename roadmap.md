@@ -49,11 +49,22 @@ end-to-end chat prototype solid. Build in this order:
       regardless of the selected chat theme (a deliberate Phase 4 deviation,
       see `decisions.md`) — revisit that now that Iris Glass is becoming the
       default instead of Apple.
-- [ ] Settings tab so users can change app settings. Brainstorm scope
-      before building (`superpowers:brainstorming`) — what belongs in it
-      hasn't been decided yet.
-- [ ] Host the prototype on Vercel so there's one persistent shareable
-      link instead of ad-hoc localhost link-sharing.
+- [ ] Settings — a floating centered modal (gear icon in the chat
+      screen's title bar), holding: the theme switcher, room/session info
+      (room code + safety number), a "leave chat" action, and an
+      about/security info panel. Design in
+      `docs/superpowers/specs/2026-07-19-phase4.5-design.md`.
+- [ ] Host the prototype: client on Vercel, relay server on Render (split
+      hosting — the relay's in-memory WebSocket state doesn't fit
+      Vercel's serverless model). One persistent shareable link instead
+      of ad-hoc localhost link-sharing.
+
+**Backlog (not in this phase, come back to later):**
+- Make the loading screen fully theme-aware (a distinct style per
+  Apple/Iris/Pulse selection) instead of always rendering Iris-Glass-
+  styled once Phase 4.5 lands.
+- Brainstorm additional settings scope beyond the four items Phase 4.5
+  builds (theme switcher, room/session info, leave chat, about/security).
 
 ## Phase 5 — New features
 Substantially expands project scope/complexity beyond Version A's original

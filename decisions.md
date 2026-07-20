@@ -8,6 +8,33 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-19 — Phase 4.5 design calls, made during brainstorming**
+  (full design in `docs/superpowers/specs/2026-07-19-phase4.5-design.md`):
+  1. The loading screen drops its "always Apple-style" behavior in favor
+     of "always Iris-Glass-style" (matching Iris becoming the default
+     chat theme), rather than becoming theme-aware for all three themes
+     right away — full theme-awareness is deferred to the roadmap
+     backlog.
+  2. Apple and Pulse Slate stay selectable in the theme switcher — only
+     the *default* for new/unset users changes to Iris Glass, nothing is
+     removed.
+  3. Settings is a floating, centered modal (claude.ai settings-panel
+     style), not a sidebar drawer or dedicated screen, and its entry
+     point (a gear icon) only appears on the chat screen — not on the
+     out-of-scope start/waiting/handshake/safety-number screens — since
+     its contents (room info, leave chat) only make sense mid-session.
+  4. Settings ships with four items this phase — theme switcher,
+     room/session info, leave chat, about/security info — with an
+     explicit roadmap backlog note to revisit and expand scope later,
+     rather than trying to fully enumerate settings scope now.
+  5. Hosting is split: client on Vercel, relay server on Render — not a
+     single-platform deploy — because the relay is a stateful WebSocket
+     server with in-memory room state, which doesn't fit Vercel's
+     serverless model. Render was chosen over Railway/Fly.io for
+     zero-config GitHub deploys of a plain Node app, accepting its free
+     tier's cold-start-after-inactivity trade-off.
+  (Decided by: Jay)
+
 - **2026-07-19 — New Phase 4.5 inserted before Phase 5: a working, hosted
   prototype (fixed Iris Glass animation, Iris Glass as the standard design,
   loading screen unified with the chat theme, a settings tab, Vercel
