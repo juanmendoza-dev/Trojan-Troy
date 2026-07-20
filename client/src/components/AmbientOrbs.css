@@ -1,0 +1,24 @@
+.ambient-orbs__orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(24px);
+  z-index: 0;
+}
+.ambient-orbs__orb--one {
+  top: 100px;
+  left: 340px;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle, rgba(143, 166, 255, 0.14), transparent 65%);
+  animation: floatOrb 9s ease-in-out infinite;
+}
+.ambient-orbs__orb--two {
+  bottom: 60px;
+  right: 80px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(196, 160, 255, 0.11), transparent 65%);
+  animation: floatOrb 12s ease-in-out infinite;
+  animation-delay: 1.4s;
+}
