@@ -6,6 +6,7 @@ import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
 import { encryptMessage, decryptMessage } from "./crypto/messages";
 import { encryptVoiceClip, decryptVoiceClip } from "./crypto/media";
+import { measureClipDurationMs } from "./audio/clipDuration";
 import { advanceStatus } from "./protocol/messageStatus";
 import { shouldSendReadAck } from "./protocol/readAckDecision";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
@@ -163,9 +164,10 @@ export default function App() {
         try {
           const blob = await decryptVoiceClip(keys.rx, envelope.payload, envelope.mimeType);
           const audioUrl = URL.createObjectURL(blob);
+          const durationMs = await measureClipDurationMs(blob).catch(() => 0);
           setMessages((prev) => [
             ...prev,
-            { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
+            { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl, durationMs },
           ]);
           client.send({ type: "delivered", messageId: envelope.messageId });
           pendingReadIdRef.current = envelope.messageId;
@@ -262,9 +264,10 @@ export default function App() {
     const id = crypto.randomUUID();
     client.send({ type: "voice", payload, mimeType, messageId: id });
     const audioUrl = URL.createObjectURL(blob);
+    const durationMs = await measureClipDurationMs(blob).catch(() => 0);
     setMessages((prev) => [
       ...prev,
-      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, status: "sent" },
+      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, durationMs, status: "sent" },
     ]);
   }
 
