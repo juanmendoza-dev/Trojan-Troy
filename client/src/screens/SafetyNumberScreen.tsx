@@ -7,86 +7,190 @@ interface SafetyNumberScreenProps {
   onVerified: () => void;
 }
 
-const TICKER_TEXT =
-  "END-TO-END ENCRYPTED · ZERO KNOWLEDGE RELAY · KEYS STAY ON DEVICE · NO ACCOUNTS · NO METADATA · ";
-const SEAL_THRESHOLD = 0.97;
-const OPENING_HOLD_MS = 900;
+const TICKER_TEXT = "END-TO-END ENCRYPTED · ZERO KNOWLEDGE RELAY · KEYS STAY ON DEVICE · ";
+const SEAL_THRESHOLD = 0.92;
+const SHAKE_FROM = 0.6;
+const OPENING_HOLD_MS = 950;
+const KNOB_SIZE = 44;
 
 type Phase = "verify" | "sealed" | "mismatch";
 
-// "Confirm Key" — compare the shared safety number, then drag to seal the
-// channel. Ported from ui/Confirm Key.html into the Iris Glass language.
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+// "Confirm Key" — compare the shared safety number, then drag the knob to seal
+// the channel. Ported 1:1 from ui/Confirm Key.html into React (orbs + gradient
+// backdrop come from HandshakeJourney, so this paints only the foreground).
 export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: SafetyNumberScreenProps) {
   const groups = safetyNumber.trim().split(/\s+/).filter(Boolean);
-  const [phase, setPhase] = useState<Phase>("verify");
+
   const [progress, setProgress] = useState(0);
+  const [holding, setHolding] = useState(false);
+  const [sealed, setSealed] = useState(false);
+  const [mismatch, setMismatch] = useState(false);
+  const [, forceShakeFrame] = useState(0);
+
   const trackRef = useRef<HTMLDivElement | null>(null);
-  const holdingRef = useRef(false);
-  const sealTimerRef = useRef<number | null>(null);
+  const dragX0 = useRef(0);
+  const dragP0 = useRef(0);
+  const rangeRef = useRef(500);
+  const shakeRaf = useRef<number | null>(null);
+  const sealTimer = useRef<number | null>(null);
+  const reduced = useRef(prefersReducedMotion());
+
+  // Mirror reactive state into refs so the rAF shake loop reads live values.
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  const holdingRef = useRef(holding);
+  holdingRef.current = holding;
+  const sealedRef = useRef(sealed);
+  sealedRef.current = sealed;
 
   useEffect(() => {
     return () => {
-      if (sealTimerRef.current !== null) window.clearTimeout(sealTimerRef.current);
+      if (shakeRaf.current !== null) cancelAnimationFrame(shakeRaf.current);
+      if (sealTimer.current !== null) window.clearTimeout(sealTimer.current);
     };
   }, []);
 
-  function seal() {
-    holdingRef.current = false;
-    setProgress(1);
-    setPhase("sealed");
-    sealTimerRef.current = window.setTimeout(onVerified, OPENING_HOLD_MS);
+  function measureRange(): number {
+    const el = trackRef.current;
+    return el ? el.clientWidth - KNOB_SIZE - 10 : 500;
   }
 
-  function updateFromClientX(clientX: number) {
-    const track = trackRef.current;
-    if (!track) return;
-    const rect = track.getBoundingClientRect();
-    const ratio = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
-    const clamped = Math.min(1, Math.max(0, ratio));
-    if (clamped >= SEAL_THRESHOLD) seal();
-    else setProgress(clamped);
+  function stopShake() {
+    if (shakeRaf.current !== null) {
+      cancelAnimationFrame(shakeRaf.current);
+      shakeRaf.current = null;
+    }
+  }
+  function tickShake() {
+    if (shakeRaf.current !== null) return;
+    const loop = () => {
+      if (!holdingRef.current || sealedRef.current || progressRef.current <= SHAKE_FROM) {
+        stopShake();
+        return;
+      }
+      forceShakeFrame((n) => n + 1);
+      shakeRaf.current = requestAnimationFrame(loop);
+    };
+    shakeRaf.current = requestAnimationFrame(loop);
+  }
+
+  function seal() {
+    stopShake();
+    setSealed(true);
+    setHolding(false);
+    setProgress(1);
+    sealTimer.current = window.setTimeout(onVerified, OPENING_HOLD_MS);
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (phase !== "verify") return;
-    holdingRef.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    updateFromClientX(event.clientX);
+    if (sealed || mismatch) return;
+    event.preventDefault();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* setPointerCapture can throw if the pointer is already gone */
+    }
+    dragX0.current = event.clientX;
+    dragP0.current = progress;
+    rangeRef.current = measureRange();
+    setHolding(true);
   }
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    if (!holdingRef.current || phase !== "verify") return;
-    updateFromClientX(event.clientX);
+    if (!holding || sealed) return;
+    const next = Math.max(
+      0,
+      Math.min(1, dragP0.current + (event.clientX - dragX0.current) / rangeRef.current)
+    );
+    setProgress(next);
+    if (next > SHAKE_FROM && !reduced.current) tickShake();
+    else stopShake();
   }
   function handlePointerUp() {
-    if (!holdingRef.current) return;
-    holdingRef.current = false;
-    if (phase === "verify") setProgress(0); // snap back if not sealed
+    stopShake();
+    if (sealed || !holding) return;
+    if (progress >= SEAL_THRESHOLD) {
+      seal();
+      return;
+    }
+    setHolding(false);
+    setProgress(0);
   }
   function handleKeyDown(event: React.KeyboardEvent) {
-    if (phase !== "verify") return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       seal();
-    } else if (event.key === "ArrowRight") {
-      setProgress((p) => Math.min(1, p + 0.15));
-    } else if (event.key === "ArrowLeft") {
-      setProgress((p) => Math.max(0, p - 0.15));
+      return;
+    }
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      const next = Math.max(0, Math.min(1, progress + (event.key === "ArrowRight" ? 0.1 : -0.1)));
+      if (next >= 1) {
+        seal();
+        return;
+      }
+      setProgress(next);
+      setHolding(false);
     }
   }
+  function goMismatch() {
+    stopShake();
+    setHolding(false);
+    setProgress(0);
+    setMismatch(true);
+  }
+  function backToVerify() {
+    setMismatch(false);
+    setProgress(0);
+    setHolding(false);
+  }
 
-  const statusLabel =
-    phase === "sealed"
-      ? "CHANNEL SEALED"
-      : phase === "mismatch"
-        ? "NUMBERS DON'T MATCH"
-        : "VERIFY IDENTITY";
+  function shakeTransform(): string {
+    if (!holding || sealed || progress <= SHAKE_FROM || reduced.current) return "none";
+    const amp = ((progress - SHAKE_FROM) / 0.4) * 3; // up to ~3px near the finish
+    const t = performance.now() / 1000;
+    const x = Math.sin(t * 47) * amp;
+    const y = Math.cos(t * 53) * amp * 0.6;
+    return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+  }
+
+  const knobPx = progress * rangeRef.current;
+  const fillWidth = `${knobPx + 27}px`;
+  const fillTransition = holding ? "none" : "all .6s cubic-bezier(0.22,1,0.36,1)";
+  const knobTransition = holding ? "none" : "transform .6s cubic-bezier(0.22,1,0.36,1)";
+  const trailOpacity = sealed ? 0 : 1;
+  const labelOpacity = Math.max(0, 1 - progress * 2);
+  const phase: Phase = sealed ? "sealed" : mismatch ? "mismatch" : "verify";
 
   return (
-    <div className="confirm-key" data-phase={phase}>
+    <div className="confirm-key" style={{ transform: shakeTransform() }}>
       <div className="confirm-key__top">
-        <div className="confirm-key__status">
-          <span className="confirm-key__status-dot" />
-          {statusLabel}
+        <div className="confirm-key__status" data-phase={phase}>
+          {phase === "verify" && (
+            <>
+              <span className="confirm-key__dot" />
+              <span>VERIFY IDENTITY</span>
+            </>
+          )}
+          {phase === "sealed" && (
+            <>
+              <span>✓</span>
+              <span>CHANNEL SEALED</span>
+            </>
+          )}
+          {phase === "mismatch" && (
+            <>
+              <span>⚠</span>
+              <span>NUMBERS DON'T MATCH</span>
+            </>
+          )}
         </div>
         <div className="confirm-key__room">Room {roomCode}</div>
       </div>
@@ -97,72 +201,115 @@ export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: Safet
           Derived from both keys — it should match theirs exactly.
         </p>
 
-        <div className="confirm-key__grid" aria-label={`Safety number ${safetyNumber}`}>
-          {groups.map((group, index) => (
-            <span key={index} className="confirm-key__group">
-              {group}
-            </span>
-          ))}
+        <div className="confirm-key__card">
+          <svg
+            className="confirm-key__shield"
+            width="26"
+            height="30"
+            viewBox="0 0 24 28"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 2 L21 6 V13 C21 19.5 17 24.5 12 26 C7 24.5 3 19.5 3 13 V6 Z"
+              stroke="#8FA6FF"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+              fill="rgba(143,166,255,0.08)"
+            />
+            <path
+              d="M8.5 13.5 L11 16 L15.5 10.5"
+              stroke="#8FA6FF"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </svg>
+          <div className="confirm-key__grid">
+            {groups.map((group, index) => (
+              <span
+                key={index}
+                className="confirm-key__group"
+                style={{ animationDelay: `${0.55 + index * 0.06}s` }}
+              >
+                {group}
+              </span>
+            ))}
+          </div>
         </div>
 
-        {phase === "mismatch" ? (
-          <div className="confirm-key__warning" role="alert">
-            <div className="confirm-key__warning-title">Don't share anything sensitive</div>
-            <p className="confirm-key__warning-body">
-              Rejoin the room to generate fresh keys, then compare again.
-            </p>
-            <button
-              type="button"
-              className="confirm-key__back"
-              onClick={() => {
-                setProgress(0);
-                setPhase("verify");
-              }}
-            >
-              ← I mistyped, compare again
-            </button>
-          </div>
-        ) : (
-          <>
-            <div
-              ref={trackRef}
-              className="confirm-key__slider"
-              data-sealed={phase === "sealed" || undefined}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-            >
-              <div className="confirm-key__slider-fill" style={{ width: `${progress * 100}%` }} />
-              <span className="confirm-key__slider-label">
-                {phase === "sealed" ? "Channel sealed" : "Drag to seal the channel"}
-              </span>
-              <button
-                type="button"
-                className="confirm-key__knob"
-                style={{ left: `calc(${progress} * (100% - var(--knob-size)))` }}
+        <div className="confirm-key__seal">
+          {phase === "verify" && (
+            <>
+              <div
+                ref={trackRef}
+                className="confirm-key__track"
+                role="slider"
+                tabIndex={0}
+                aria-label="Drag right to seal the channel, or press Enter to confirm"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progress * 100)}
                 onKeyDown={handleKeyDown}
-                aria-label="Slide to confirm the safety number matches, then seal the channel"
               >
-                {phase === "sealed" ? "✓" : "→"}
-              </button>
-            </div>
-
-            {phase === "sealed" ? (
-              <div className="confirm-key__opening">Opening the room…</div>
-            ) : (
-              <button
-                type="button"
-                className="confirm-key__mismatch-link"
-                onClick={() => setPhase("mismatch")}
-              >
+                <div
+                  className="confirm-key__fill confirm-key__fill--base"
+                  style={{ width: fillWidth, opacity: trailOpacity, transition: fillTransition }}
+                />
+                <div
+                  className="confirm-key__fill confirm-key__fill--glow"
+                  style={{ width: fillWidth, opacity: trailOpacity, transition: fillTransition }}
+                />
+                <div
+                  className="confirm-key__track-label"
+                  style={{ opacity: labelOpacity, transition: fillTransition }}
+                >
+                  Drag to seal the channel
+                </div>
+                <div
+                  className="confirm-key__knob"
+                  style={{ transform: `translateX(${knobPx}px)`, transition: knobTransition }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                >
+                  <span className="confirm-key__knob-arrow">⟶</span>
+                </div>
+              </div>
+              <button type="button" className="confirm-key__mismatch-link" onClick={goMismatch}>
                 the numbers don't match →
               </button>
-            )}
-          </>
-        )}
+            </>
+          )}
 
-        <div className="confirm-key__reassurance">This number never leaves your device.</div>
+          {phase === "sealed" && (
+            <>
+              <div className="confirm-key__sealed-box">
+                <span>✓</span>
+                <span>Channel sealed</span>
+              </div>
+              <span className="confirm-key__opening">Opening the room…</span>
+            </>
+          )}
+
+          {phase === "mismatch" && (
+            <>
+              <div className="confirm-key__warning" role="alert">
+                <div className="confirm-key__warning-title">Don't share anything sensitive</div>
+                <div className="confirm-key__warning-body">
+                  Rejoin the room to generate fresh keys, then compare again.
+                </div>
+              </div>
+              <button type="button" className="confirm-key__back" onClick={backToVerify}>
+                ← I mistyped, compare again
+              </button>
+            </>
+          )}
+        </div>
+
+        <p className="confirm-key__reassurance">This number never leaves your device.</p>
       </div>
 
       <div className="confirm-key__marquee" aria-hidden="true">

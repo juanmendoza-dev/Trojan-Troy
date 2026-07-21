@@ -1,260 +1,374 @@
 /* client/src/screens/SafetyNumberScreen.css
-   "Confirm Key" — the safety-number verification screen in the Iris Glass
-   language. Sits inside HandshakeJourney, so the gradient + ambient orbs come
-   from the wrapper; this paints only the foreground. Ported from
-   ui/Confirm Key.html. Reuses the statusPulse + marqueeX keyframes that the
-   loading screen already relies on. */
+   "Confirm Key" — safety-number verification, ported 1:1 from ui/Confirm Key.html.
+   Sits inside HandshakeJourney, so the gradient + ambient orbs come from the
+   wrapper; this paints only the foreground. Dynamic values (fill width, knob
+   position, opacities, transitions, shake transform) are set inline in the TSX. */
 
 .confirm-key {
   position: relative;
   z-index: 1;
-  width: 100%;
   height: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 64px 80px 88px;
+  padding: 28px 36px 0;
   font-family: "Schibsted Grotesk", sans-serif;
   color: #e8eaf2;
   background: transparent;
+  will-change: transform;
 }
 
+/* ---- top row ---- */
 .confirm-key__top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  animation: cfIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) 0.05s both;
 }
 .confirm-key__status {
   display: flex;
   align-items: center;
   gap: 10px;
+  font-family: "JetBrains Mono", monospace;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  color: #9ba1b5;
-  transition: color 0.3s ease;
+  letter-spacing: 0.18em;
 }
-.confirm-key__status-dot {
+.confirm-key__status[data-phase="verify"] {
+  color: #9ba1b5;
+}
+.confirm-key__status[data-phase="sealed"] {
+  color: #7ed9b7;
+}
+.confirm-key__status[data-phase="mismatch"] {
+  color: #ff6b6b;
+}
+.confirm-key__dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: #8fa6ff;
-  animation: statusPulse 2.4s ease-out infinite;
-}
-.confirm-key[data-phase="sealed"] .confirm-key__status {
-  color: #7ed9b7;
-}
-.confirm-key[data-phase="sealed"] .confirm-key__status-dot {
-  background: #7ed9b7;
-  animation: none;
-}
-.confirm-key[data-phase="mismatch"] .confirm-key__status {
-  color: #ff6b6b;
-}
-.confirm-key[data-phase="mismatch"] .confirm-key__status-dot {
-  background: #ff6b6b;
-  animation: none;
+  box-shadow: 0 0 10px rgba(143, 166, 255, 0.8);
+  animation: dotPulse 2.2s ease-in-out infinite;
 }
 .confirm-key__room {
-  font-size: 12px;
-  letter-spacing: -0.12px;
-  color: #9ba1b5;
   font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: #5e6478;
 }
 
+/* ---- center column ---- */
 .confirm-key__center {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 18px;
-  margin: auto 0;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 16px 0;
 }
 .confirm-key__title {
-  font-size: 34px;
-  font-weight: 600;
-  letter-spacing: -0.5px;
   margin: 0;
+  font-size: clamp(24px, 4.5vh, 32px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: center;
+  animation: cfIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) 0.15s both;
 }
 .confirm-key__subtitle {
-  font-size: 14px;
+  margin: 10px 0 0;
+  font-size: 15px;
   color: #9ba1b5;
-  margin: 0;
-  max-width: 420px;
-  line-height: 1.5;
+  text-align: center;
+  animation: cfIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) 0.22s both;
 }
 
+/* ---- number card ---- */
+.confirm-key__card {
+  margin-top: clamp(16px, 3.5vh, 32px);
+  width: min(680px, 90vw);
+  box-sizing: border-box;
+  border-radius: 20px;
+  border: 1px solid rgba(143, 166, 255, 0.14);
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: clamp(16px, 3vh, 26px) 40px clamp(18px, 3.5vh, 32px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  animation: cfIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) 0.3s both;
+}
+.confirm-key__shield {
+  filter: drop-shadow(0 0 8px rgba(143, 166, 255, 0.5));
+}
 .confirm-key__grid {
+  margin-top: clamp(12px, 2.5vh, 20px);
   display: grid;
-  grid-template-columns: repeat(4, auto);
-  gap: 12px 24px;
-  margin: 8px 0 4px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(10px, 2.2vh, 20px) 34px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: clamp(19px, 3.4vh, 25px);
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-align: center;
 }
 .confirm-key__group {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 24px;
-  letter-spacing: 2px;
-  color: #e8eaf2;
-  font-variant-numeric: tabular-nums;
+  animation: blurIn 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 
-.confirm-key__slider {
-  --knob-size: 52px;
+/* ---- seal area ---- */
+.confirm-key__seal {
+  margin-top: clamp(14px, 3vh, 26px);
+  width: min(680px, 90vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: cfIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) 0.4s both;
+}
+
+.confirm-key__track {
   position: relative;
-  width: 340px;
-  height: 58px;
-  margin-top: 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(143, 166, 255, 0.06);
+  width: 100%;
+  height: 56px;
+  box-sizing: border-box;
   overflow: hidden;
-  touch-action: none;
+  border-radius: 20px;
+  border: 1px solid rgba(143, 166, 255, 0.35);
+  background: rgba(143, 166, 255, 0.07);
   user-select: none;
-  cursor: grab;
+  -webkit-user-select: none;
+  outline: none;
 }
-.confirm-key__slider[data-sealed] {
-  cursor: default;
-  border-color: rgba(126, 217, 183, 0.5);
+.confirm-key__track:hover {
+  border-color: rgba(143, 166, 255, 0.6);
 }
-.confirm-key__slider-fill {
+.confirm-key__track:focus-visible {
+  border-color: rgba(143, 166, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(143, 166, 255, 0.18);
+}
+
+/* the "rainbow trail" — a soft base gradient plus a brighter masked streak */
+.confirm-key__fill {
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
-  background: linear-gradient(90deg, rgba(143, 166, 255, 0.22), rgba(143, 166, 255, 0.42));
-  transition: width 0.05s linear;
+  pointer-events: none;
 }
-.confirm-key[data-phase="sealed"] .confirm-key__slider-fill {
-  background: linear-gradient(90deg, rgba(126, 217, 183, 0.3), rgba(126, 217, 183, 0.5));
+.confirm-key__fill--base {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 107, 107, 0.28),
+    rgba(255, 196, 110, 0.28),
+    rgba(126, 217, 183, 0.3),
+    rgba(143, 166, 255, 0.32),
+    rgba(196, 143, 255, 0.32)
+  );
+  filter: blur(0.5px);
 }
-.confirm-key__slider-label {
+.confirm-key__fill--glow {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 107, 107, 0.6),
+    rgba(255, 196, 110, 0.6),
+    rgba(126, 217, 183, 0.65),
+    rgba(143, 166, 255, 0.7),
+    rgba(196, 143, 255, 0.7)
+  );
+  mask-image: linear-gradient(180deg, transparent 42%, #000 50%, transparent 58%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 42%, #000 50%, transparent 58%);
+  filter: blur(3px);
+}
+.confirm-key__track-label {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  gap: 12px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  color: #9ba1b5;
+  color: #e8eaf2;
+  letter-spacing: 0.02em;
   pointer-events: none;
-}
-.confirm-key[data-phase="sealed"] .confirm-key__slider-label {
-  color: #7ed9b7;
 }
 .confirm-key__knob {
   position: absolute;
-  top: 3px;
-  left: 0;
-  width: var(--knob-size);
-  height: var(--knob-size);
+  top: 5px;
+  left: 5px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  border: none;
-  background: #8fa6ff;
-  color: #0b0c14;
-  font-size: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -6px 12px rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: grab;
-  transition: background 0.3s ease;
+  touch-action: none;
+  will-change: transform;
 }
 .confirm-key__knob:active {
   cursor: grabbing;
 }
-.confirm-key[data-phase="sealed"] .confirm-key__knob {
-  background: #7ed9b7;
-  cursor: default;
-}
-.confirm-key__knob:focus-visible {
-  outline: 2px solid #aebeff;
-  outline-offset: 3px;
+.confirm-key__knob-arrow {
+  color: #e8eaf2;
+  font-size: 18px;
+  font-weight: 600;
+  pointer-events: none;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
 }
 
+/* ---- sealed / mismatch / links ---- */
+.confirm-key__sealed-box {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid rgba(126, 217, 183, 0.5);
+  background: rgba(126, 217, 183, 0.12);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #7ed9b7;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 30px rgba(126, 217, 183, 0.15);
+}
 .confirm-key__opening {
   font-size: 13px;
   color: #7ed9b7;
-  letter-spacing: 0.02em;
+  opacity: 0.8;
 }
 .confirm-key__mismatch-link {
   background: none;
   border: none;
-  color: #5e6478;
   font-family: inherit;
   font-size: 13px;
+  color: #5e6478;
   cursor: pointer;
   transition: color 0.2s ease;
 }
 .confirm-key__mismatch-link:hover {
-  color: #9ba1b5;
+  color: #ff6b6b;
 }
-
 .confirm-key__warning {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 20px 24px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 107, 107, 0.35);
-  background: rgba(255, 107, 107, 0.06);
-  max-width: 380px;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  background: rgba(255, 107, 107, 0.08);
+  padding: 16px 24px;
+  text-align: center;
 }
 .confirm-key__warning-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #ff6b6b;
 }
 .confirm-key__warning-body {
+  margin-top: 6px;
   font-size: 13px;
   color: #9ba1b5;
-  margin: 0;
-  line-height: 1.5;
 }
 .confirm-key__back {
-  margin-top: 6px;
   background: none;
   border: none;
-  color: #8fa6ff;
   font-family: inherit;
   font-size: 13px;
+  color: #5e6478;
   cursor: pointer;
+  transition: color 0.2s ease;
 }
 .confirm-key__back:hover {
-  color: #aebeff;
+  color: #8fa6ff;
 }
 
 .confirm-key__reassurance {
-  font-size: 12px;
+  margin: clamp(14px, 3vh, 26px) 0 0;
+  font-size: 13px;
   color: #5e6478;
-  letter-spacing: -0.12px;
+  text-align: center;
+  animation: cfIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) 0.5s both;
 }
 
+/* ---- marquee ---- */
 .confirm-key__marquee {
-  position: absolute;
-  bottom: 14px;
-  left: 0;
-  right: 0;
+  flex: none;
+  padding: 0 0 18px;
   overflow: hidden;
-  white-space: nowrap;
-  pointer-events: none;
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
 }
 .confirm-key__marquee-track {
-  display: inline-flex;
+  display: flex;
+  white-space: nowrap;
   width: max-content;
-  animation: marqueeX 22s linear infinite;
+  animation: tickScroll 36s linear infinite;
+  font-family: "JetBrains Mono", monospace;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  color: #3a3e52;
+  letter-spacing: 0.22em;
+  color: #5e6478;
 }
 .confirm-key__marquee-track span {
   padding-right: 48px;
 }
 
+/* ---- keyframes (screen-local, matching the design) ---- */
+@keyframes cfIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes blurIn {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+@keyframes dotPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+@keyframes tickScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .confirm-key__status-dot,
-  .confirm-key__marquee-track {
-    animation: none;
+  .confirm-key,
+  .confirm-key * {
+    animation-duration: 0.001s !important;
+    animation-delay: 0s !important;
   }
 }
