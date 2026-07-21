@@ -15,7 +15,7 @@ and `decisions.md` for why things were done a certain way.
 | 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
 | — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | Complete — verified end-to-end |
 | — Chat polish: themed bubble animations, read receipts, Ghost Mode (unscheduled, user-requested) | Complete — verified end-to-end |
-| 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` redesigned (Radar/Signal); `StartJoinScreen` & `SafetyNumberScreen` still pending |
+| 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5 — Marketing/landing site | Not started |
 
 ## Log
@@ -302,3 +302,34 @@ and `decisions.md` for why things were done a certain way.
   `feat/waiting-room-redesign` off `main` (does **not** include the in-flight
   `fix/security-review-findings` commit). Phase 4.6's `StartJoinScreen` and
   `SafetyNumberScreen` styling remain open. See `decisions.md` (2026-07-21).
+
+- **2026-07-21** — Home-screen redesign (part of Phase 4.6, `StartJoinScreen` +
+  the new connecting bar). Rebuilt the previously-unstyled home/entry screen to
+  the Fable handoff (`ui/Trojan Troy Home Screen/Trojan Troy Home.dc.html`),
+  matching the Iris-Glass world: own fixed gradient shell + shared
+  `AmbientOrbs`, top-left "secure channel ready" badge, centered `Trojan Troy.`
+  wordmark + tagline, a frosted action card (Start button → "or join" divider →
+  room-code input + Join), a bottom security marquee (shared
+  `SECURITY_TICKER_TEXT`) and accent hairline, with staggered rise-in entrances
+  on the signature easing. The **connecting / waking-the-relay bar** (grassy
+  green `#6FBF78→#7BC97F→#A6E0A0`) is new: phase-driven (surge → hold → complete
+  → settle → exit) via CSS width transitions, with sheen + breathing-glow
+  "alive" layers kept separate from the fill % so a ~60s cold start never looks
+  frozen, plus a `prefers-reduced-motion` fallback. It's driven by the real
+  connection event — `App` passes a `connectStatus` prop
+  (`idle|connecting|connected`) down, flips it on tap and on `created`
+  (Start) / `peer-connected` (Join), and holds a beat
+  (`CONNECT_COMPLETE_HOLD_MS`) at 100% before transitioning; the error path
+  resets it so the bar never hangs. Pure phase→visual logic + timings factored
+  into a tested `barPhases.ts` (8 tests). Added a `?screen=connecting` dev
+  override (replacing the handoff's demo relay/warm/cold preview controls,
+  which were dropped as non-product UI) to eyeball the alive state without a
+  relay. Preserves the invite-link `initialCode` prefill/focus/select. Verified:
+  `npm run typecheck` clean, 74 vitest tests pass (8 new for `barPhases`, 1 for
+  the `connecting` override), `npm run build` green, and a dev-server smoke test
+  (home page + all new modules serve HTTP 200, grassy-green fill present).
+  Layout/bar motion + the ~60s cold-start hold still want a manual eyeball via
+  `npm run dev` (`/` and `?screen=connecting`) — no browser-automation tool in
+  this environment, as in prior phases. Built on branch
+  `feat/home-screen-redesign` off `main`. Phase 4.6's `SafetyNumberScreen`
+  styling remains open. See `decisions.md` (2026-07-21).

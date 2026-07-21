@@ -8,6 +8,47 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-21 — Home-screen (`StartJoinScreen`) redesign + connecting-bar
+  wiring, built from the Fable home handoff; several implementation calls.**
+  The handoff (`ui/Trojan Troy Home Screen/Trojan Troy Home.dc.html`, copied
+  into the repo for provenance) was ported as normal feature-branch work, same
+  as the waiting-room task. `SafetyNumberScreen` styling stays open.
+  (1) `StartJoinScreen` follows the `WaitingScreen` template — its own fixed
+  Iris-Glass gradient shell + the shared `<AmbientOrbs/>`, hardcoded palette
+  (theme-independent), staggered rise-in entrances on the signature easing —
+  so the entry screen flows into the waiting/loading screens it precedes.
+  (2) The handoff's top-right "Demo relay / Warm / Cold" controls were dropped
+  from the shipped screen: they're the designer's preview harness for driving
+  the bar without a live relay (the same category as the Phase 4 mockup's
+  "demo stand-ins"), not product UI. A dev-only `?screen=connecting` override
+  (extending `screenOverride`) replaces them for eyeballing the bar's "alive"
+  cold-start state without a relay. (3) The connecting bar is driven by the
+  REAL connection lifecycle, wired via a `connectStatus` prop
+  (`idle | connecting | connected`) passed from `App` down to `StartJoinScreen`
+  (chosen over a callback/ref handle to keep `App.tsx` changes minimal and
+  localized for the in-flight `fix/security-review-findings` merge). `App`
+  flips it to `connecting` on tap and `connected` on the real event
+  (`created` for Start, `peer-connected` for Join), then holds a beat
+  (`CONNECT_COMPLETE_HOLD_MS`, mirroring the existing `HANDSHAKE_MIN_MS`
+  pattern) at 100% before `setScreen`. The error path (relay unreachable / bad
+  code / `waitForOpen` reject) resets `connectStatus` to `idle` so the bar
+  never hangs or falsely completes. (4) For Join, `exchangeKeys` is called
+  IMMEDIATELY on `peer-connected` (only the `setScreen` is delayed for the
+  beat), because `RelayClient.onMessage` stacks listeners rather than replacing
+  — delaying the exchange would drop the peer's pubkey (no handler registered
+  yet) and hang the handshake. The delayed transitions use a functional
+  `setScreen` guard (`prev.name === "start"`) so a peer connecting inside the
+  ~1.25s hold window can't be clobbered. (5) The bar is modelled in phases
+  (surge → hold → complete → settle → exit) with CSS width transitions exactly
+  like the handoff — NOT a per-frame JS fill curve — with the pure phase→visual
+  mapping + timings factored into a tested `barPhases.ts` (in the `percent.ts`
+  spirit). The "alive" sheen + breathing-glow are CSS layers independent of the
+  fill %, killed by `prefers-reduced-motion`. (6) Reused the shared
+  `SECURITY_TICKER_TEXT` and `<AmbientOrbs/>` rather than the handoff's slightly
+  different marquee copy / corner-anchored orbs, for consistency with the
+  loading/waiting screens (the chat-polish review flagged duplicated constants
+  as a smell). (Decided by: Jay (design) + Claude (implementation calls))
+
 - **2026-07-21 — Waiting-room redesign built directly from Jay's inline brief;
   six related implementation calls.** The task brief delivered the approved
   "Radar / Signal" design plus a file-by-file spec directly, so this was built
