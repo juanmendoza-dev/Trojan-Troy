@@ -10,12 +10,12 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 - **2026-07-21 — Home-screen (`StartJoinScreen`) redesign + connecting-bar
   wiring, built from the Fable home handoff; several implementation calls.**
-  The Fable home handoff (`Trojan Troy Home.dc.html`) was ported as normal
-  feature-branch work, same as the waiting-room task. The raw handoff HTML was
-  later removed from the repo at Jay's request (it read as ugly clutter in the
-  editor and isn't part of the build) — the implemented React screens
-  (`StartJoinScreen`, `ConnectingBar`) are the source of truth for the design.
-  `SafetyNumberScreen` styling stays open.
+  The Fable home handoff (`ui/Trojan Troy Home Screen/Trojan Troy Home.dc.html`)
+  was ported as normal feature-branch work, same as the waiting-room task; it
+  lives alongside the desktop-redesign handoff under `ui/` (see `ui/README.md`).
+  The implemented React screens (`StartJoinScreen`, `ConnectingBar`) are the
+  source of truth for the design — the `.dc.html` is reference/provenance only,
+  not part of the build. `SafetyNumberScreen` styling stays open.
   (1) `StartJoinScreen` follows the `WaitingScreen` template — its own fixed
   Iris-Glass gradient shell + the shared `<AmbientOrbs/>`, hardcoded palette
   (theme-independent), staggered rise-in entrances on the signature easing —
