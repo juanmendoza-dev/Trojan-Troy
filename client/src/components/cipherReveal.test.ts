@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lockedCharCount, CIPHER_REVEAL_MS } from "./cipherReveal";
+import { lockedCharCount, cipherRevealDuration, CIPHER_REVEAL_MS } from "./cipherReveal";
 
 describe("lockedCharCount", () => {
   it("locks nothing at the start", () => {
@@ -24,5 +24,20 @@ describe("lockedCharCount", () => {
   it("handles empty text and non-positive durations", () => {
     expect(lockedCharCount(100, 0)).toBe(0);
     expect(lockedCharCount(100, 10, 0)).toBe(10);
+  });
+});
+
+describe("cipherRevealDuration", () => {
+  it("holds a calm minimum for short messages", () => {
+    expect(cipherRevealDuration(0)).toBe(700);
+    expect(cipherRevealDuration(3)).toBeGreaterThanOrEqual(700);
+  });
+
+  it("grows with message length", () => {
+    expect(cipherRevealDuration(40)).toBeGreaterThan(cipherRevealDuration(5));
+  });
+
+  it("caps long messages so they never drag on", () => {
+    expect(cipherRevealDuration(10000)).toBe(2400);
   });
 });
