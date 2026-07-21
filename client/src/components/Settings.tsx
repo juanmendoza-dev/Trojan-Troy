@@ -80,9 +80,10 @@ export function Settings({
         <div className="settings__section">
           <div className="settings__section-label">About</div>
           <p className="settings__about-text">
-            Trojan Troy encrypts every message and voice note end-to-end. The relay only ever sees
-            ciphertext — your keys never leave this device. The safety number above verifies this
-            session; if it ever changes unexpectedly, don't trust the connection.
+            Trojan Troy encrypts every message and voice note end-to-end. The relay can never read
+            your content — only encrypted ciphertext passes through it, and your keys never leave
+            this device. The safety number above verifies this session; if it ever changes
+            unexpectedly, don't trust the connection.
           </p>
         </div>
 

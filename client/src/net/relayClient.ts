@@ -94,6 +94,11 @@ export class RelayClient {
   }
 
   close(): void {
+    // Mark closed *before* closing the socket so the async `onclose` that
+    // follows is treated as an intentional local close (handleFailure
+    // early-returns) rather than a relay failure that would clobber the UI.
+    this.state = "closed";
+    this.pendingOpen = null;
     this.ws.close();
   }
 }

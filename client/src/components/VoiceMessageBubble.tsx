@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { MessageStatus } from "../protocol/messageStatus";
+import { STATUS_TICKS, type MessageStatus } from "../protocol/messageStatus";
 import "./VoiceMessageBubble.css";
 
 interface VoiceMessageBubbleProps {
@@ -11,12 +11,6 @@ interface VoiceMessageBubbleProps {
 }
 
 const BAR_HEIGHTS = [10, 20, 14, 24, 12, 22, 9, 18, 13, 21];
-
-const STATUS_TICKS: Record<MessageStatus, string> = {
-  sent: "✓",
-  delivered: "✓✓",
-  read: "✓✓",
-};
 
 export function VoiceMessageBubble({
   from,

@@ -1,5 +1,5 @@
 import "./MessageBubble.css";
-import type { MessageStatus } from "../protocol/messageStatus";
+import { STATUS_TICKS, type MessageStatus } from "../protocol/messageStatus";
 
 interface MessageBubbleProps {
   from: "me" | "peer";
@@ -7,12 +7,6 @@ interface MessageBubbleProps {
   status?: MessageStatus;
   delayMs?: number;
 }
-
-const STATUS_TICKS: Record<MessageStatus, string> = {
-  sent: "✓",
-  delivered: "✓✓",
-  read: "✓✓",
-};
 
 export function MessageBubble({ from, text, status, delayMs = 0 }: MessageBubbleProps) {
   return (
