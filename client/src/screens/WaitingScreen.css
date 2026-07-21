@@ -1,0 +1,256 @@
+/* client/src/screens/WaitingScreen.css
+   Matches the loading screen's "Iris Glass" world (hardcoded palette, not
+   theme tokens) so the waiting room flows straight into the handshake. */
+
+.waiting-screen {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(160deg, #0d0f18 0%, #101223 100%);
+  font-family: 'Schibsted Grotesk', sans-serif;
+  color: #e8eaf2;
+}
+
+.waiting-screen__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 56px 80px 90px;
+}
+
+/* ── Top row ─────────────────────────────────────────────── */
+.waiting-screen__top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.waiting-screen__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: #9ba1b5;
+}
+.waiting-screen__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8fa6ff;
+  animation: statusPulse 2.4s ease-out infinite;
+}
+.waiting-screen__cancel {
+  border: none;
+  background: transparent;
+  padding: 6px 4px;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: -0.12px;
+  color: #9ba1b5;
+  cursor: pointer;
+  transition: color 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.waiting-screen__cancel:hover {
+  color: #e8eaf2;
+}
+
+/* ── Center cluster ──────────────────────────────────────── */
+.waiting-screen__center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  text-align: center;
+}
+
+.waiting-screen__radar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 230px;
+}
+.waiting-screen__ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 360px;
+  height: 360px;
+  margin: -180px 0 0 -180px;
+  border: 1px solid rgba(143, 166, 255, 0.55);
+  border-radius: 50%;
+  animation: radarPing 3s cubic-bezier(0.2, 0.9, 0.3, 1) infinite;
+}
+.waiting-screen__code {
+  position: relative;
+  z-index: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(40px, 10vw, 72px);
+  font-weight: 500;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  color: #e8eaf2;
+  text-shadow: 0 0 26px rgba(143, 166, 255, 0.45);
+}
+
+.waiting-screen__subwait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 14px;
+  letter-spacing: -0.12px;
+  color: #9ba1b5;
+}
+.waiting-screen__subwait-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8fa6ff;
+  animation: statusPulse 2.4s ease-out infinite;
+}
+
+/* ── Copy actions ────────────────────────────────────────── */
+.waiting-screen__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.waiting-screen__pill {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 11px 22px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  cursor: pointer;
+  transition: background 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    border-color 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    color 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.waiting-screen__pill--filled {
+  background: rgba(143, 166, 255, 0.16);
+  border-color: rgba(143, 166, 255, 0.35);
+  color: #e8eaf2;
+}
+.waiting-screen__pill--filled:hover {
+  background: rgba(143, 166, 255, 0.24);
+}
+.waiting-screen__pill--outline {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #9ba1b5;
+}
+.waiting-screen__pill--outline:hover {
+  border-color: rgba(255, 255, 255, 0.26);
+  color: #e8eaf2;
+}
+.waiting-screen__pill.is-copied {
+  background: rgba(126, 217, 183, 0.12);
+  border-color: rgba(126, 217, 183, 0.4);
+  color: #7ed9b7;
+}
+
+/* ── QR card ─────────────────────────────────────────────── */
+.waiting-screen__qr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(143, 166, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.waiting-screen__qr-caption {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: #9ba1b5;
+}
+
+/* ── Reassurance ─────────────────────────────────────────── */
+.waiting-screen__bottom {
+  display: flex;
+  justify-content: center;
+}
+.waiting-screen__reassurance {
+  margin: 0;
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: -0.12px;
+  color: #9ba1b5;
+  text-align: center;
+}
+
+/* ── Security marquee + accent hairline ──────────────────── */
+.waiting-screen__marquee {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.waiting-screen__marquee-track {
+  display: inline-flex;
+  width: max-content;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: #3a3e52;
+  animation: marqueeX 22s linear infinite;
+}
+.waiting-screen__marquee-track span {
+  padding-right: 48px;
+}
+.waiting-screen__hairline {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(143, 166, 255, 0.45), transparent);
+}
+
+/* ── Staggered rise-in entrances (signature easing) ──────── */
+.waiting-screen__top-row,
+.waiting-screen__radar,
+.waiting-screen__subwait,
+.waiting-screen__actions,
+.waiting-screen__qr-card,
+.waiting-screen__bottom {
+  animation: crossfadeIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.waiting-screen__top-row {
+  animation-delay: 0.05s;
+}
+.waiting-screen__radar {
+  animation-delay: 0.12s;
+}
+.waiting-screen__subwait {
+  animation-delay: 0.22s;
+}
+.waiting-screen__actions {
+  animation-delay: 0.3s;
+}
+.waiting-screen__qr-card {
+  animation-delay: 0.38s;
+}
+.waiting-screen__bottom {
+  animation-delay: 0.46s;
+}

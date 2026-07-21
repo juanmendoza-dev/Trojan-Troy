@@ -337,7 +337,7 @@ export default function App() {
     );
   }
   if (screen.name === "waiting") {
-    return <WaitingScreen roomCode={screen.roomCode} />;
+    return <WaitingScreen roomCode={screen.roomCode} onCancel={handleLeave} />;
   }
   if (screen.name === "handshake" || screen.name === "safety-number" || screen.name === "chat") {
     let content: ReactNode;
