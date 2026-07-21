@@ -24,6 +24,10 @@ describe("parseScreenOverride", () => {
     expect(parseScreenOverride("?screen=connecting")).toEqual({ screen: "connecting" });
   });
 
+  it("parses the safety screen", () => {
+    expect(parseScreenOverride("?screen=safety")).toEqual({ screen: "safety" });
+  });
+
   it("omits theme when not given or invalid", () => {
     expect(parseScreenOverride("?screen=chat")).toEqual({ screen: "chat" });
     expect(parseScreenOverride("?screen=chat&theme=nope")).toEqual({ screen: "chat" });
