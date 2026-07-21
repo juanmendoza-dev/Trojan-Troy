@@ -327,6 +327,9 @@ export default function App() {
       </HandshakeJourney>
     );
   }
+  if (devOverride?.screen === "waiting") {
+    return <WaitingScreen roomCode="K7F-2QX" onCancel={() => {}} />;
+  }
   if (screen.name === "start") {
     return (
       <StartJoinScreen

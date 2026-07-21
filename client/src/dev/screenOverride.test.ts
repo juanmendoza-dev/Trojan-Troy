@@ -12,6 +12,14 @@ describe("parseScreenOverride", () => {
     expect(parseScreenOverride("?screen=loading&theme=pulse")).toEqual({ screen: "loading", theme: "pulse" });
   });
 
+  it("parses the waiting screen", () => {
+    expect(parseScreenOverride("?screen=waiting")).toEqual({ screen: "waiting" });
+    expect(parseScreenOverride("?screen=waiting&theme=iris")).toEqual({
+      screen: "waiting",
+      theme: "iris",
+    });
+  });
+
   it("omits theme when not given or invalid", () => {
     expect(parseScreenOverride("?screen=chat")).toEqual({ screen: "chat" });
     expect(parseScreenOverride("?screen=chat&theme=nope")).toEqual({ screen: "chat" });
