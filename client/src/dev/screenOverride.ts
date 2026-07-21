@@ -1,11 +1,11 @@
 import type { ThemeName } from "../theme/theme";
 
 export interface ScreenOverride {
-  screen: "loading" | "chat" | "waiting";
+  screen: "loading" | "chat" | "waiting" | "connecting";
   theme?: ThemeName;
 }
 
-const VALID_SCREENS = new Set(["loading", "chat", "waiting"]);
+const VALID_SCREENS = new Set(["loading", "chat", "waiting", "connecting"]);
 const VALID_THEMES = new Set<ThemeName>(["apple", "iris", "pulse"]);
 
 export function parseScreenOverride(search: string): ScreenOverride | null {
