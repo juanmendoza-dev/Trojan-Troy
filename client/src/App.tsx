@@ -353,6 +353,17 @@ export default function App() {
   if (devOverride?.screen === "waiting") {
     return <WaitingScreen roomCode="K7F-2QX" onCancel={() => {}} />;
   }
+  if (devOverride?.screen === "safety") {
+    return (
+      <HandshakeJourney activeKey="safety-number">
+        <SafetyNumberScreen
+          roomCode="K7F-2QX"
+          safetyNumber="21934 07741 66012 88304 55120 09937 41028 77650 30291 66104 82255 19073"
+          onVerified={() => {}}
+        />
+      </HandshakeJourney>
+    );
+  }
   if (devOverride?.screen === "connecting") {
     // Holds the connecting bar in its "alive" cold-start state so the sheen +
     // breathing glow can be eyeballed without a live relay.
@@ -380,6 +391,7 @@ export default function App() {
     } else if (screen.name === "safety-number") {
       content = (
         <SafetyNumberScreen
+          roomCode={screen.roomCode}
           safetyNumber={screen.safetyNumber}
           onVerified={() =>
             setScreen({ name: "chat", roomCode: screen.roomCode, safetyNumber: screen.safetyNumber })

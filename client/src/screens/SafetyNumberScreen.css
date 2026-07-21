@@ -1,5 +1,260 @@
-/* client/src/screens/SafetyNumberScreen.css */
-.safety-number-screen {
+/* client/src/screens/SafetyNumberScreen.css
+   "Confirm Key" — the safety-number verification screen in the Iris Glass
+   language. Sits inside HandshakeJourney, so the gradient + ambient orbs come
+   from the wrapper; this paints only the foreground. Ported from
+   ui/Confirm Key.html. Reuses the statusPulse + marqueeX keyframes that the
+   loading screen already relies on. */
+
+.confirm-key {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 64px 80px 88px;
+  font-family: "Schibsted Grotesk", sans-serif;
+  color: #e8eaf2;
   background: transparent;
-  color: #E8EAF2;
+}
+
+.confirm-key__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.confirm-key__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: #9ba1b5;
+  transition: color 0.3s ease;
+}
+.confirm-key__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8fa6ff;
+  animation: statusPulse 2.4s ease-out infinite;
+}
+.confirm-key[data-phase="sealed"] .confirm-key__status {
+  color: #7ed9b7;
+}
+.confirm-key[data-phase="sealed"] .confirm-key__status-dot {
+  background: #7ed9b7;
+  animation: none;
+}
+.confirm-key[data-phase="mismatch"] .confirm-key__status {
+  color: #ff6b6b;
+}
+.confirm-key[data-phase="mismatch"] .confirm-key__status-dot {
+  background: #ff6b6b;
+  animation: none;
+}
+.confirm-key__room {
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  color: #9ba1b5;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.confirm-key__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+  margin: auto 0;
+}
+.confirm-key__title {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+.confirm-key__subtitle {
+  font-size: 14px;
+  color: #9ba1b5;
+  margin: 0;
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+.confirm-key__grid {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 12px 24px;
+  margin: 8px 0 4px;
+}
+.confirm-key__group {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 24px;
+  letter-spacing: 2px;
+  color: #e8eaf2;
+  font-variant-numeric: tabular-nums;
+}
+
+.confirm-key__slider {
+  --knob-size: 52px;
+  position: relative;
+  width: 340px;
+  height: 58px;
+  margin-top: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(143, 166, 255, 0.06);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.confirm-key__slider[data-sealed] {
+  cursor: default;
+  border-color: rgba(126, 217, 183, 0.5);
+}
+.confirm-key__slider-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(143, 166, 255, 0.22), rgba(143, 166, 255, 0.42));
+  transition: width 0.05s linear;
+}
+.confirm-key[data-phase="sealed"] .confirm-key__slider-fill {
+  background: linear-gradient(90deg, rgba(126, 217, 183, 0.3), rgba(126, 217, 183, 0.5));
+}
+.confirm-key__slider-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #9ba1b5;
+  pointer-events: none;
+}
+.confirm-key[data-phase="sealed"] .confirm-key__slider-label {
+  color: #7ed9b7;
+}
+.confirm-key__knob {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: var(--knob-size);
+  height: var(--knob-size);
+  border-radius: 50%;
+  border: none;
+  background: #8fa6ff;
+  color: #0b0c14;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  transition: background 0.3s ease;
+}
+.confirm-key__knob:active {
+  cursor: grabbing;
+}
+.confirm-key[data-phase="sealed"] .confirm-key__knob {
+  background: #7ed9b7;
+  cursor: default;
+}
+.confirm-key__knob:focus-visible {
+  outline: 2px solid #aebeff;
+  outline-offset: 3px;
+}
+
+.confirm-key__opening {
+  font-size: 13px;
+  color: #7ed9b7;
+  letter-spacing: 0.02em;
+}
+.confirm-key__mismatch-link {
+  background: none;
+  border: none;
+  color: #5e6478;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.confirm-key__mismatch-link:hover {
+  color: #9ba1b5;
+}
+
+.confirm-key__warning {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.06);
+  max-width: 380px;
+}
+.confirm-key__warning-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ff6b6b;
+}
+.confirm-key__warning-body {
+  font-size: 13px;
+  color: #9ba1b5;
+  margin: 0;
+  line-height: 1.5;
+}
+.confirm-key__back {
+  margin-top: 6px;
+  background: none;
+  border: none;
+  color: #8fa6ff;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.confirm-key__back:hover {
+  color: #aebeff;
+}
+
+.confirm-key__reassurance {
+  font-size: 12px;
+  color: #5e6478;
+  letter-spacing: -0.12px;
+}
+
+.confirm-key__marquee {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.confirm-key__marquee-track {
+  display: inline-flex;
+  width: max-content;
+  animation: marqueeX 22s linear infinite;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: #3a3e52;
+}
+.confirm-key__marquee-track span {
+  padding-right: 48px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-key__status-dot,
+  .confirm-key__marquee-track {
+    animation: none;
+  }
 }
