@@ -305,8 +305,9 @@ and `decisions.md` for why things were done a certain way.
 
 - **2026-07-21** — Home-screen redesign (part of Phase 4.6, `StartJoinScreen` +
   the new connecting bar). Rebuilt the previously-unstyled home/entry screen to
-  the Fable handoff (`ui/Trojan Troy Home Screen/Trojan Troy Home.dc.html`),
-  matching the Iris-Glass world: own fixed gradient shell + shared
+  the Fable handoff (`Trojan Troy Home.dc.html`; the raw handoff HTML was later
+  removed from the repo at Jay's request — the implemented React screens are the
+  design's source of truth), matching the Iris-Glass world: own fixed gradient shell + shared
   `AmbientOrbs`, top-left "secure channel ready" badge, centered `Trojan Troy.`
   wordmark + tagline, a frosted action card (Start button → "or join" divider →
   room-code input + Join), a bottom security marquee (shared
