@@ -15,6 +15,7 @@ and `decisions.md` for why things were done a certain way.
 | 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
 | — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | Complete — verified end-to-end |
 | — Chat polish: themed bubble animations, read receipts, Ghost Mode (unscheduled, user-requested) | Complete — verified end-to-end |
+| 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` redesigned (Radar/Signal); `StartJoinScreen` & `SafetyNumberScreen` still pending |
 | 5 — Marketing/landing site | Not started |
 
 ## Log
@@ -273,3 +274,31 @@ and `decisions.md` for why things were done a certain way.
   action's own promise resolving meant the state had already updated). See
   `docs/superpowers/specs/2026-07-20-chat-polish-design.md` and
   `docs/superpowers/plans/2026-07-20-chat-polish.md`.
+
+- **2026-07-21** — Waiting-room redesign (part of Phase 4.6, `WaitingScreen`
+  only). Rebuilt the previously-unstyled waiting screen to the approved
+  "Radar / Signal" concept, matching the loading screen's Iris Glass world:
+  its own fixed gradient shell + the shared `AmbientOrbs`, concentric radar
+  rings (new `radarPing` keyframe) around the room code in large JetBrains
+  Mono with a periwinkle glow, a pulsing "waiting for your friend…" line, and
+  a dim security marquee + accent hairline, with staggered rise-in entrances
+  on the signature easing. Net-new features wired in: **copy code** and **copy
+  invite link** pill buttons (each flips to a green "Copied ✓" for ~1.5s),
+  a pure/tested `net/inviteLink.ts` (`buildInviteLink` / `parseInviteCode`,
+  8 unit tests) whose link is built from `window.location` so it works on both
+  localhost and the deployed URL; opening that link **prefills the join code**
+  into `StartJoinScreen` (new `initialCode` prop, focus+select) rather than
+  auto-joining, with the hash cleared afterward; an on-theme **QR code**
+  (`qrcode.react`) encoding the same link inside a frosted "SCAN TO JOIN"
+  card; and a **Cancel** button that tears the room down via `handleLeave`.
+  Also extracted the security ticker text into a shared `securityTicker.ts`
+  (used by both loading and waiting screens) and added a `?screen=waiting`
+  dev override for previewing. Verified: `npm run typecheck` clean, 65 vitest
+  tests pass (9 new — 8 for `inviteLink`, 1 for the `waiting` override),
+  `npm run build` green, and a dev-server smoke test (all new modules and the
+  `qrcode.react` dep transform/resolve with HTTP 200). Radar/QR pixels still
+  want a manual eyeball via `?screen=waiting` (no browser-automation tool in
+  this environment, as in prior phases). Built on branch
+  `feat/waiting-room-redesign` off `main` (does **not** include the in-flight
+  `fix/security-review-findings` commit). Phase 4.6's `StartJoinScreen` and
+  `SafetyNumberScreen` styling remain open. See `decisions.md` (2026-07-21).

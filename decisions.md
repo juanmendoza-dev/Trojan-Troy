@@ -8,6 +8,37 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-21 — Waiting-room redesign built directly from Jay's inline brief;
+  six related implementation calls.** The task brief delivered the approved
+  "Radar / Signal" design plus a file-by-file spec directly, so this was built
+  as normal feature-branch work rather than the full
+  brainstorm→spec→plan→SDD cycle Phase 4.6 nominally prescribes; only
+  `WaitingScreen` was built (plus a functional `StartJoinScreen` prop), so
+  4.6's `StartJoinScreen`/`SafetyNumberScreen` styling stays open.
+  (1) `WaitingScreen` renders its own fixed gradient shell + the shared
+  `<AmbientOrbs/>` rather than being wrapped in `HandshakeJourney` — it isn't
+  part of the handshake→safety→chat journey and doesn't need HandshakeJourney's
+  `Crossfade`; the only duplication is a one-line background gradient. Its
+  palette is hardcoded to Iris Glass like `LoadingScreen.css`, so it's
+  theme-independent and flows straight into the loading screen it precedes.
+  (2) An invite link (`…/#CODE`) prefills the join form and highlights it
+  rather than auto-joining on load — matches the existing click-to-join UX;
+  the hash is cleared via `history.replaceState` after reading so a refresh
+  doesn't re-trigger. (3) The dim security marquee text was extracted into a
+  shared `securityTicker.ts` consumed by both the loading and waiting screens
+  instead of duplicating the string (the chat-polish review flagged duplicated
+  constants as a smell). (4) The QR encodes the same invite link and uses
+  periwinkle (`#8FA6FF`) modules on a transparent background per the design's
+  "light or periwinkle modules" — inverted (light-on-dark) QRs scan slightly
+  less reliably on some third-party scanners than dark-on-light, so `level="M"`
+  error correction is set; if real-device scanning proves flaky, switching
+  `fgColor` to `#E8EAF2` is a one-liner. (5) Cancel reuses `handleLeave` — safe
+  from the waiting state, since it just disposes the relay client and resets to
+  the start screen. (6) Added a `?screen=waiting` dev override (extending
+  `screenOverride`) so the radar can be previewed without a live relay/paired
+  session, since visuals are verified manually. (Decided by: Jay (design) +
+  Claude (implementation calls))
+
 - **2026-07-20 — Read/delivered-receipt protocol (spec being written) uses a
   cleartext `messageId` field alongside the ciphertext, not one embedded
   inside the encrypted payload — deliberately deferred for now, revisit
