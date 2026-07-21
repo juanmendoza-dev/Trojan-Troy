@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RelayClient, type Envelope } from "./net/relayClient";
+import { parseInviteCode } from "./net/inviteLink";
 import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
@@ -49,6 +50,7 @@ type Screen =
 export default function App() {
   const devOverride = import.meta.env.DEV ? parseScreenOverride(window.location.search) : null;
   const [screen, setScreen] = useState<Screen>({ name: "start" });
+  const [initialJoinCode] = useState<string | null>(() => parseInviteCode(window.location.hash));
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const sessionKeysRef = useRef<SessionKeys | null>(null);
   const clientRef = useRef<RelayClient | null>(null);
@@ -91,6 +93,14 @@ export default function App() {
 
   useEffect(() => {
     if (devOverride?.theme) setTheme(devOverride.theme);
+  }, []);
+
+  // An invite link (…/#CODE) prefills the join form on load; drop the hash
+  // afterward so a refresh doesn't re-trigger it.
+  useEffect(() => {
+    if (initialJoinCode && window.location.hash) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
   }, []);
 
   const HANDSHAKE_MIN_MS = 2600;
@@ -318,7 +328,13 @@ export default function App() {
     );
   }
   if (screen.name === "start") {
-    return <StartJoinScreen onStart={handleStart} onJoin={handleJoin} />;
+    return (
+      <StartJoinScreen
+        onStart={handleStart}
+        onJoin={handleJoin}
+        initialCode={initialJoinCode ?? undefined}
+      />
+    );
   }
   if (screen.name === "waiting") {
     return <WaitingScreen roomCode={screen.roomCode} />;
