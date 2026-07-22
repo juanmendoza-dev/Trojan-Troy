@@ -23,6 +23,8 @@ import { ChatScreen, type ChatMessage } from "./screens/ChatScreen";
 import { useTheme } from "./theme/ThemeContext";
 import { LoadingScreen } from "./screens/loading/LoadingScreen";
 import { HandshakeJourney } from "./screens/HandshakeJourney";
+import { ErrorScreen } from "./screens/ErrorScreen";
+import { scenarioFromServerMessage, type ErrorScenario } from "./screens/errorScenario";
 import { parseScreenOverride } from "./dev/screenOverride";
 
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
@@ -53,7 +55,12 @@ type Screen =
   | { name: "handshake"; roomCode: string }
   | { name: "safety-number"; roomCode: string; safetyNumber: string }
   | { name: "chat"; roomCode: string; safetyNumber: string }
-  | { name: "error"; message: string };
+  | {
+      name: "error";
+      scenario: ErrorScenario;
+      /** How to replay the failed action, if it can be retried in place. */
+      retry?: { kind: "start" } | { kind: "join"; roomCode: string };
+    };
 
 export default function App() {
   const devOverride = import.meta.env.DEV ? parseScreenOverride(window.location.search) : null;
@@ -175,7 +182,7 @@ export default function App() {
     client.onMessage(async (envelope: Envelope) => {
       if (envelope.type === "peer-disconnected") {
         disconnected = true;
-        setScreen({ name: "error", message: "Your friend disconnected." });
+        setScreen({ name: "error", scenario: "friend_left" });
         return;
       }
       if (envelope.type === "pubkey") {
@@ -190,7 +197,7 @@ export default function App() {
           if (disconnected) return;
           setScreen({ name: "safety-number", roomCode, safetyNumber });
         } catch {
-          setScreen({ name: "error", message: "Key exchange failed." });
+          setScreen({ name: "error", scenario: "handshake_failed" });
         }
         return;
       }
@@ -274,7 +281,7 @@ export default function App() {
       await client.waitForOpen();
     } catch {
       setConnectStatus("idle");
-      setScreen({ name: "error", message: "Could not connect to the relay." });
+      setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "start" } });
       return;
     }
     let currentRoomCode = "";
@@ -295,7 +302,11 @@ export default function App() {
       }
       if (envelope.type === "error") {
         setConnectStatus("idle");
-        setScreen({ name: "error", message: envelope.message });
+        setScreen({
+          name: "error",
+          scenario: scenarioFromServerMessage(envelope.message),
+          retry: { kind: "start" },
+        });
       }
     });
     client.send({ type: "create" });
@@ -310,13 +321,17 @@ export default function App() {
       await client.waitForOpen();
     } catch {
       setConnectStatus("idle");
-      setScreen({ name: "error", message: "Could not connect to the relay." });
+      setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "join", roomCode } });
       return;
     }
     client.onMessage((envelope) => {
       if (envelope.type === "error") {
         setConnectStatus("idle");
-        setScreen({ name: "error", message: envelope.message });
+        setScreen({
+          name: "error",
+          scenario: scenarioFromServerMessage(envelope.message),
+          retry: { kind: "join", roomCode },
+        });
       }
       if (envelope.type === "peer-connected") {
         // Start the key exchange right away (listeners stack — delaying it would
@@ -449,6 +464,16 @@ export default function App() {
       <StartJoinScreen onStart={() => {}} onJoin={() => {}} connectStatus="connecting" />
     );
   }
+  if (devOverride?.screen === "error") {
+    const scenario = devOverride.scenario ?? "friend_left";
+    // Show "Try again" for the connection-time scenarios (mirrors the real
+    // wiring, where only those carry a retry); peer-left / handshake show one.
+    const retryable =
+      scenario === "server_unreachable" || scenario === "bad_code" || scenario === "room_full";
+    return (
+      <ErrorScreen scenario={scenario} onNewChat={() => {}} onRetry={retryable ? () => {} : undefined} />
+    );
+  }
   if (screen.name === "start") {
     return (
       <StartJoinScreen
@@ -494,10 +519,22 @@ export default function App() {
     }
     return <HandshakeJourney activeKey={screen.name}>{content}</HandshakeJourney>;
   }
+  // Only the "error" variant remains.
+  const retry = screen.retry;
   return (
-    <div>
-      <h1>Something went wrong</h1>
-      <p>{screen.message}</p>
-    </div>
+    <ErrorScreen
+      scenario={screen.scenario}
+      onNewChat={handleLeave}
+      onRetry={
+        retry
+          ? () => {
+              // Tear down the failed attempt's client/state, then replay it.
+              handleLeave();
+              if (retry.kind === "start") void handleStart();
+              else void handleJoin(retry.roomCode);
+            }
+          : undefined
+      }
+    />
   );
 }
