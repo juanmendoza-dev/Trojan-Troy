@@ -15,6 +15,7 @@ and `decisions.md` for why things were done a certain way.
 | 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
 | — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | Complete — verified end-to-end |
 | — Chat polish: themed bubble animations, read receipts, Ghost Mode (unscheduled, user-requested) | Complete — verified end-to-end |
+| — Decrypt-reveal redesign: width-driven focus sweep (unscheduled, user-requested polish) | Merged to `main` — typecheck/tests/build green; manual eyeball pending |
 | — Peer presence indicator: encrypted typing + recording (unscheduled, user-requested) | Built on `feat/typing-presence-indicator` — typecheck/tests/build green; visual eyeball + live round-trip pending |
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5 — Marketing/landing site | Not started |
@@ -335,6 +336,28 @@ and `decisions.md` for why things were done a certain way.
   this environment, as in prior phases. Built on branch
   `feat/home-screen-redesign` off `main`. Phase 4.6's `SafetyNumberScreen`
   styling remains open. See `decisions.md` (2026-07-21).
+
+- **2026-07-22** — Decrypt-reveal redesign (unscheduled, user-requested polish).
+  Replaced the incoming-message per-character scramble (`CipherText` /
+  `cipherReveal`) with a width-driven "focus sweep" (`DecryptReveal`): the message
+  arrives blurred + dim and a glowing `--accent`-colored edge sweeps left→right
+  bringing it into sharp focus, as one fixed-duration (560ms) CSS timeline masked
+  across the bubble width. Fixes the four things that made the scramble read as a
+  bug — horizontal glyph wobble (proportional font), flicker trailing past the
+  bubble entrance, a scramble alphabet that never matched real text, and the
+  short-message case ("hi" had nothing to sweep). Real glyphs throughout → no
+  wobble, no reflow, and more accessible (no rAF loop; the sharp text is present
+  from the first frame). Gate unchanged: incoming-only, Iris/Pulse-only, once per
+  message id, Apple instant, reduced-motion shows text immediately; the old
+  per-bubble `bubbleDecryptGlow` bloom was removed (the sweep edge replaces it).
+  Retired `cipherReveal.ts` + its test (no per-char timing logic left to
+  unit-test); `npm run typecheck` clean, 75/75 client vitest tests pass,
+  `npm run build` green. No browser-automation tool in this environment (as in
+  every prior visual phase), so the sweep's pixels still want a manual eyeball via
+  `npm run dev` → `?screen=chat` (toggle Iris/Pulse) before merge. Built on branch
+  `feat/decrypt-focus-sweep` off `main` (rebased clean onto `main` after it was
+  initially branched on top of the unrelated typing-presence spec). See
+  `decisions.md` (2026-07-22).
 
 - **2026-07-22** — Peer presence indicator (typing + voice recording)
   brainstormed with Jay and spec'd. Not a scheduled phase — the Phase 5

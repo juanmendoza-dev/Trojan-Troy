@@ -48,6 +48,38 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
   keyframe + the signature easing.
   (Decided by: Jay (feature direction) + Claude (implementation calls))
 
+- **2026-07-22 — Reworked the incoming-message "decrypt" reveal from a
+  per-character scramble to a width-driven focus sweep (`CipherText` →
+  `DecryptReveal`).** The old scramble read as a bug rather than a feature for
+  four reasons: (1) the scramble layer used the bubble's proportional font, so
+  random-width glyphs made the text wobble horizontally frame to frame; (2) the
+  reveal outlasted the bubble's entrance animation, so the text kept flickering
+  after the bubble had visibly settled; (3) the scramble alphabet was lowercase
+  alphanumeric only, so real text (capitals/punctuation) resolved out of a
+  character set that never matched it, reading as corruption; and (4) it was a
+  per-character lock front, which needs length to read as a "sweep" — a two-char
+  message like "hi" got ~744ms of two glyphs strobing with nothing sweeping (Jay's
+  main complaint). The new effect renders the real text throughout (no scramble):
+  a blurred+dim copy in normal flow reserves the wrapped box, a sharp copy is
+  masked in on top, and a glowing `--accent`-colored edge sweeps left→right. It's
+  one fixed-duration (560ms) CSS timeline tied to the bubble's width via an
+  animated `mask-position`, so a two-letter message sweeps exactly like a
+  paragraph — fixing the short-message case by construction, along with the wobble
+  (real glyphs at fixed positions), the trailing flicker (the sweep now ends
+  within the entrance envelope), and the alphabet mismatch (there's no scramble at
+  all). Bonus: it's simpler and more accessible than the scramble — no rAF loop,
+  and the sharp text is real from the first frame. Implementation calls: renamed
+  the component (nothing "cipher" remains) and retired `cipherReveal.ts` + its
+  Vitest test — the effect is now pure CSS with no per-character timing logic left
+  to test, so this branch adds no new unit tests (consistent with the repo rule
+  that only pure-logic modules get coverage; the animation itself is verified by
+  eye). The surrounding gate is unchanged: still incoming-only, Iris/Pulse-only,
+  once per message id, Apple stays instant, `prefers-reduced-motion` shows text
+  immediately. The per-bubble `bubbleDecryptGlow` box-shadow bloom was removed —
+  the sweep's glowing edge replaces it. Chosen from four brainstormed directions
+  (focus sweep / cipher scan / redacted-block / minimal fix). (Decided by: Jay
+  (picked the focus-sweep direction) + Claude (implementation calls))
+
 - **2026-07-21 — Home-screen (`StartJoinScreen`) redesign + connecting-bar
   wiring, built from the Fable home handoff; several implementation calls.**
   The Fable home handoff (`ui/Trojan Troy Home Screen/Trojan Troy Home.dc.html`)

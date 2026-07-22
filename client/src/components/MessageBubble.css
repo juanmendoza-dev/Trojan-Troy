@@ -76,35 +76,10 @@
   color: var(--accent);
 }
 
-/* Decrypt-in reveal (see MessageBubble.tsx + CipherText.tsx): incoming bubbles
-   on the dark themes keep their entrance animation and gain a soft periwinkle
-   glow that blooms while the cipher text resolves. */
-:root[data-theme="iris"] .message-bubble--incoming[data-decrypting] {
-  animation: bubbleInIris 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) both,
-    bubbleDecryptGlow 0.6s ease-out both;
-}
-:root[data-theme="pulse"] .message-bubble--incoming[data-decrypting] {
-  animation: bubbleInPulse 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both,
-    bubbleDecryptGlow 0.6s ease-out both;
-}
-/* The decrypt reveal stands in for the one-shot sheen sweep. */
+/* Decrypt-in reveal (see MessageBubble.tsx + DecryptReveal.tsx): incoming
+   bubbles on the dark themes keep their normal entrance. The focus-sweep and its
+   glow now live inside DecryptReveal and stand in for the one-shot sheen sweep,
+   so suppress that here to keep the two from overlapping. */
 :root[data-theme="iris"] .message-bubble--incoming[data-decrypting]::after {
   display: none;
-}
-@keyframes bubbleDecryptGlow {
-  0% {
-    box-shadow: 0 0 0 0 rgba(143, 166, 255, 0);
-  }
-  40% {
-    box-shadow: 0 0 20px 2px rgba(143, 166, 255, 0.33);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(143, 166, 255, 0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  :root[data-theme="iris"] .message-bubble--incoming[data-decrypting],
-  :root[data-theme="pulse"] .message-bubble--incoming[data-decrypting] {
-    animation: none;
-  }
 }
