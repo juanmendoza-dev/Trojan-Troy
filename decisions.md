@@ -8,6 +8,46 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-22 — Peer presence indicator designed as an *encrypted*
+  typing+recording signal; several design/implementation calls.** Brainstormed
+  with Jay from the Phase 5 backlog "peer is typing" item; full design in
+  `docs/superpowers/specs/2026-07-22-typing-presence-design.md`. Jay set the
+  direction (classic Instagram-style dots with a Trojan Troy touch; encrypt +
+  respect Ghost Mode; cover text *and* voice recording), then delegated the
+  finer calls ("do whatever you think is best").
+  (1) **Transport is client-only, not a "protocol change."** The Phase 4 note
+  (`decisions.md`, 2026-07-19) that a typing indicator needs a relay/protocol
+  change is corrected: the relay forwards unknown envelope types opaquely
+  (same as `ciphertext`/`voice`/`delivered`/`read`), so a new `presence`
+  envelope is one line in the client `Envelope` union with zero server work.
+  `roadmap.md`'s backlog note updated to match.
+  (2) **The presence state is encrypted**, unlike the cleartext
+  `delivered`/`read` acks — the payload is a tiny JSON `{state}` sealed
+  through the existing `encryptMessage`/`secretbox` path (no new primitive),
+  so the relay can't tell typing from recording from stop. The `type:
+  "presence"` field stays cleartext (structural routing, same category as the
+  already-cleartext `messageId`). Accepted residual leak: the relay can still
+  see presence-packet *cadence* (traffic analysis) even without contents —
+  same threat-model line as `messageId`, hardening deferred to Phase 5.
+  (3) **Ghost Mode is broadened** from "suppress read receipts" to "don't
+  broadcast my activity" — it now also suppresses outgoing presence, reusing
+  the same `trojan-troy-ghost-mode` toggle/`ghostModeRef` gate (no new
+  setting). It governs only what you send; you still see the peer's presence.
+  Settings "Privacy" copy to be updated.
+  (4) **Send model is a throttled heartbeat** (~2.5s while active) + immediate
+  stop, with the receiver auto-expiring the indicator (~5s) as a dropped-stop
+  safety net; the pure timing logic goes in `protocol/presenceState.ts` with a
+  unit test, matching `messageStatus.ts`/`readAckDecision.ts`.
+  (5) Delegated calls: **continuity** is a light overlapping fade of the dots
+  bubble into the arriving message (not a full shared-element morph — brittle
+  across variable heights, and there's no layout-animation lib; the message's
+  existing `CipherText` decrypt reveal still carries the cipher flavor);
+  **recording variant** = mic glyph + dots labelled "recording audio…";
+  **Apple theme** gets a flat grey iMessage-style bubble (not skipped),
+  Iris/Pulse get periwinkle glass beads + the currently-unused `glowPulse`
+  keyframe + the signature easing.
+  (Decided by: Jay (feature direction) + Claude (implementation calls))
+
 - **2026-07-21 — Home-screen (`StartJoinScreen`) redesign + connecting-bar
   wiring, built from the Fable home handoff; several implementation calls.**
   The Fable home handoff (`ui/Trojan Troy Home Screen/Trojan Troy Home.dc.html`)
