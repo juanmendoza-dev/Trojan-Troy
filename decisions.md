@@ -8,6 +8,46 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-22 — Seal-slider spark effect on the safety-number screen: a
+  canvas particle layer; three design directions + several implementation
+  calls.** Brainstormed with Jay from scratch (make the "drag to seal" slider
+  throw sparks as it moves right, as rich and smooth as possible); full design
+  in `docs/superpowers/specs/2026-07-22-seal-slider-sparks-design.md`. Jay chose
+  the three headline directions: **canvas particle system** (over lightweight
+  CSS/DOM sparks or a particle-library dependency), **rainbow embers** whose hue
+  is sampled from the existing trail gradient at each spark's birth point (over
+  a hot-friction or electric/plasma palette), and **full cinematic** intensity
+  (embers escape up off the rail while dragging + a radial burst on seal). The
+  finer implementation calls (Claude):
+  (1) The spark canvas is a **persistent child of `.confirm-key__seal`, rendered
+  outside the `phase === "verify"` conditional.** On seal that block (track +
+  knob) unmounts, so a canvas nested inside it would vanish before the burst
+  could draw; as an outside sibling it survives to shower over the "Channel
+  sealed" box during the existing `OPENING_HOLD_MS` hold.
+  (2) **The loop runs for the component's lifetime rather than the spec's
+  "self-park + restart" model.** Self-parking would need an imperative handle or
+  the parent re-kicking the loop; since `SafetyNumberScreen` is short-lived and
+  an idle frame is just one cheap `clearRect` on a small canvas, always-running-
+  while-mounted is simpler and stays fully ref-driven — the `holdingRef` the
+  spec earmarked for parking wasn't needed and was dropped from the component's
+  props.
+  (3) **The one-shot seal "sheen" sweep moved from the fill to the
+  `.confirm-key__sealed-box`.** The spec put it on the fill, but the fill lives
+  in the verify block that unmounts on seal, so it can't sweep post-seal; the
+  green sealed box carries it instead (same reused global `sheen` keyframe).
+  (4) **Physics are dt-normalized to 60fps units** (motion speed is refresh-rate
+  independent) while emission stays per-frame — a 120Hz display simply throws
+  denser sparks, bounded by the `MAX_PARTICLES` cap, which is fine.
+  (5) **Keyboard parity via a synthetic velocity impulse:** `ArrowRight` briefly
+  sets `velocityRef` so the same velocity-driven emission path puffs for that
+  step; Enter / arrow-to-100% seal and trigger the burst like a drag does.
+  The pure emission-count + trail-color-sampling math is extracted to a tested
+  `screens/sparkModel.ts` (matching `barPhases.ts` / `readAckDecision.ts`); the
+  canvas drawing itself is visual-only with no unit test, per the project's
+  standing convention. Reduced motion renders no canvas but keeps a
+  progress-scaled static knob glow. No new dependency, no crypto/relay/server
+  change. (Decided by: Jay (design directions) + Claude (implementation calls))
+
 - **2026-07-22 — Reworked the incoming-message "decrypt" reveal from a
   per-character scramble to a width-driven focus sweep (`CipherText` →
   `DecryptReveal`).** The old scramble read as a bug rather than a feature for

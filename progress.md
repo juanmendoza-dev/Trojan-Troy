@@ -16,6 +16,7 @@ and `decisions.md` for why things were done a certain way.
 | — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | Complete — verified end-to-end |
 | — Chat polish: themed bubble animations, read receipts, Ghost Mode (unscheduled, user-requested) | Complete — verified end-to-end |
 | — Decrypt-reveal redesign: width-driven focus sweep (unscheduled, user-requested polish) | Code complete on branch `feat/decrypt-focus-sweep` — typecheck/tests/build green; manual eyeball + merge pending |
+| — Seal-slider sparks: canvas ember effect on the safety-number slider (unscheduled, user-requested) | Built — typecheck/86 tests/build green; visual eyeball via `?screen=safety` pending |
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5 — Marketing/landing site | Not started |
 
@@ -357,3 +358,21 @@ and `decisions.md` for why things were done a certain way.
   `feat/decrypt-focus-sweep` off `main` (rebased clean onto `main` after it was
   initially branched on top of the unrelated typing-presence spec). See
   `decisions.md` (2026-07-22).
+
+- **2026-07-22** — Seal-slider spark effect (unscheduled, user-requested
+  polish, not a roadmap phase). The safety-number screen's "drag to seal"
+  slider now throws rainbow embers off the knob as you drag right —
+  intensifying with drag speed and progress — and bursts a radial shower on
+  seal. Built as a canvas overlay (`components/SealSparks.tsx` + `.css`) mounted
+  over `.confirm-key__seal`, with the pure emission-count + trail-color sampling
+  in a tested `screens/sparkModel.ts` (11 new unit tests); `SafetyNumberScreen`
+  gained pointer-velocity tracking on drag, a keyboard puff impulse, and a
+  reduced-motion static knob glow. Rainbow-ember hue is sampled from the same
+  trail gradient the track paints, so sparks look flung off the rail. No new
+  dependency, no crypto/relay/server change. Verified: `npm run typecheck`
+  clean, 86 vitest tests pass (11 new), `npm run build` green (99 modules). The
+  live ember motion + seal burst still want a manual eyeball via `npm run dev` →
+  `?screen=safety` (no browser-automation tool in this environment, as in every
+  prior visual phase). Built on branch `feat/seal-slider-sparks` off `main`.
+  Design: `docs/superpowers/specs/2026-07-22-seal-slider-sparks-design.md`;
+  rationale + implementation calls in `decisions.md` (2026-07-22).
