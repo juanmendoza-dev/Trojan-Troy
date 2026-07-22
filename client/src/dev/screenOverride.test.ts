@@ -45,6 +45,10 @@ describe("parseScreenOverride", () => {
     });
   });
 
+  it("parses the profiles screen", () => {
+    expect(parseScreenOverride("?screen=profiles")).toEqual({ screen: "profiles" });
+  });
+
   it("omits theme when not given or invalid", () => {
     expect(parseScreenOverride("?screen=chat")).toEqual({ screen: "chat" });
     expect(parseScreenOverride("?screen=chat&theme=nope")).toEqual({ screen: "chat" });

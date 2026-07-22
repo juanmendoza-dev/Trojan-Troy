@@ -19,7 +19,8 @@ and `decisions.md` for why things were done a certain way.
 | — Peer presence indicator: encrypted typing + recording (unscheduled, user-requested) | Built on `feat/typing-presence-indicator` — typecheck/tests/build green; visual eyeball + live round-trip pending |
 | — Seal-slider sparks: canvas ember effect on the safety-number slider (unscheduled, user-requested) | Merged to `main` — typecheck/95 tests/build green; visual eyeball via `?screen=safety` pending |
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
-| 5.1 + 5.1a — Persistent identity + contacts privacy settings | In progress — building together on `feat/persistent-identity-contacts` (ahead of 4.6/4.7 per Jay, see `decisions.md`) |
+| 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
+| 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
 
 ## Log
 
@@ -421,3 +422,38 @@ and `decisions.md` for why things were done a certain way.
   `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`; headline
   directions + delegated implementation calls in `decisions.md` (2026-07-22);
   `roadmap.md` gains a 5.1a note.
+
+- **2026-07-22** — Local Profiles (Layer A) built — replaces the retired
+  persistent-identity direction (see `decisions.md`). After the
+  persistent-identity + PIN/contacts work was rolled back off `main` (`1ee0e35`),
+  built device-local, PIN-gated profiles on `feat/profiles`: pure
+  `profiles/pin.ts` (4-digit validate + salted hash) and
+  `profiles/profileModel.ts` (Anonymous default + active-profile resolution), an
+  IndexedDB `profileStore.ts` (+ `fake-indexeddb` for tests), the bundled default
+  avatar (the taiyaki-hat cat) + a downscale util, a `ProfileButton` on the home
+  screen, a Settings-style `ProfileModal` (create / select-with-PIN / delete with
+  a soft-red cube confirm), and opt-in *encrypted* name/photo sharing (a new
+  relay-forwarded `profile` envelope, a Settings toggle default off, peer card in
+  the chat header). Session crypto unchanged; no server change. Added a
+  `?screen=profiles` dev override. Verified: `npm run typecheck` clean, 108
+  vitest tests pass (13 new), `npm run build` green (default-avatar bundled). Per-
+  profile conversation history is Layer B (a separate plan). Manual eyeball
+  (`?screen=profiles`) + a live two-browser sharing round-trip still pending — no
+  browser-automation tool in this environment, as in every prior visual phase.
+  Spec: `docs/superpowers/specs/2026-07-22-local-profiles-design.md`; plan:
+  `docs/superpowers/plans/2026-07-22-local-profiles.md`.
+
+- **2026-07-22** — Profile avatars on messages + click-to-open profile card
+  (extends Local Profiles; user-requested). Hybrid Discord style — kept the
+  themed bubbles, added a small avatar beside each message (peer's on incoming,
+  yours on outgoing), shown on the last message of a consecutive run (tested
+  `components/messageGrouping.ts`). Clicking an avatar opens a `ProfileCard`
+  popover (name + larger picture + "on computer/phone"). Device is a best-effort
+  heuristic (`profiles/device.ts`, tested) added to the existing *encrypted*
+  `profile` card payload — relay-blind, opt-in via the same sharing toggle. Not
+  shared → the message avatars/card fall back to the default cat + "Anonymous".
+  Refactored the message row to `[avatar][stack]` (`MessageBubble` /
+  `VoiceMessageBubble`), all themes. Verified: typecheck clean, 114 vitest tests
+  (6 new), build green. Manual eyeball (`?screen=chat`, and a live two-browser
+  round-trip with sharing on) still pending — no browser-automation tool here.
+  Built on `feat/profiles`.

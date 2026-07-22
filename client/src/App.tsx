@@ -25,6 +25,18 @@ import { LoadingScreen } from "./screens/loading/LoadingScreen";
 import { HandshakeJourney } from "./screens/HandshakeJourney";
 import { ErrorScreen } from "./screens/ErrorScreen";
 import { scenarioFromServerMessage, type ErrorScenario } from "./screens/errorScenario";
+import { ProfileModal } from "./components/ProfileModal";
+import { resolveActiveProfile, ANONYMOUS_ID, type Profile, type PeerProfile } from "./profiles/profileModel";
+import {
+  listProfiles,
+  putProfile,
+  deleteProfile,
+  getActiveProfileId,
+  getShareProfile,
+  setActiveProfileId as persistActiveProfileId,
+  setShareProfile as persistShareProfile,
+} from "./profiles/profileStore";
+import { detectDevice } from "./profiles/device";
 import { parseScreenOverride } from "./dev/screenOverride";
 
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
@@ -73,6 +85,46 @@ export default function App() {
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
   const { setTheme } = useTheme();
+
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [activeProfileId, setActiveProfileId] = useState<string>(() => getActiveProfileId());
+  const [profilesOpen, setProfilesOpen] = useState(false);
+  const activeProfile = resolveActiveProfile(profiles, activeProfileId);
+  const [ownDevice] = useState(detectDevice);
+  const selfCard: PeerProfile = {
+    name: activeProfile.kind === "named" ? activeProfile.profile.name : "Anonymous",
+    avatar: activeProfile.kind === "named" ? activeProfile.profile.avatar : null,
+    device: ownDevice,
+  };
+  const activeProfileRef = useRef(activeProfile);
+  activeProfileRef.current = activeProfile;
+  const [shareProfile, setShareProfile] = useState<boolean>(() => getShareProfile());
+  const shareProfileRef = useRef(shareProfile);
+  shareProfileRef.current = shareProfile;
+  function updateShareProfile(next: boolean) {
+    persistShareProfile(next);
+    setShareProfile(next);
+  }
+  const [peerProfile, setPeerProfile] = useState<PeerProfile | null>(null);
+
+  useEffect(() => {
+    void listProfiles().then(setProfiles);
+  }, []);
+
+  function selectProfile(id: string) {
+    persistActiveProfileId(id);
+    setActiveProfileId(id);
+  }
+  async function handleCreateProfile(profile: Profile) {
+    await putProfile(profile);
+    setProfiles(await listProfiles());
+    selectProfile(profile.id);
+  }
+  async function handleDeleteProfile(id: string) {
+    await deleteProfile(id);
+    setProfiles(await listProfiles());
+    if (activeProfileId === id) selectProfile(ANONYMOUS_ID);
+  }
 
   const pendingReadIdRef = useRef<string | null>(null);
   const [ghostMode, setGhostMode] = useState<boolean>(
@@ -189,6 +241,11 @@ export default function App() {
         try {
           const peerPublicKey = await fromBase64(envelope.payload);
           sessionKeysRef.current = await deriveSessionKeys(own, peerPublicKey, role);
+          if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
+            const self = activeProfileRef.current.profile;
+            const card = JSON.stringify({ name: self.name, avatar: self.avatar, device: ownDevice });
+            client.send({ type: "profile", payload: await encryptMessage(sessionKeysRef.current.tx, card) });
+          }
           const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey);
           const elapsed = performance.now() - handshakeStart;
           if (elapsed < HANDSHAKE_MIN_MS) {
@@ -255,6 +312,23 @@ export default function App() {
           if (state) showPeerPresence(state);
         } catch {
           // Ignore malformed/undecryptable presence — the next heartbeat recovers.
+        }
+        return;
+      }
+      if (envelope.type === "profile") {
+        const keys = sessionKeysRef.current;
+        if (!keys) return;
+        try {
+          const card = JSON.parse(await decryptMessage(keys.rx, envelope.payload));
+          if (card && typeof card.name === "string") {
+            setPeerProfile({
+              name: card.name,
+              avatar: typeof card.avatar === "string" ? card.avatar : null,
+              device: card.device === "phone" || card.device === "computer" ? card.device : null,
+            });
+          }
+        } catch {
+          // Ignore a malformed/undecryptable profile card.
         }
         return;
       }
@@ -386,6 +460,7 @@ export default function App() {
     }
     presenceSentRef.current = { state: "idle", at: 0 };
     setPeerPresence("idle");
+    setPeerProfile(null);
     setConnectStatus("idle");
     for (const message of messagesRef.current) {
       if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
@@ -434,6 +509,10 @@ export default function App() {
           ]}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
+          shareProfile={false}
+          onShareProfileChange={() => {}}
+          selfCard={{ name: "You", avatar: null, device: "computer" }}
+          peerProfile={{ name: "Jay", avatar: null, device: "phone" }}
           peerPresence="typing"
           onPresence={() => {}}
           onSend={() => {}}
@@ -461,7 +540,39 @@ export default function App() {
     // Holds the connecting bar in its "alive" cold-start state so the sheen +
     // breathing glow can be eyeballed without a live relay.
     return (
-      <StartJoinScreen onStart={() => {}} onJoin={() => {}} connectStatus="connecting" />
+      <StartJoinScreen
+        onStart={() => {}}
+        onJoin={() => {}}
+        connectStatus="connecting"
+        activeProfile={{ kind: "anonymous" }}
+        onOpenProfiles={() => {}}
+      />
+    );
+  }
+  if (devOverride?.screen === "profiles") {
+    const sample: Profile[] = [
+      { id: "s1", name: "Jay", avatar: null, pinSalt: "", pinHash: "", createdAt: 0 },
+      { id: "s2", name: "Work", avatar: null, pinSalt: "", pinHash: "", createdAt: 0 },
+    ];
+    return (
+      <>
+        <StartJoinScreen
+          onStart={() => {}}
+          onJoin={() => {}}
+          connectStatus="idle"
+          activeProfile={{ kind: "anonymous" }}
+          onOpenProfiles={() => {}}
+        />
+        <ProfileModal
+          profiles={sample}
+          activeId={ANONYMOUS_ID}
+          onSelectAnonymous={() => {}}
+          onSelectNamed={() => {}}
+          onCreate={() => {}}
+          onDelete={() => {}}
+          onClose={() => {}}
+        />
+      </>
     );
   }
   if (devOverride?.screen === "error") {
@@ -476,12 +587,27 @@ export default function App() {
   }
   if (screen.name === "start") {
     return (
-      <StartJoinScreen
-        onStart={handleStart}
-        onJoin={handleJoin}
-        connectStatus={connectStatus}
-        initialCode={initialJoinCode ?? undefined}
-      />
+      <>
+        <StartJoinScreen
+          onStart={handleStart}
+          onJoin={handleJoin}
+          connectStatus={connectStatus}
+          initialCode={initialJoinCode ?? undefined}
+          activeProfile={activeProfile}
+          onOpenProfiles={() => setProfilesOpen(true)}
+        />
+        {profilesOpen && (
+          <ProfileModal
+            profiles={profiles}
+            activeId={activeProfileId}
+            onSelectAnonymous={() => selectProfile(ANONYMOUS_ID)}
+            onSelectNamed={(profile) => selectProfile(profile.id)}
+            onCreate={handleCreateProfile}
+            onDelete={handleDeleteProfile}
+            onClose={() => setProfilesOpen(false)}
+          />
+        )}
+      </>
     );
   }
   if (screen.name === "waiting") {
@@ -507,8 +633,12 @@ export default function App() {
           roomCode={screen.roomCode}
           safetyNumber={screen.safetyNumber}
           messages={messages}
+          selfCard={selfCard}
+          peerProfile={peerProfile}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
+          shareProfile={shareProfile}
+          onShareProfileChange={updateShareProfile}
           peerPresence={peerPresence}
           onPresence={sendPresence}
           onSend={handleSend}

@@ -1,12 +1,27 @@
 .message-row {
   display: flex;
+  align-items: flex-end;
+  gap: 8px;
 }
 .message-row--incoming {
+  flex-direction: row;
   justify-content: flex-start;
 }
 .message-row--outgoing {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+.message-row__stack {
+  display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+.message-row--outgoing .message-row__stack {
   align-items: flex-end;
+}
+.message-row__avatar-gap {
+  flex: none;
+  width: 28px;
 }
 .message-bubble {
   max-width: 420px;

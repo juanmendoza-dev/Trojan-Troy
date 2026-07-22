@@ -50,6 +50,19 @@ describe("RelayClient", () => {
     ]);
   });
 
+  it("passes a profile card envelope through in both directions", () => {
+    const socket = fakeSocket();
+    const client = new RelayClient("ws://test", () => socket);
+    const received: unknown[] = [];
+    client.onMessage((envelope) => received.push(envelope));
+
+    client.send({ type: "profile", payload: "sealed-card" });
+    socket.onmessage?.({ data: JSON.stringify({ type: "profile", payload: "sealed-card" }) });
+
+    expect(socket.sent).toEqual([JSON.stringify({ type: "profile", payload: "sealed-card" })]);
+    expect(received).toEqual([{ type: "profile", payload: "sealed-card" }]);
+  });
+
   it("notifies listeners when a message arrives", () => {
     const socket = fakeSocket();
     const client = new RelayClient("ws://test", () => socket);

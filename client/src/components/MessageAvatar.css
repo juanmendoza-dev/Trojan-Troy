@@ -1,0 +1,27 @@
+.message-avatar {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.message-avatar:hover {
+  transform: scale(1.08);
+}
+.message-avatar__img {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-card);
+}
+@media (prefers-reduced-motion: reduce) {
+  .message-avatar {
+    transition: none;
+  }
+}
