@@ -139,6 +139,13 @@ export async function unlock(passphrase: string): Promise<boolean> {
 export function isLoaded(): boolean {
   return vault !== null;
 }
+// Drop the decrypted vault from memory (idle re-lock). Only meaningful when a
+// PIN is set; the next access routes back through unlock().
+export function lockVault(): void {
+  vault = null;
+  vaultKey = null;
+  vaultSalt = null;
+}
 export function hasPin(): boolean {
   return vaultKey !== null;
 }

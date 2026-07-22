@@ -14,7 +14,23 @@ import {
   PRESENCE_EXPIRY_MS,
   type PresenceState,
 } from "./protocol/presenceState";
+import { decideAccess } from "./net/accessControl";
+import { shouldRelock, DEFAULT_LOCK_TIMEOUT_MS } from "./identity/lockState";
+import {
+  initIdentity,
+  lockVault,
+  hasPin,
+  getIdentityKeypair,
+  getDisplayName,
+  getAliases,
+  getContact,
+  upsertContact,
+  blockedSet,
+} from "./identity/identity";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
+import { SetupScreen } from "./screens/SetupScreen";
+import { UnlockScreen } from "./screens/UnlockScreen";
+import { ContactsScreen } from "./screens/ContactsScreen";
 import { type ConnectStatus } from "./screens/ConnectingBar";
 import { CONNECT_COMPLETE_HOLD_MS } from "./screens/barPhases";
 import { WaitingScreen } from "./screens/WaitingScreen";
@@ -29,6 +45,7 @@ import { parseScreenOverride } from "./dev/screenOverride";
 
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
 const GHOST_MODE_STORAGE_KEY = "trojan-troy-ghost-mode";
+const CONTACTS_ONLY_STORAGE_KEY = "trojan-troy-contacts-only";
 
 function maybeSendReadAck(
   client: RelayClient,
@@ -49,11 +66,19 @@ function maybeSendReadAck(
   }
 }
 
+type AppState = "loading" | "setup" | "unlock" | "ready";
+
 type Screen =
   | { name: "start" }
   | { name: "waiting"; roomCode: string }
   | { name: "handshake"; roomCode: string }
-  | { name: "safety-number"; roomCode: string; safetyNumber: string }
+  | {
+      name: "safety-number";
+      roomCode: string;
+      safetyNumber: string;
+      recognized: boolean;
+      contactName?: string;
+    }
   | { name: "chat"; roomCode: string; safetyNumber: string }
   | {
       name: "error";
@@ -64,15 +89,26 @@ type Screen =
 
 export default function App() {
   const devOverride = import.meta.env.DEV ? parseScreenOverride(window.location.search) : null;
+  const [appState, setAppState] = useState<AppState>(devOverride ? "ready" : "loading");
   const [screen, setScreen] = useState<Screen>({ name: "start" });
   const [initialJoinCode] = useState<string | null>(() => parseInviteCode(window.location.hash));
   const [connectStatus, setConnectStatus] = useState<ConnectStatus>("idle");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [showContacts, setShowContacts] = useState(false);
   const sessionKeysRef = useRef<SessionKeys | null>(null);
   const clientRef = useRef<RelayClient | null>(null);
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
   const { setTheme } = useTheme();
+
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+
+  // The name we present in the identity handshake (chosen in the "join as"
+  // picker); null = anonymous. And the peer's asserted identity, set aside so we
+  // can save/update the contact once the safety number is confirmed.
+  const presentedNameRef = useRef<string | null>(null);
+  const peerHandshakeRef = useRef<{ identityKey: string; presentedName?: string } | null>(null);
 
   const pendingReadIdRef = useRef<string | null>(null);
   const [ghostMode, setGhostMode] = useState<boolean>(
@@ -80,6 +116,12 @@ export default function App() {
   );
   const ghostModeRef = useRef(ghostMode);
   ghostModeRef.current = ghostMode;
+
+  const [contactsOnly, setContactsOnly] = useState<boolean>(
+    () => localStorage.getItem(CONTACTS_ONLY_STORAGE_KEY) === "true"
+  );
+  const contactsOnlyRef = useRef(contactsOnly);
+  contactsOnlyRef.current = contactsOnly;
 
   const [peerPresence, setPeerPresence] = useState<PresenceState>("idle");
   const presenceExpiryRef = useRef<number | null>(null);
@@ -89,6 +131,49 @@ export default function App() {
     localStorage.setItem(GHOST_MODE_STORAGE_KEY, String(next));
     setGhostMode(next);
   }
+  function updateContactsOnly(next: boolean) {
+    localStorage.setItem(CONTACTS_ONLY_STORAGE_KEY, String(next));
+    setContactsOnly(next);
+  }
+
+  // Load or create the persistent identity on mount, routing to Setup (no name
+  // yet) or Unlock (PIN-protected) before the app proper. Skipped under a dev
+  // screen override, which renders a single screen in isolation.
+  useEffect(() => {
+    if (devOverride) return;
+    void (async () => {
+      const status = await initIdentity();
+      setAppState(status === "locked" ? "unlock" : status);
+    })();
+  }, []);
+
+  // Idle re-lock: when a PIN is set and we're sitting idle on the start screen,
+  // drop the vault and require unlock again. Never fires mid-chat — the active
+  // session's keys are independent of the identity vault (see spec).
+  const lastActivityRef = useRef(Date.now());
+  useEffect(() => {
+    function bump() {
+      lastActivityRef.current = Date.now();
+    }
+    window.addEventListener("pointerdown", bump);
+    window.addEventListener("keydown", bump);
+    const interval = window.setInterval(() => {
+      if (
+        hasPin() &&
+        screenRef.current.name === "start" &&
+        shouldRelock(lastActivityRef.current, Date.now(), DEFAULT_LOCK_TIMEOUT_MS)
+      ) {
+        lockVault();
+        setShowContacts(false);
+        setAppState("unlock");
+      }
+    }, 30_000);
+    return () => {
+      window.removeEventListener("pointerdown", bump);
+      window.removeEventListener("keydown", bump);
+      window.clearInterval(interval);
+    };
+  }, []);
 
   // Show the peer's live presence, auto-clearing after PRESENCE_EXPIRY_MS as a
   // safety net for a dropped "idle"/stop event.
@@ -173,7 +258,8 @@ export default function App() {
 
   async function exchangeKeys(
     client: RelayClient,
-    own: Keypair,
+    ownEphemeral: Keypair,
+    ownIdentity: Keypair,
     role: "initiator" | "responder",
     roomCode: string
   ) {
@@ -185,17 +271,51 @@ export default function App() {
         setScreen({ name: "error", scenario: "friend_left" });
         return;
       }
-      if (envelope.type === "pubkey") {
+      if (envelope.type === "identity") {
         try {
-          const peerPublicKey = await fromBase64(envelope.payload);
-          sessionKeysRef.current = await deriveSessionKeys(own, peerPublicKey, role);
-          const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey);
+          const peerIdentityKey = envelope.identityPublicKey;
+          // Access gate — keyed on the identity KEY, never the presented name —
+          // before deriving any session key or revealing chat.
+          const decision = decideAccess(peerIdentityKey, {
+            contactsOnly: contactsOnlyRef.current,
+            blocked: blockedSet(),
+            knownContact: !!getContact(peerIdentityKey),
+          });
+          if (decision !== "allow") {
+            disconnected = true;
+            client.close();
+            clientRef.current = null;
+            setScreen({
+              name: "error",
+              scenario: decision === "refuse-unknown" ? "not_a_contact" : "handshake_failed",
+            });
+            return;
+          }
+
+          const peerIdentityPub = await fromBase64(envelope.identityPublicKey);
+          const peerEphemeralPub = await fromBase64(envelope.ephemeralPublicKey);
+          sessionKeysRef.current = await deriveSessionKeys(
+            ownIdentity,
+            peerIdentityPub,
+            ownEphemeral,
+            peerEphemeralPub,
+            role
+          );
+          const safetyNumber = await computeSafetyNumber(ownIdentity.publicKey, peerIdentityPub);
+          const existing = getContact(peerIdentityKey);
+          const recognized = !!existing;
+          const contactName = existing?.label || existing?.displayName || envelope.displayName;
+          peerHandshakeRef.current = {
+            identityKey: peerIdentityKey,
+            presentedName: envelope.displayName,
+          };
+
           const elapsed = performance.now() - handshakeStart;
           if (elapsed < HANDSHAKE_MIN_MS) {
             await new Promise((resolve) => setTimeout(resolve, HANDSHAKE_MIN_MS - elapsed));
           }
           if (disconnected) return;
-          setScreen({ name: "safety-number", roomCode, safetyNumber });
+          setScreen({ name: "safety-number", roomCode, safetyNumber, recognized, contactName });
         } catch {
           setScreen({ name: "error", scenario: "handshake_failed" });
         }
@@ -269,12 +389,19 @@ export default function App() {
       }
     });
 
-    client.send({ type: "pubkey", payload: await toBase64(own.publicKey) });
+    client.send({
+      type: "identity",
+      ephemeralPublicKey: await toBase64(ownEphemeral.publicKey),
+      identityPublicKey: await toBase64(ownIdentity.publicKey),
+      displayName: presentedNameRef.current ?? undefined,
+    });
   }
 
-  async function handleStart() {
+  async function handleStart(presentedName: string | null = presentedNameRef.current) {
+    presentedNameRef.current = presentedName;
     setConnectStatus("connecting");
-    const own = await generateKeypair();
+    const ephemeral = await generateKeypair();
+    const identity = await getIdentityKeypair();
     const client = new RelayClient(RELAY_URL);
     clientRef.current = client;
     try {
@@ -298,7 +425,7 @@ export default function App() {
       }
       if (envelope.type === "peer-connected") {
         setScreen({ name: "handshake", roomCode: currentRoomCode });
-        void exchangeKeys(client, own, "initiator", currentRoomCode);
+        void exchangeKeys(client, ephemeral, identity, "initiator", currentRoomCode);
       }
       if (envelope.type === "error") {
         setConnectStatus("idle");
@@ -312,9 +439,11 @@ export default function App() {
     client.send({ type: "create" });
   }
 
-  async function handleJoin(roomCode: string) {
+  async function handleJoin(roomCode: string, presentedName: string | null = presentedNameRef.current) {
+    presentedNameRef.current = presentedName;
     setConnectStatus("connecting");
-    const own = await generateKeypair();
+    const ephemeral = await generateKeypair();
+    const identity = await getIdentityKeypair();
     const client = new RelayClient(RELAY_URL);
     clientRef.current = client;
     try {
@@ -335,10 +464,10 @@ export default function App() {
       }
       if (envelope.type === "peer-connected") {
         // Start the key exchange right away (listeners stack — delaying it would
-        // drop the peer's pubkey), but hold the finished bar a beat on the home
-        // screen before swapping in the handshake/loading screen.
+        // drop the peer's identity envelope), but hold the finished bar a beat on
+        // the home screen before swapping in the handshake/loading screen.
         setConnectStatus("connected");
-        void exchangeKeys(client, own, "responder", roomCode);
+        void exchangeKeys(client, ephemeral, identity, "responder", roomCode);
         window.setTimeout(() => {
           setConnectStatus("idle");
           setScreen((prev) => (prev.name === "start" ? { name: "handshake", roomCode } : prev));
@@ -346,6 +475,24 @@ export default function App() {
       }
     });
     client.send({ type: "join", roomCode });
+  }
+
+  // Confirmed the safety number (new or recognized) → save/update the contact
+  // keyed on their identity key, then unlock chat.
+  async function handleVerified(roomCode: string, safetyNumber: string) {
+    const peer = peerHandshakeRef.current;
+    if (peer) {
+      try {
+        await upsertContact({
+          identityPublicKey: peer.identityKey,
+          displayName: peer.presentedName,
+          safetyNumber,
+        });
+      } catch {
+        // Non-fatal (e.g. in-memory fallback) — chat still proceeds.
+      }
+    }
+    setScreen({ name: "chat", roomCode, safetyNumber });
   }
 
   async function handleSend(text: string) {
@@ -380,6 +527,7 @@ export default function App() {
     clientRef.current = null;
     sessionKeysRef.current = null;
     pendingReadIdRef.current = null;
+    peerHandshakeRef.current = null;
     if (presenceExpiryRef.current !== null) {
       clearTimeout(presenceExpiryRef.current);
       presenceExpiryRef.current = null;
@@ -387,6 +535,7 @@ export default function App() {
     presenceSentRef.current = { state: "idle", at: 0 };
     setPeerPresence("idle");
     setConnectStatus("idle");
+    setShowContacts(false);
     for (const message of messagesRef.current) {
       if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
     }
@@ -434,6 +583,9 @@ export default function App() {
           ]}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
+          contactsOnly={contactsOnly}
+          onContactsOnlyChange={updateContactsOnly}
+          onOpenContacts={() => {}}
           peerPresence="typing"
           onPresence={() => {}}
           onSend={() => {}}
@@ -460,9 +612,7 @@ export default function App() {
   if (devOverride?.screen === "connecting") {
     // Holds the connecting bar in its "alive" cold-start state so the sheen +
     // breathing glow can be eyeballed without a live relay.
-    return (
-      <StartJoinScreen onStart={() => {}} onJoin={() => {}} connectStatus="connecting" />
-    );
+    return <StartJoinScreen onStart={() => {}} onJoin={() => {}} connectStatus="connecting" />;
   }
   if (devOverride?.screen === "error") {
     const scenario = devOverride.scenario ?? "friend_left";
@@ -474,6 +624,17 @@ export default function App() {
       <ErrorScreen scenario={scenario} onNewChat={() => {}} onRetry={retryable ? () => {} : undefined} />
     );
   }
+
+  if (appState === "loading") {
+    return <div style={{ minHeight: "100vh", background: "#070912" }} />;
+  }
+  if (appState === "setup") {
+    return <SetupScreen onComplete={() => setAppState("ready")} />;
+  }
+  if (appState === "unlock") {
+    return <UnlockScreen onUnlocked={() => setAppState("ready")} />;
+  }
+
   if (screen.name === "start") {
     return (
       <StartJoinScreen
@@ -481,6 +642,8 @@ export default function App() {
         onJoin={handleJoin}
         connectStatus={connectStatus}
         initialCode={initialJoinCode ?? undefined}
+        displayName={getDisplayName()}
+        aliases={getAliases()}
       />
     );
   }
@@ -496,9 +659,9 @@ export default function App() {
         <SafetyNumberScreen
           roomCode={screen.roomCode}
           safetyNumber={screen.safetyNumber}
-          onVerified={() =>
-            setScreen({ name: "chat", roomCode: screen.roomCode, safetyNumber: screen.safetyNumber })
-          }
+          recognized={screen.recognized}
+          contactName={screen.contactName}
+          onVerified={() => void handleVerified(screen.roomCode, screen.safetyNumber)}
         />
       );
     } else {
@@ -509,6 +672,9 @@ export default function App() {
           messages={messages}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
+          contactsOnly={contactsOnly}
+          onContactsOnlyChange={updateContactsOnly}
+          onOpenContacts={() => setShowContacts(true)}
           peerPresence={peerPresence}
           onPresence={sendPresence}
           onSend={handleSend}
@@ -517,7 +683,12 @@ export default function App() {
         />
       );
     }
-    return <HandshakeJourney activeKey={screen.name}>{content}</HandshakeJourney>;
+    return (
+      <>
+        <HandshakeJourney activeKey={screen.name}>{content}</HandshakeJourney>
+        {showContacts && <ContactsScreen onBack={() => setShowContacts(false)} />}
+      </>
+    );
   }
   // Only the "error" variant remains.
   const retry = screen.retry;

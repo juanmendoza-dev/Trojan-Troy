@@ -10,7 +10,8 @@ export type ErrorScenario =
   | "server_unreachable"
   | "bad_code"
   | "room_full"
-  | "handshake_failed";
+  | "handshake_failed"
+  | "not_a_contact";
 
 export interface ScenarioContent {
   /** Uppercase mono label above the headline. */
@@ -49,6 +50,14 @@ export const ERROR_SCENARIOS: Record<ErrorScenario, ScenarioContent> = {
   handshake_failed: {
     label: "handshake failed",
     lines: ["The handshake fell apart. Awkward.", "Couldn't agree on a secret. Trust issues."],
+  },
+  not_a_contact: {
+    label: "connection refused",
+    lines: [
+      "Contacts-only mode is on — that key isn't one you've verified.",
+      "Unknown key. You're only letting verified contacts in right now.",
+      "Not on your list. The door stayed shut.",
+    ],
   },
 };
 

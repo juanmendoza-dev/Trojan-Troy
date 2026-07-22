@@ -12,6 +12,7 @@ const ALL: ErrorScenario[] = [
   "bad_code",
   "room_full",
   "handshake_failed",
+  "not_a_contact",
 ];
 
 describe("scenarioFromServerMessage", () => {
