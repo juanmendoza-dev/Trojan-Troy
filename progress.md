@@ -404,3 +404,20 @@ and `decisions.md` for why things were done a certain way.
   browser-automation tool in this environment, as in every prior visual phase.
   Design: `docs/superpowers/specs/2026-07-22-seal-slider-sparks-design.md`;
   rationale + implementation calls in `decisions.md` (2026-07-22).
+
+- **2026-07-22** — Contacts privacy settings (extension to Phase 5.1)
+  brainstormed with Jay and spec'd. Design-ahead, same as the presence
+  indicator — build stays gated under Phase 5.1 (and Phase 5's 4.6/4.7
+  prerequisites); nothing built yet. Jay wanted a contact feature "similar to
+  crypto" (a public-key/address-book model, which 5.1's identity-key contacts
+  list already is) with more privacy controls, and chose three to design on top
+  of 5.1: per-contact **pseudonyms** (cosmetic — one identity key; choose the
+  name/none each contact sees + local-only labels), **contacts-only mode + block
+  list** (opt-in), and **at-rest encryption** of the identity/contacts store
+  (PIN + idle re-lock, `crypto_pwhash` + the existing `crypto_secretbox`, no new
+  primitive). Recognition simplified to key-based only (5.1's name-based
+  key-changed warning dropped; the `identity` envelope name is now optional). No
+  server change. Spec:
+  `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`; headline
+  directions + delegated implementation calls in `decisions.md` (2026-07-22);
+  `roadmap.md` gains a 5.1a note.

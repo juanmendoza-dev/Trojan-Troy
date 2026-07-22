@@ -8,6 +8,55 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-22 — Contacts privacy settings brainstormed and spec'd as an
+  extension to Phase 5.1; three settings, headline directions chosen by Jay,
+  finer calls delegated to Claude.** Full design in
+  `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`. Jay wanted a
+  contact feature "similar to crypto" (a public-key / address-book model — which
+  5.1's identity-key contacts list already is) with more privacy settings, chose
+  to build on 5.1, and picked three: (a) **per-contact pseudonyms**,
+  **cosmetic** (one shared identity key; choose the name/none each contact sees
+  + local-only labels) over true per-contact unlinkability (a separate key per
+  relationship — much larger, breaks the single recovery code / one safety
+  number; deferred); (b) **contacts-only mode + block list**, opt-in / off by
+  default; (c) **at-rest encryption** of the identity/contacts store, unlocked
+  with a PIN + **idle re-lock (session timeout)** over app-lock-every-launch or
+  lazy. Delegated implementation calls (Claude):
+  (1) **Recognition becomes key-based only** — 5.1's name-based "key-changed"
+  warning branch is dropped (self-asserted names are now cosmetic/optional, so
+  correlating a new key to an old contact by name is unreliable and noisy; the
+  safety number was always the real protection, and 5.1 framed the warning as
+  routing into it, not replacing it). 5.1's three `SafetyNumberScreen` branches
+  collapse to two (recognized / new); the `identity` envelope's `displayName`
+  becomes optional (anonymous presentation). This overrides part of the Approved
+  5.1 spec — confirmed with Jay before writing it down.
+  (2) **"Join as" picker** on the start/join screen (default name / saved alias
+  / anonymous), scoped to the room and chosen before the handshake — sidesteps
+  the fact that both peers send their `identity` envelope simultaneously on
+  `peer-connected`, so you can't pick a per-contact name after learning who the
+  peer is without a two-phase handshake.
+  (3) **Access gate keys on the identity key, never the presented name** (pure
+  `net/accessControl.ts`), so anonymous-but-known peers are allowed and
+  unknown-but-named peers refused; `refuse-blocked` is silent (looks like a
+  failed connection — no block signal, no retaliation bait).
+  (4) **At-rest uses libsodium only** — `crypto_pwhash` (Argon2id) derives the
+  vault key and the existing `crypto_secretbox` wraps the identity secret key +
+  contacts store (no new primitive). Idle re-lock gates the contacts/identity
+  store but does **not** kill an active in-memory chat (its session keys are
+  already derived, independent of the identity secret). Forgot-PIN restores via
+  5.1's recovery code; the recovery-code export gains **optional passphrase
+  protection** (nudged when a PIN is set) so it isn't the weak link.
+  Pure logic (`atRest`, `lockState`, `accessControl`, extended `recoveryCode`)
+  gets Vitest coverage; screens are manually verified, per the standing
+  convention. No server change. Documented residual limits: pseudonyms hide
+  names not the shared key (colluding contacts can still correlate — true
+  unlinkability deferred); blocking is per-key not per-person; at-rest
+  encryption protects a locked/stolen device, not malware-while-unlocked or a
+  known PIN; no PIN brute-force lockout this pass (relies on Argon2id cost).
+  Design-ahead — build stays gated under Phase 5.1 (and Phase 5's 4.6 / 4.7
+  prerequisites), same as the presence indicator. (Decided by: Jay (headline
+  directions) + Claude (implementation calls))
+
 - **2026-07-22 — Seal-slider spark effect on the safety-number screen: a
   canvas particle layer; three design directions + several implementation
   calls.** Brainstormed with Jay from scratch (make the "drag to seal" slider

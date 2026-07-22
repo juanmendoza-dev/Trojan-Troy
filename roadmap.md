@@ -124,6 +124,14 @@ earlier ones:
       recognizes returning peers and warns on key changes, identity
       export/import via a recovery code. Spec:
       `docs/superpowers/specs/2026-07-19-persistent-identity-design.md`.
+- [ ] 5.1a — Contacts privacy settings (extends 5.1, design-ahead). Per-contact
+      pseudonyms (cosmetic: one identity key; choose the name/none each contact
+      sees + local-only labels), contacts-only mode + block list (opt-in), and
+      at-rest encryption of the identity/contacts store (PIN + idle re-lock,
+      `crypto_pwhash` + the existing `crypto_secretbox`). Simplifies 5.1's
+      key-change handling to key-based recognition only (self-asserted names
+      become cosmetic; the `identity` envelope name becomes optional). Spec:
+      `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`.
 - [ ] 5.2 — Forward-secrecy ratchet (Double Ratchet-style per-message key
       rotation), built on top of 5.1's identity/ephemeral key split.
 - [ ] 5.3 — Encrypted offline delivery: server holds ciphertext for a peer
