@@ -8,6 +8,12 @@ import { encryptMessage, decryptMessage } from "./crypto/messages";
 import { encryptVoiceClip, decryptVoiceClip } from "./crypto/media";
 import { advanceStatus } from "./protocol/messageStatus";
 import { shouldSendReadAck } from "./protocol/readAckDecision";
+import {
+  shouldSendPresence,
+  parsePresenceState,
+  PRESENCE_EXPIRY_MS,
+  type PresenceState,
+} from "./protocol/presenceState";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
 import { type ConnectStatus } from "./screens/ConnectingBar";
 import { CONNECT_COMPLETE_HOLD_MS } from "./screens/barPhases";
@@ -68,9 +74,53 @@ export default function App() {
   const ghostModeRef = useRef(ghostMode);
   ghostModeRef.current = ghostMode;
 
+  const [peerPresence, setPeerPresence] = useState<PresenceState>("idle");
+  const presenceExpiryRef = useRef<number | null>(null);
+  const presenceSentRef = useRef<{ state: PresenceState; at: number }>({ state: "idle", at: 0 });
+
   function updateGhostMode(next: boolean) {
     localStorage.setItem(GHOST_MODE_STORAGE_KEY, String(next));
     setGhostMode(next);
+  }
+
+  // Show the peer's live presence, auto-clearing after PRESENCE_EXPIRY_MS as a
+  // safety net for a dropped "idle"/stop event.
+  function showPeerPresence(next: PresenceState) {
+    if (presenceExpiryRef.current !== null) {
+      clearTimeout(presenceExpiryRef.current);
+      presenceExpiryRef.current = null;
+    }
+    setPeerPresence(next);
+    if (next !== "idle") {
+      presenceExpiryRef.current = window.setTimeout(() => {
+        setPeerPresence("idle");
+        presenceExpiryRef.current = null;
+      }, PRESENCE_EXPIRY_MS);
+    }
+  }
+
+  // Broadcast our own composition activity — encrypted, throttled to a heartbeat,
+  // and suppressed by Ghost Mode (see protocol/presenceState.ts).
+  async function sendPresence(next: PresenceState) {
+    const client = clientRef.current;
+    const keys = sessionKeysRef.current;
+    if (!client || !keys) return;
+    const now = performance.now();
+    const last = presenceSentRef.current;
+    if (
+      !shouldSendPresence({
+        nextState: next,
+        lastSentState: last.state,
+        lastSentAt: last.at,
+        now,
+        ghostMode: ghostModeRef.current,
+      })
+    ) {
+      return;
+    }
+    presenceSentRef.current = { state: next, at: now };
+    const payload = await encryptMessage(keys.tx, JSON.stringify({ state: next }));
+    client.send({ type: "presence", payload });
   }
 
   useEffect(() => {
@@ -91,6 +141,12 @@ export default function App() {
       for (const message of messagesRef.current) {
         if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (presenceExpiryRef.current !== null) clearTimeout(presenceExpiryRef.current);
     };
   }, []);
 
@@ -144,6 +200,7 @@ export default function App() {
         if (!keys || !client) return;
         try {
           const text = await decryptMessage(keys.rx, envelope.payload);
+          showPeerPresence("idle");
           setMessages((prev) => [
             ...prev,
             { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "text", text },
@@ -166,6 +223,7 @@ export default function App() {
         try {
           const blob = await decryptVoiceClip(keys.rx, envelope.payload, envelope.mimeType);
           const audioUrl = URL.createObjectURL(blob);
+          showPeerPresence("idle");
           setMessages((prev) => [
             ...prev,
             { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
@@ -178,6 +236,18 @@ export default function App() {
             ...prev,
             { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
           ]);
+        }
+        return;
+      }
+      if (envelope.type === "presence") {
+        const keys = sessionKeysRef.current;
+        if (!keys) return;
+        try {
+          const text = await decryptMessage(keys.rx, envelope.payload);
+          const state = parsePresenceState(JSON.parse(text)?.state);
+          if (state) showPeerPresence(state);
+        } catch {
+          // Ignore malformed/undecryptable presence — the next heartbeat recovers.
         }
         return;
       }
@@ -295,6 +365,12 @@ export default function App() {
     clientRef.current = null;
     sessionKeysRef.current = null;
     pendingReadIdRef.current = null;
+    if (presenceExpiryRef.current !== null) {
+      clearTimeout(presenceExpiryRef.current);
+      presenceExpiryRef.current = null;
+    }
+    presenceSentRef.current = { state: "idle", at: 0 };
+    setPeerPresence("idle");
     setConnectStatus("idle");
     for (const message of messagesRef.current) {
       if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
@@ -343,6 +419,8 @@ export default function App() {
           ]}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
+          peerPresence="typing"
+          onPresence={() => {}}
           onSend={() => {}}
           onSendVoice={() => {}}
           onLeave={() => {}}
@@ -406,6 +484,8 @@ export default function App() {
           messages={messages}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
+          peerPresence={peerPresence}
+          onPresence={sendPresence}
           onSend={handleSend}
           onSendVoice={handleSendVoice}
           onLeave={handleLeave}

@@ -9,6 +9,7 @@ export type Envelope =
   | { type: "voice"; payload: string; mimeType: string; messageId: string }
   | { type: "delivered"; messageId: string }
   | { type: "read"; messageId: string }
+  | { type: "presence"; payload: string }
   | { type: "error"; message: string };
 
 export interface MinimalWebSocket {

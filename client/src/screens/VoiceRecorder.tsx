@@ -9,6 +9,7 @@ import {
 
 interface VoiceRecorderProps {
   onSend: (blob: Blob, mimeType: string) => void;
+  onRecordingChange?: (isRecording: boolean) => void;
 }
 
 type RecorderState =
@@ -17,13 +18,20 @@ type RecorderState =
   | { status: "preview"; blob: Blob; mimeType: string; audioUrl: string }
   | { status: "error"; message: string };
 
-export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
+export function VoiceRecorder({ onSend, onRecordingChange }: VoiceRecorderProps) {
   const [state, setState] = useState<RecorderState>({ status: "idle" });
   const [elapsedMs, setElapsedMs] = useState(0);
   const handleRef = useRef<RecordingHandle | null>(null);
   const isStartingRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const onRecordingChangeRef = useRef(onRecordingChange);
+  onRecordingChangeRef.current = onRecordingChange;
+
+  // Report recording start/stop up so the peer can see a "recording…" indicator.
+  useEffect(() => {
+    onRecordingChangeRef.current?.(state.status === "recording");
+  }, [state.status]);
 
   useEffect(() => {
     if (state.status !== "recording") return;
