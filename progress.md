@@ -22,6 +22,7 @@ and `decisions.md` for why things were done a certain way.
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
 | 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
+| 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | In progress on `feat/forward-secrecy-ratchet` — crypto foundation (Tasks 0-4: aead/kdf/framing/ratchet) built + committed, 150/150 client tests green; wire format + App wiring (Tasks 5-7) + relay hardening (Track B) remain. See the log entry below + the plan's BUILD STATUS banner. |
 
 ## Log
 
@@ -482,3 +483,54 @@ and `decisions.md` for why things were done a certain way.
   `npm run dev` → `?screen=error&scenario=…`) — no browser-automation tool in
   this environment, as in every prior visual phase. See `decisions.md`
   (2026-07-22).
+
+- **2026-07-22** — Phase 5.2 (forward-secrecy ratchet) build STARTED on branch
+  `feat/forward-secrecy-ratchet` off `main` (`8d8f1a2`); paused mid-plan with the
+  crypto foundation done and green. This is the "turn up the backend security"
+  work Jay green-lit: a Signal-style **Double Ratchet** (a fresh key per message →
+  forward secrecy + post-compromise self-healing) riding on the existing ephemeral
+  `crypto_kx` handshake (no persistent identity), plus sealed framing
+  (channel/`messageId`/`mimeType` moved inside the ciphertext) and size-bucket
+  padding, collapsing the content/signal envelopes into one opaque `msg`. Invisible
+  to the user — bytes on the wire only. Built with libsodium only (no new
+  dependency, no `-sumo`). Spec:
+  `docs/superpowers/specs/2026-07-22-phase5.2-forward-secrecy-ratchet-design.md`;
+  plan: `docs/superpowers/plans/2026-07-22-phase5.2-forward-secrecy-ratchet.md`
+  (its **BUILD STATUS banner** at the top is the authoritative done/todo ledger);
+  rationale in `decisions.md` (2026-07-22, top entry).
+
+  **Done, committed, green (full client suite 150/150):**
+  - Task 0 — roadmap/decisions reordering logged (`ad01fc7`).
+  - Task 1 — `crypto/aead.ts`: XChaCha20-Poly1305 AEAD wrapper with associated
+    data, `nonce||ct` base64 (5 tests) (`41d1a4d`).
+  - Task 2 — `crypto/kdf.ts`: `deriveRootKey` (RK0 from the sorted crypto_kx
+    session keys), `kdfRoot`, `kdfChain`, `deriveChannelSubkey` — all keyed
+    BLAKE2b (6 tests) (`1cfb964`).
+  - Task 3 — `crypto/framing.ts`: frame/unframe + one unified pad schedule
+    `[64,256,1024,4096,16384]` then 16 KiB steps (a refinement over the spec's
+    two-schedule idea — avoids a profile-avatar overflow) (7 tests) (`adb94ed`).
+  - Task 4 — `crypto/ratchet.ts`: the Double Ratchet core (init{Alice,Bob},
+    ratchetEncrypt/Decrypt, DH ratchet, skipped-key handling — MAX_SKIP=100,
+    global cap 1000). `ratchetDecrypt` is **transactional** (clones state, commits
+    only on successful decrypt) so a tampered/replayed packet can't corrupt the
+    session. 9 tests: in-order, out-of-order within a chain and across a DH step,
+    replay-drop, skip cap, header tamper, reflection (`128a87e`).
+
+  **Resume at Task 5** (`net/relayClient.ts` Envelope collapse into the unified
+  `msg` + new `protocol/ratchetSession.ts`), then Task 6 (`App.tsx` wiring: seed
+  the ratchet in `exchangeKeys`, send/receive via `ratchetSession`, static
+  per-channel subkeys for presence/ack/profile, the H2 re-key guard, zeroize on
+  leave), Task 7 (docs + honest security copy), and the independent Track B (relay
+  DoS/lifecycle hardening on its own branch `fix/relay-dos-limits`).
+
+  **Scouted gotcha for Task 5:** `client/src/net/relayClient.test.ts` hard-codes the
+  OLD envelope shapes in three cases ("includes messageId when sending a ciphertext
+  envelope", "passes through delivered and read acks", "passes a profile card
+  envelope through") — they must be rewritten to the unified `msg` envelope in the
+  same task or the suite breaks. `crypto/messages.ts`/`media.ts`/`secretbox.ts` stay
+  (tests still pass; unused by the live path after Task 6, kept for Layer-B). And
+  `npm run typecheck` will be RED between Task 5 and the end of Task 6 (App.tsx still
+  references the removed envelope types until rewired) — normal mid-phase; vitest
+  still runs per-file. No live two-browser round-trip yet (that's Task 6's manual
+  acceptance) — no browser-automation tool in this environment, as in every prior
+  phase.
