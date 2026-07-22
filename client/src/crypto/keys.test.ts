@@ -1,12 +1,19 @@
 import { describe, it, expect } from "vitest";
 import sodium from "libsodium-wrappers";
-import { generateKeypair, deriveSessionKeys } from "./keys";
+import { generateKeypair, deriveSessionKeys, publicKeyFromSecret } from "./keys";
 
 describe("keys", () => {
   it("generates a keypair with 32-byte public and private keys", async () => {
     const kp = await generateKeypair();
     expect(kp.publicKey).toHaveLength(32);
     expect(kp.privateKey).toHaveLength(32);
+  });
+
+  it("recomputes the public key from the secret key", async () => {
+    const kp = await generateKeypair();
+    const pub = await publicKeyFromSecret(kp.privateKey);
+    await sodium.ready;
+    expect(sodium.memcmp(pub, kp.publicKey)).toBe(true);
   });
 
   it("derives matching session keys for both sides of the exchange", async () => {

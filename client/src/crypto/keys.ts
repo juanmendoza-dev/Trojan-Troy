@@ -16,6 +16,13 @@ export async function generateKeypair(): Promise<Keypair> {
   return { publicKey: kp.publicKey, privateKey: kp.privateKey };
 }
 
+// Recompute the X25519 public key from a secret key — used when restoring an
+// identity from a recovery code, which stores only the secret.
+export async function publicKeyFromSecret(secretKey: Uint8Array): Promise<Uint8Array> {
+  await sodium.ready;
+  return sodium.crypto_scalarmult_base(secretKey);
+}
+
 function kxSessionKeys(
   own: Keypair,
   peerPublicKey: Uint8Array,
