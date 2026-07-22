@@ -34,6 +34,7 @@ import {
   setActiveProfileId as persistActiveProfileId,
   setShareProfile as persistShareProfile,
 } from "./profiles/profileStore";
+import { detectDevice } from "./profiles/device";
 import { parseScreenOverride } from "./dev/screenOverride";
 
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
@@ -82,6 +83,12 @@ export default function App() {
   const [activeProfileId, setActiveProfileId] = useState<string>(() => getActiveProfileId());
   const [profilesOpen, setProfilesOpen] = useState(false);
   const activeProfile = resolveActiveProfile(profiles, activeProfileId);
+  const [ownDevice] = useState(detectDevice);
+  const selfCard: PeerProfile = {
+    name: activeProfile.kind === "named" ? activeProfile.profile.name : "Anonymous",
+    avatar: activeProfile.kind === "named" ? activeProfile.profile.avatar : null,
+    device: ownDevice,
+  };
   const activeProfileRef = useRef(activeProfile);
   activeProfileRef.current = activeProfile;
   const [shareProfile, setShareProfile] = useState<boolean>(() => getShareProfile());
@@ -229,7 +236,7 @@ export default function App() {
           sessionKeysRef.current = await deriveSessionKeys(own, peerPublicKey, role);
           if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
             const self = activeProfileRef.current.profile;
-            const card = JSON.stringify({ name: self.name, avatar: self.avatar });
+            const card = JSON.stringify({ name: self.name, avatar: self.avatar, device: ownDevice });
             client.send({ type: "profile", payload: await encryptMessage(sessionKeysRef.current.tx, card) });
           }
           const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey);
@@ -310,6 +317,7 @@ export default function App() {
             setPeerProfile({
               name: card.name,
               avatar: typeof card.avatar === "string" ? card.avatar : null,
+              device: card.device === "phone" || card.device === "computer" ? card.device : null,
             });
           }
         } catch {
@@ -488,7 +496,8 @@ export default function App() {
           onGhostModeChange={updateGhostMode}
           shareProfile={false}
           onShareProfileChange={() => {}}
-          peerProfile={{ name: "Jay", avatar: null }}
+          selfCard={{ name: "You", avatar: null, device: "computer" }}
+          peerProfile={{ name: "Jay", avatar: null, device: "phone" }}
           peerPresence="typing"
           onPresence={() => {}}
           onSend={() => {}}
@@ -599,6 +608,7 @@ export default function App() {
           roomCode={screen.roomCode}
           safetyNumber={screen.safetyNumber}
           messages={messages}
+          selfCard={selfCard}
           peerProfile={peerProfile}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}

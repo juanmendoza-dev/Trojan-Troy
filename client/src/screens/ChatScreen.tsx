@@ -7,6 +7,9 @@ import { Composer } from "../components/Composer";
 import { Settings } from "../components/Settings";
 import type { MessageStatus } from "../protocol/messageStatus";
 import { staggerDelayMs } from "../components/messageStagger";
+import { endsGroup } from "../components/messageGrouping";
+import { MessageAvatar } from "../components/MessageAvatar";
+import { ProfileCard } from "../components/ProfileCard";
 import { PresenceIndicator } from "../components/PresenceIndicator";
 import type { PresenceState } from "../protocol/presenceState";
 import type { PeerProfile } from "../profiles/profileModel";
@@ -22,6 +25,7 @@ interface ChatScreenProps {
   safetyNumber: string;
   messages: ChatMessage[];
   peerProfile?: PeerProfile | null;
+  selfCard: PeerProfile;
   ghostMode: boolean;
   onGhostModeChange: (next: boolean) => void;
   shareProfile: boolean;
@@ -33,11 +37,19 @@ interface ChatScreenProps {
   onLeave: () => void;
 }
 
-function renderMessage(message: ChatMessage, showStatus: boolean, delayMs: number): ReactNode {
+function renderMessage(
+  message: ChatMessage,
+  showStatus: boolean,
+  delayMs: number,
+  avatar: ReactNode
+): ReactNode {
   if (message.kind === "decryption-error") {
     return (
       <div className="message-row message-row--incoming">
-        <div className="message-bubble message-bubble--incoming">[Message could not be decrypted]</div>
+        {avatar}
+        <div className="message-row__stack">
+          <div className="message-bubble message-bubble--incoming">[Message could not be decrypted]</div>
+        </div>
       </div>
     );
   }
@@ -50,10 +62,20 @@ function renderMessage(message: ChatMessage, showStatus: boolean, delayMs: numbe
         durationLabel="0:23"
         status={status}
         delayMs={delayMs}
+        avatar={avatar}
       />
     );
   }
-  return <MessageBubble id={message.id} from={message.from} text={message.text} status={status} delayMs={delayMs} />;
+  return (
+    <MessageBubble
+      id={message.id}
+      from={message.from}
+      text={message.text}
+      status={status}
+      delayMs={delayMs}
+      avatar={avatar}
+    />
+  );
 }
 
 export function ChatScreen({
@@ -61,6 +83,7 @@ export function ChatScreen({
   safetyNumber,
   messages,
   peerProfile,
+  selfCard,
   ghostMode,
   onGhostModeChange,
   shareProfile,
@@ -72,6 +95,8 @@ export function ChatScreen({
   onLeave,
 }: ChatScreenProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [openCard, setOpenCard] = useState<{ data: PeerProfile; anchor: DOMRect } | null>(null);
+  const peerCard: PeerProfile = peerProfile ?? { name: "Anonymous", avatar: null, device: null };
 
   const lastMeIndex = messages.reduce(
     (acc, message, index) => (message.kind !== "decryption-error" && message.from === "me" ? index : acc),
@@ -86,11 +111,25 @@ export function ChatScreen({
         <div className="chat-screen__main">
           <div className="chat-screen__messages">
             <div className="chat-screen__day-divider">Today</div>
-            {messages.map((message, index) => (
-              <div key={message.id}>
-                {renderMessage(message, index === lastMeIndex, staggerDelayMs(messages, index))}
-              </div>
-            ))}
+            {messages.map((message, index) => {
+              const isError = message.kind === "decryption-error";
+              const fromMe = !isError && message.from === "me";
+              const card = fromMe ? selfCard : peerCard;
+              const avatar =
+                !isError && endsGroup(messages, index) ? (
+                  <MessageAvatar
+                    avatar={card.avatar}
+                    onOpen={(anchor) => setOpenCard({ data: card, anchor })}
+                  />
+                ) : (
+                  <span className="message-row__avatar-gap" aria-hidden="true" />
+                );
+              return (
+                <div key={message.id}>
+                  {renderMessage(message, index === lastMeIndex, staggerDelayMs(messages, index), avatar)}
+                </div>
+              );
+            })}
             <PresenceIndicator state={peerPresence} />
           </div>
           <Composer
@@ -112,6 +151,9 @@ export function ChatScreen({
           onLeave={onLeave}
           onClose={() => setSettingsOpen(false)}
         />
+      )}
+      {openCard && (
+        <ProfileCard card={openCard.data} anchor={openCard.anchor} onClose={() => setOpenCard(null)} />
       )}
     </div>
   );
