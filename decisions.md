@@ -8,6 +8,23 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-22 — Profile avatars on messages + a click-to-open profile card
+  (extends Local Profiles).** Design calls with Jay: **hybrid, not full
+  Discord** — keep the themed left/right bubbles and just add a small clickable
+  avatar beside each message (peer's on incoming, yours on outgoing), rather than
+  rebuilding the message area as Discord-style rows (which would retire the
+  bubble animation / read-receipt work). Avatar shows on the **last message of a
+  consecutive run** (`endsGroup` + `align-items: flex-end`) — the iMessage-tail
+  position that fits bubbles, vs Discord's top-of-run. The card shows name +
+  picture + **device** ("computer"/"phone"): device is a best-effort UA
+  heuristic (`profiles/device.ts`) carried inside the existing *encrypted*
+  `profile` card (no new envelope; relay stays blind), gated by the same opt-in
+  sharing toggle — accepted that it's a small extra metadata disclosure to the
+  peer and can be wrong/spoofed. Peer hasn't shared → avatars/card fall back to
+  the default cat + "Anonymous". `ProfileCard` is a lightweight popover anchored
+  above the clicked avatar (no positioning lib). (Decided by: Jay (direction) +
+  Claude (implementation calls))
+
 - **2026-07-22 — Retired persistent identity (5.1) + contacts privacy (5.1a) in
   favor of "Local Profiles"; built Layer A.** After the persistent-identity +
   PIN/contacts build was rolled back (`main` @ `1ee0e35` "Redeploy the

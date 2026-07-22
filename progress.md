@@ -442,3 +442,18 @@ and `decisions.md` for why things were done a certain way.
   browser-automation tool in this environment, as in every prior visual phase.
   Spec: `docs/superpowers/specs/2026-07-22-local-profiles-design.md`; plan:
   `docs/superpowers/plans/2026-07-22-local-profiles.md`.
+
+- **2026-07-22** — Profile avatars on messages + click-to-open profile card
+  (extends Local Profiles; user-requested). Hybrid Discord style — kept the
+  themed bubbles, added a small avatar beside each message (peer's on incoming,
+  yours on outgoing), shown on the last message of a consecutive run (tested
+  `components/messageGrouping.ts`). Clicking an avatar opens a `ProfileCard`
+  popover (name + larger picture + "on computer/phone"). Device is a best-effort
+  heuristic (`profiles/device.ts`, tested) added to the existing *encrypted*
+  `profile` card payload — relay-blind, opt-in via the same sharing toggle. Not
+  shared → the message avatars/card fall back to the default cat + "Anonymous".
+  Refactored the message row to `[avatar][stack]` (`MessageBubble` /
+  `VoiceMessageBubble`), all themes. Verified: typecheck clean, 114 vitest tests
+  (6 new), build green. Manual eyeball (`?screen=chat`, and a live two-browser
+  round-trip with sharing on) still pending — no browser-automation tool here.
+  Built on `feat/profiles`.
