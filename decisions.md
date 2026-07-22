@@ -8,6 +8,28 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-22 — Retired persistent identity (5.1) + contacts privacy (5.1a) in
+  favor of "Local Profiles"; built Layer A.** After the persistent-identity +
+  PIN/contacts build was rolled back (`main` @ `1ee0e35` "Redeploy the
+  pre-identity client"), Jay chose a lighter, UI-first direction and said he
+  likes it a lot better. Local Profiles = device-local, PIN-gated profiles
+  (name + picture) with an always-present **Anonymous** default, plus opt-in
+  name/photo sharing with the peer. Key calls (Jay unless noted): **light/local
+  only** — no long-term identity keypair, session crypto unchanged, no server
+  change; **PIN is a 4-digit local access gate**, salted-hashed, explicitly NOT
+  encryption (the UI says so); **Anonymous** shares nothing and keeps no history;
+  **avatar** is an uploaded photo or a single bundled default picture (the
+  taiyaki-hat cat Jay supplied) — no emoji set, one fewer dependency; **sharing
+  is opt-in, default off**, and the name/photo go to the peer as an *encrypted*
+  `profile` envelope (relay-blind, same pattern as `presence`). Claude calls:
+  archive-only history + at-rest encryption under the PIN for the deferred Layer
+  B; the profile card is sent right after the key exchange. Layer A (profiles +
+  PIN + modal + sharing) is built on `feat/profiles`; per-profile conversation
+  history is Layer B (a separate plan). The 5.1/5.1a specs are shelved, not
+  deleted. Spec: `docs/superpowers/specs/2026-07-22-local-profiles-design.md`;
+  plan: `docs/superpowers/plans/2026-07-22-local-profiles.md`. (Decided by: Jay
+  (direction) + Claude (implementation calls))
+
 - **2026-07-22 — Building Phase 5.1 (persistent identity) + 5.1a (contacts
   privacy settings) now, together, ahead of the 4.6/4.7 ordering.** Jay asked to
   build the contacts-privacy spec; since it's an extension that sits entirely on

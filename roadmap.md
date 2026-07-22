@@ -119,19 +119,21 @@ sub-projects, each with its own spec in `docs/superpowers/specs/` and its
 own plan/implementation cycle. Build in this order — later items depend on
 earlier ones:
 
-- [ ] 5.1 — Persistent identity keys. Long-term keypair per user (replacing
-      the ephemeral-only model), display names, a local contacts list that
-      recognizes returning peers and warns on key changes, identity
-      export/import via a recovery code. Spec:
-      `docs/superpowers/specs/2026-07-19-persistent-identity-design.md`.
-- [ ] 5.1a — Contacts privacy settings (extends 5.1, design-ahead). Per-contact
-      pseudonyms (cosmetic: one identity key; choose the name/none each contact
-      sees + local-only labels), contacts-only mode + block list (opt-in), and
-      at-rest encryption of the identity/contacts store (PIN + idle re-lock,
-      `crypto_pwhash` + the existing `crypto_secretbox`). Simplifies 5.1's
-      key-change handling to key-based recognition only (self-asserted names
-      become cosmetic; the `identity` envelope name becomes optional). Spec:
-      `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`.
+- [ ] 5.1 — **Local Profiles** (REPLACES the retired persistent-identity
+      approach — Jay's call, 2026-07-22, see `decisions.md`). Device-local,
+      PIN-gated profiles (name + picture) with an always-present Anonymous
+      default, plus opt-in *encrypted* name/photo sharing with the peer.
+      Deliberately light: no long-term identity keypair, session crypto
+      unchanged. Layer A (profiles + PIN + modal + sharing) built on
+      `feat/profiles`; Layer B (per-profile saved conversation history,
+      IndexedDB, archive-only, encrypted at rest) is a follow-up. Spec:
+      `docs/superpowers/specs/2026-07-22-local-profiles-design.md`; plan:
+      `docs/superpowers/plans/2026-07-22-local-profiles.md`.
+      The earlier persistent-identity (5.1) + contacts-privacy (5.1a) build was
+      rolled back (`main` @ `1ee0e35`); those specs are shelved, not deleted.
+      NOTE: 5.2 (ratchet) and 5.3 (offline delivery) below were specced on top of
+      persistent identity keys — with identity retired, revisit their design
+      before building (neither is started).
 - [ ] 5.2 — Forward-secrecy ratchet (Double Ratchet-style per-message key
       rotation), built on top of 5.1's identity/ephemeral key split.
 - [ ] 5.3 — Encrypted offline delivery: server holds ciphertext for a peer
