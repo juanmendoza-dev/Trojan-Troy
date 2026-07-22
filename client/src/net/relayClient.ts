@@ -10,6 +10,7 @@ export type Envelope =
   | { type: "delivered"; messageId: string }
   | { type: "read"; messageId: string }
   | { type: "presence"; payload: string }
+  | { type: "profile"; payload: string }
   | { type: "error"; message: string };
 
 export interface MinimalWebSocket {

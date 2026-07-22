@@ -12,6 +12,12 @@ export type ActiveProfile =
   | { kind: "anonymous" }
   | { kind: "named"; profile: Profile };
 
+// The peer's shared identity card (opt-in), shown in the chat header.
+export interface PeerProfile {
+  name: string;
+  avatar: string | null;
+}
+
 export const ANONYMOUS_ID = "anonymous";
 
 // Resolve which profile is active from the stored id. Anything unknown (never

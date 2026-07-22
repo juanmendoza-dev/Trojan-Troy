@@ -24,6 +24,27 @@
   letter-spacing: 0.16em;
   color: var(--accent);
 }
+.title-bar__peer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.title-bar__peer-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: var(--bg-card);
+}
+.title-bar__peer-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
 .title-bar__room {
   flex: 1;
   text-align: center;

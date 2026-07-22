@@ -24,12 +24,13 @@ import { useTheme } from "./theme/ThemeContext";
 import { LoadingScreen } from "./screens/loading/LoadingScreen";
 import { HandshakeJourney } from "./screens/HandshakeJourney";
 import { ProfileModal } from "./components/ProfileModal";
-import { resolveActiveProfile, ANONYMOUS_ID, type Profile } from "./profiles/profileModel";
+import { resolveActiveProfile, ANONYMOUS_ID, type Profile, type PeerProfile } from "./profiles/profileModel";
 import {
   listProfiles,
   putProfile,
   deleteProfile,
   getActiveProfileId,
+  getShareProfile,
   setActiveProfileId as persistActiveProfileId,
 } from "./profiles/profileStore";
 import { parseScreenOverride } from "./dev/screenOverride";
@@ -80,6 +81,10 @@ export default function App() {
   const [activeProfileId, setActiveProfileId] = useState<string>(() => getActiveProfileId());
   const [profilesOpen, setProfilesOpen] = useState(false);
   const activeProfile = resolveActiveProfile(profiles, activeProfileId);
+  const activeProfileRef = useRef(activeProfile);
+  activeProfileRef.current = activeProfile;
+  const shareProfileRef = useRef(getShareProfile());
+  const [peerProfile, setPeerProfile] = useState<PeerProfile | null>(null);
 
   useEffect(() => {
     void listProfiles().then(setProfiles);
@@ -215,6 +220,11 @@ export default function App() {
         try {
           const peerPublicKey = await fromBase64(envelope.payload);
           sessionKeysRef.current = await deriveSessionKeys(own, peerPublicKey, role);
+          if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
+            const self = activeProfileRef.current.profile;
+            const card = JSON.stringify({ name: self.name, avatar: self.avatar });
+            client.send({ type: "profile", payload: await encryptMessage(sessionKeysRef.current.tx, card) });
+          }
           const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey);
           const elapsed = performance.now() - handshakeStart;
           if (elapsed < HANDSHAKE_MIN_MS) {
@@ -281,6 +291,22 @@ export default function App() {
           if (state) showPeerPresence(state);
         } catch {
           // Ignore malformed/undecryptable presence — the next heartbeat recovers.
+        }
+        return;
+      }
+      if (envelope.type === "profile") {
+        const keys = sessionKeysRef.current;
+        if (!keys) return;
+        try {
+          const card = JSON.parse(await decryptMessage(keys.rx, envelope.payload));
+          if (card && typeof card.name === "string") {
+            setPeerProfile({
+              name: card.name,
+              avatar: typeof card.avatar === "string" ? card.avatar : null,
+            });
+          }
+        } catch {
+          // Ignore a malformed/undecryptable profile card.
         }
         return;
       }
@@ -404,6 +430,7 @@ export default function App() {
     }
     presenceSentRef.current = { state: "idle", at: 0 };
     setPeerPresence("idle");
+    setPeerProfile(null);
     setConnectStatus("idle");
     for (const message of messagesRef.current) {
       if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
@@ -452,6 +479,7 @@ export default function App() {
           ]}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
+          peerProfile={{ name: "Jay", avatar: null }}
           peerPresence="typing"
           onPresence={() => {}}
           onSend={() => {}}
@@ -562,6 +590,7 @@ export default function App() {
           roomCode={screen.roomCode}
           safetyNumber={screen.safetyNumber}
           messages={messages}
+          peerProfile={peerProfile}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
           peerPresence={peerPresence}

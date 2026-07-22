@@ -9,6 +9,7 @@ import type { MessageStatus } from "../protocol/messageStatus";
 import { staggerDelayMs } from "../components/messageStagger";
 import { PresenceIndicator } from "../components/PresenceIndicator";
 import type { PresenceState } from "../protocol/presenceState";
+import type { PeerProfile } from "../profiles/profileModel";
 import "./ChatScreen.css";
 
 export type ChatMessage =
@@ -20,6 +21,7 @@ interface ChatScreenProps {
   roomCode: string;
   safetyNumber: string;
   messages: ChatMessage[];
+  peerProfile?: PeerProfile | null;
   ghostMode: boolean;
   onGhostModeChange: (next: boolean) => void;
   peerPresence: PresenceState;
@@ -56,6 +58,7 @@ export function ChatScreen({
   roomCode,
   safetyNumber,
   messages,
+  peerProfile,
   ghostMode,
   onGhostModeChange,
   peerPresence,
@@ -73,7 +76,7 @@ export function ChatScreen({
 
   return (
     <div className="chat-screen">
-      <TitleBar roomCode={roomCode} onOpenSettings={() => setSettingsOpen(true)} />
+      <TitleBar roomCode={roomCode} peerProfile={peerProfile} onOpenSettings={() => setSettingsOpen(true)} />
       <div className="chat-screen__body">
         <Sidebar roomCode={roomCode} onNewChat={() => {}} />
         <div className="chat-screen__main">
