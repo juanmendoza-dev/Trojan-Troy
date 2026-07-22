@@ -19,7 +19,7 @@ and `decisions.md` for why things were done a certain way.
 | — Peer presence indicator: encrypted typing + recording (unscheduled, user-requested) | Built on `feat/typing-presence-indicator` — typecheck/tests/build green; visual eyeball + live round-trip pending |
 | — Seal-slider sparks: canvas ember effect on the safety-number slider (unscheduled, user-requested) | Merged to `main` — typecheck/95 tests/build green; visual eyeball via `?screen=safety` pending |
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
-| 5 — Marketing/landing site | Not started |
+| 5.1 + 5.1a — Persistent identity + contacts privacy settings | In progress — building together on `feat/persistent-identity-contacts` (ahead of 4.6/4.7 per Jay, see `decisions.md`) |
 
 ## Log
 

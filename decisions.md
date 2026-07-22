@@ -8,6 +8,22 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-22 — Building Phase 5.1 (persistent identity) + 5.1a (contacts
+  privacy settings) now, together, ahead of the 4.6/4.7 ordering.** Jay asked to
+  build the contacts-privacy spec; since it's an extension that sits entirely on
+  the still-unbuilt 5.1 foundation (identity keypair, contacts store, `identity`
+  envelope, combined key derivation), "following the spec" requires building 5.1
+  first. Jay chose to build them **together** on one feature branch rather than
+  5.1-then-extension, because they modify the same surfaces and a split would
+  mean building-then-reworking (5.1's three-branch safety screen collapses to
+  two; the plaintext contacts store becomes encrypted). This overrides the
+  2026-07-20 decision that put Phase 4.6 (SafetyNumberScreen styling) and 4.7
+  (Fable code review) before any Phase 5 work — Jay explicitly accepted that
+  trade. Built on branch `feat/persistent-identity-contacts`. Specs:
+  `docs/superpowers/specs/2026-07-19-persistent-identity-design.md` +
+  `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`. (Decided by:
+  Jay)
+
 - **2026-07-22 — Contacts privacy settings brainstormed and spec'd as an
   extension to Phase 5.1; three settings, headline directions chosen by Jay,
   finer calls delegated to Claude.** Full design in
