@@ -24,6 +24,8 @@ interface ChatScreenProps {
   peerProfile?: PeerProfile | null;
   ghostMode: boolean;
   onGhostModeChange: (next: boolean) => void;
+  shareProfile: boolean;
+  onShareProfileChange: (next: boolean) => void;
   peerPresence: PresenceState;
   onPresence: (state: PresenceState) => void;
   onSend: (text: string) => void;
@@ -61,6 +63,8 @@ export function ChatScreen({
   peerProfile,
   ghostMode,
   onGhostModeChange,
+  shareProfile,
+  onShareProfileChange,
   peerPresence,
   onPresence,
   onSend,
@@ -103,6 +107,8 @@ export function ChatScreen({
           safetyNumber={safetyNumber}
           ghostMode={ghostMode}
           onGhostModeChange={onGhostModeChange}
+          shareProfile={shareProfile}
+          onShareProfileChange={onShareProfileChange}
           onLeave={onLeave}
           onClose={() => setSettingsOpen(false)}
         />

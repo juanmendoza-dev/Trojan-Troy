@@ -7,6 +7,8 @@ interface SettingsProps {
   safetyNumber: string;
   ghostMode: boolean;
   onGhostModeChange: (next: boolean) => void;
+  shareProfile: boolean;
+  onShareProfileChange: (next: boolean) => void;
   onLeave: () => void;
   onClose: () => void;
 }
@@ -16,6 +18,8 @@ export function Settings({
   safetyNumber,
   ghostMode,
   onGhostModeChange,
+  shareProfile,
+  onShareProfileChange,
   onLeave,
   onClose,
 }: SettingsProps) {
@@ -74,6 +78,21 @@ export function Settings({
           <p className="settings__about-text">
             When on, your peer never sees a "read" receipt for messages you open — they'll still see
             "delivered."
+          </p>
+          <div className="settings__row">
+            <span className="settings__row-label">Show my name &amp; photo</span>
+            <label className="settings__toggle">
+              <input
+                type="checkbox"
+                checked={shareProfile}
+                onChange={(event) => onShareProfileChange(event.target.checked)}
+              />
+              <span className="settings__toggle-track" />
+            </label>
+          </div>
+          <p className="settings__about-text">
+            Off by default. When on with a named profile active, only the person you're chatting with
+            sees your name and photo — sent encrypted, never the relay.
           </p>
         </div>
 

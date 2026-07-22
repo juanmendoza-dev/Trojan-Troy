@@ -32,6 +32,7 @@ import {
   getActiveProfileId,
   getShareProfile,
   setActiveProfileId as persistActiveProfileId,
+  setShareProfile as persistShareProfile,
 } from "./profiles/profileStore";
 import { parseScreenOverride } from "./dev/screenOverride";
 
@@ -83,7 +84,13 @@ export default function App() {
   const activeProfile = resolveActiveProfile(profiles, activeProfileId);
   const activeProfileRef = useRef(activeProfile);
   activeProfileRef.current = activeProfile;
-  const shareProfileRef = useRef(getShareProfile());
+  const [shareProfile, setShareProfile] = useState<boolean>(() => getShareProfile());
+  const shareProfileRef = useRef(shareProfile);
+  shareProfileRef.current = shareProfile;
+  function updateShareProfile(next: boolean) {
+    persistShareProfile(next);
+    setShareProfile(next);
+  }
   const [peerProfile, setPeerProfile] = useState<PeerProfile | null>(null);
 
   useEffect(() => {
@@ -479,6 +486,8 @@ export default function App() {
           ]}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
+          shareProfile={false}
+          onShareProfileChange={() => {}}
           peerProfile={{ name: "Jay", avatar: null }}
           peerPresence="typing"
           onPresence={() => {}}
@@ -593,6 +602,8 @@ export default function App() {
           peerProfile={peerProfile}
           ghostMode={ghostMode}
           onGhostModeChange={updateGhostMode}
+          shareProfile={shareProfile}
+          onShareProfileChange={updateShareProfile}
           peerPresence={peerPresence}
           onPresence={sendPresence}
           onSend={handleSend}
