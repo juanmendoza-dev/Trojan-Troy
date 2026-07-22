@@ -1,0 +1,14 @@
+/* Spark canvas overlaid on the seal slider. Sits over .confirm-key__seal
+   (which is position: relative), covering the track's footprint plus a 48px
+   overhang above so embers can leap up off the rail instead of being clipped
+   by the track's own overflow: hidden. Purely decorative — never intercepts
+   the drag. Geometry here must match the constants in SealSparks.tsx. */
+.confirm-key__sparks {
+  position: absolute;
+  top: -48px;
+  left: 0;
+  width: 100%;
+  height: calc(56px + 48px);
+  pointer-events: none;
+  z-index: 2;
+}

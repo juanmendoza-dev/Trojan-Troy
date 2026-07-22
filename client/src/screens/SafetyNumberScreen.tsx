@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { SealSparks } from "../components/SealSparks";
 import "./SafetyNumberScreen.css";
 
 interface SafetyNumberScreenProps {
@@ -39,6 +40,8 @@ export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: Safet
   const dragX0 = useRef(0);
   const dragP0 = useRef(0);
   const rangeRef = useRef(500);
+  const velocityRef = useRef(0); // px/ms, signed — drives spark emission (SealSparks)
+  const lastMoveRef = useRef<{ x: number; t: number } | null>(null);
   const shakeRaf = useRef<number | null>(null);
   const sealTimer = useRef<number | null>(null);
   const reduced = useRef(prefersReducedMotion());
@@ -101,10 +104,19 @@ export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: Safet
     dragX0.current = event.clientX;
     dragP0.current = progress;
     rangeRef.current = measureRange();
+    velocityRef.current = 0;
+    lastMoveRef.current = { x: event.clientX, t: performance.now() };
     setHolding(true);
   }
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
     if (!holding || sealed) return;
+    const now = performance.now();
+    const last = lastMoveRef.current;
+    if (last && now > last.t) {
+      const instant = (event.clientX - last.x) / (now - last.t); // px/ms, signed
+      velocityRef.current = velocityRef.current * 0.6 + instant * 0.4; // smoothed (EMA)
+    }
+    lastMoveRef.current = { x: event.clientX, t: now };
     const next = Math.max(
       0,
       Math.min(1, dragP0.current + (event.clientX - dragX0.current) / rangeRef.current)
@@ -131,6 +143,9 @@ export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: Safet
     }
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       event.preventDefault();
+      // A synthetic rightward impulse makes SealSparks puff for this step;
+      // leftward emits nothing.
+      velocityRef.current = event.key === "ArrowRight" ? 0.6 : 0;
       const next = Math.max(0, Math.min(1, progress + (event.key === "ArrowRight" ? 0.1 : -0.1)));
       if (next >= 1) {
         seal();
@@ -240,6 +255,12 @@ export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: Safet
         </div>
 
         <div className="confirm-key__seal">
+          <SealSparks
+            progressRef={progressRef}
+            sealedRef={sealedRef}
+            velocityRef={velocityRef}
+            reduced={reduced.current}
+          />
           {phase === "verify" && (
             <>
               <div
@@ -269,7 +290,13 @@ export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: Safet
                 </div>
                 <div
                   className="confirm-key__knob"
-                  style={{ transform: `translateX(${knobPx}px)`, transition: knobTransition }}
+                  style={
+                    {
+                      transform: `translateX(${knobPx}px)`,
+                      transition: knobTransition,
+                      "--seal-progress": progress,
+                    } as CSSProperties
+                  }
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
