@@ -47,7 +47,6 @@ export function Composer({ onSend, onSendVoice, onTypingChange, onRecordingChang
           placeholder="Message — encrypted end-to-end"
           autoComplete="off"
         />
-        <span className="composer__caret" />
       </div>
       <VoiceRecorder onSend={onSendVoice} onRecordingChange={onRecordingChange} />
       <button className="composer__send-button" type="submit" aria-label="Send">
