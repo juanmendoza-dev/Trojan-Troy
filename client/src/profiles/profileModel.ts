@@ -1,3 +1,5 @@
+import type { DeviceKind } from "./device";
+
 export interface Profile {
   id: string;
   name: string;
@@ -12,10 +14,13 @@ export type ActiveProfile =
   | { kind: "anonymous" }
   | { kind: "named"; profile: Profile };
 
-// The peer's shared identity card (opt-in), shown in the chat header.
+// A shared identity card (opt-in): the peer's, shown in the chat header + on
+// message avatars, and your own for outgoing message avatars. `device` is a
+// best-effort "computer"/"phone" hint, null when not shared/known.
 export interface PeerProfile {
   name: string;
   avatar: string | null;
+  device: DeviceKind | null;
 }
 
 export const ANONYMOUS_ID = "anonymous";
