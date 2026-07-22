@@ -121,6 +121,7 @@
 
 /* ---- seal area ---- */
 .confirm-key__seal {
+  position: relative;
   margin-top: clamp(14px, 3vh, 26px);
   width: min(680px, 90vw);
   display: flex;
@@ -229,6 +230,8 @@
 
 /* ---- sealed / mismatch / links ---- */
 .confirm-key__sealed-box {
+  position: relative;
+  overflow: hidden;
   width: 100%;
   box-sizing: border-box;
   border-radius: 12px;
@@ -244,6 +247,18 @@
   color: #7ed9b7;
   letter-spacing: 0.02em;
   box-shadow: 0 0 30px rgba(126, 217, 183, 0.15);
+}
+/* One-shot light sweep as the channel seals — pairs with the spark burst.
+   Reuses the global `sheen` keyframe (styles/keyframes.css). */
+.confirm-key__sealed-box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  transform: translateX(-130%) skewX(-20deg);
+  animation: sheen 0.9s cubic-bezier(0.2, 0.9, 0.3, 1) 0.05s both;
+  pointer-events: none;
 }
 .confirm-key__opening {
   font-size: 13px;
@@ -370,5 +385,16 @@
   .confirm-key * {
     animation-duration: 0.001s !important;
     animation-delay: 0s !important;
+  }
+  /* No spark canvas under reduced motion — give the knob a static periwinkle
+     glow that grows with progress so there's still "getting close" feedback. */
+  .confirm-key__knob {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4),
+      inset 0 -6px 12px rgba(255, 255, 255, 0.06),
+      0 0 calc(8px + var(--seal-progress, 0) * 22px)
+        rgba(143, 166, 255, calc(0.25 + var(--seal-progress, 0) * 0.5));
+  }
+  .confirm-key__sealed-box::after {
+    display: none;
   }
 }
