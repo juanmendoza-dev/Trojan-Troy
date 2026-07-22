@@ -15,7 +15,7 @@ and `decisions.md` for why things were done a certain way.
 | 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
 | — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | Complete — verified end-to-end |
 | — Chat polish: themed bubble animations, read receipts, Ghost Mode (unscheduled, user-requested) | Complete — verified end-to-end |
-| — Peer presence indicator: encrypted typing + recording (unscheduled, user-requested) | Spec'd — not yet built |
+| — Peer presence indicator: encrypted typing + recording (unscheduled, user-requested) | Built on `feat/typing-presence-indicator` — typecheck/tests/build green; visual eyeball + live round-trip pending |
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5 — Marketing/landing site | Not started |
 
@@ -349,5 +349,16 @@ and `decisions.md` for why things were done a certain way.
   `protocol/presenceState.ts` (matching `messageStatus.ts`/`readAckDecision.ts`).
   Spec: `docs/superpowers/specs/2026-07-22-typing-presence-design.md`;
   rationale + delegated calls in `decisions.md` (2026-07-22); `roadmap.md`
-  backlog note corrected (client-only, not a protocol change). Built on branch
-  `feat/typing-presence-indicator` off `main`. Not yet implemented — spec only.
+  backlog note corrected (client-only, not a protocol change). Then implemented
+  on branch `feat/typing-presence-indicator` off `main`: the `presence` envelope
+  (`relayClient.ts`), a pure `protocol/presenceState.ts` (heartbeat-send decision
+  + defensive state parse, 9 unit tests), a themed `PresenceIndicator` component
+  (reuses the existing `typingDot`/`glowPulse` keyframes; SVG mic for the
+  recording variant; light fade-out for the hand-off to the arriving message),
+  and wiring through `Composer`/`VoiceRecorder`/`ChatScreen`/`App`.
+  `encryptMessage`/`decryptMessage` reused for the sealed `{state}` payload — no
+  new crypto primitive, no server change. Verified: `npm run typecheck` clean, 92
+  vitest tests pass (9 new for `presenceState`), `npm run build` green. Visual
+  eyeball (dev `?screen=chat` renders the indicator) + a live two-browser
+  round-trip still want a manual look — no browser-automation tool in this
+  environment, as in prior phases.
