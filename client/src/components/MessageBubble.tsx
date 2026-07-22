@@ -2,7 +2,7 @@ import { useState } from "react";
 import "./MessageBubble.css";
 import type { MessageStatus } from "../protocol/messageStatus";
 import { useTheme } from "../theme/ThemeContext";
-import { CipherText } from "./CipherText";
+import { DecryptReveal } from "./DecryptReveal";
 
 interface MessageBubbleProps {
   id: string;
@@ -42,7 +42,7 @@ export function MessageBubble({ id, from, text, status, delayMs = 0 }: MessageBu
         style={{ animationDelay: `${delayMs}ms` }}
         data-decrypting={decryptIn || undefined}
       >
-        {decryptIn ? <CipherText text={text} /> : text}
+        {decryptIn ? <DecryptReveal text={text} /> : text}
       </div>
       {status && <span className={`message-status message-status--${status}`}>{STATUS_TICKS[status]}</span>}
     </div>
