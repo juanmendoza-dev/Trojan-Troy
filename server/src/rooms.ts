@@ -29,6 +29,13 @@ export class RoomManager {
   }
 
   createRoom(creator: Peer): string {
+    // Idempotent per peer: a connection that spams `create` gets its existing
+    // room back instead of minting unbounded rooms (each of which would pin a
+    // peer reference and a TTL timer in memory until expiry).
+    const existing = this.peerRooms.get(creator);
+    if (existing !== undefined && this.rooms.has(existing)) {
+      return existing;
+    }
     let code = this.generateCode();
     while (this.rooms.has(code)) {
       code = this.generateCode();
@@ -45,6 +52,9 @@ export class RoomManager {
     const room = this.rooms.get(code);
     if (!room) {
       return { ok: false, message: "Room not found" };
+    }
+    if (room.peers.includes(joiner)) {
+      return { ok: false, message: "Already in this room" };
     }
     if (room.peers.length >= 2) {
       return { ok: false, message: "Room is full" };

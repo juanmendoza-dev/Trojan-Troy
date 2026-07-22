@@ -33,6 +33,37 @@ describe("RoomManager", () => {
     expect(joiner.messages).toContain(JSON.stringify({ type: "peer-connected" }));
   });
 
+  it("returns the same room code when a peer creates repeatedly", () => {
+    const rooms = new RoomManager();
+    const creator = fakePeer();
+
+    const first = rooms.createRoom(creator);
+    const second = rooms.createRoom(creator);
+
+    expect(second).toBe(first);
+  });
+
+  it("cleans up its room on disconnect even after repeated creates", () => {
+    const rooms = new RoomManager();
+    const creator = fakePeer();
+
+    const code = rooms.createRoom(creator);
+    rooms.createRoom(creator);
+    rooms.disconnect(creator);
+
+    expect(rooms.hasRoom(code)).toBe(false);
+  });
+
+  it("rejects joining a room the peer is already in", () => {
+    const rooms = new RoomManager();
+    const creator = fakePeer();
+    const code = rooms.createRoom(creator);
+
+    const result = rooms.joinRoom(code, creator);
+
+    expect(result).toEqual({ ok: false, message: "Already in this room" });
+  });
+
   it("rejects joining a room that does not exist", () => {
     const rooms = new RoomManager();
     const joiner = fakePeer();

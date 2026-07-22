@@ -281,6 +281,22 @@
   font-size: 13px;
   color: #9ba1b5;
 }
+.confirm-key__abort {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.5);
+  border-radius: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.confirm-key__abort:hover {
+  background: rgba(255, 107, 107, 0.16);
+  border-color: rgba(255, 107, 107, 0.75);
+}
 .confirm-key__back {
   background: none;
   border: none;

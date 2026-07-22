@@ -22,6 +22,7 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
   const [elapsedMs, setElapsedMs] = useState(0);
   const handleRef = useRef<RecordingHandle | null>(null);
   const isStartingRef = useRef(false);
+  const mountedRef = useRef(true);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -33,6 +34,7 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
 
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       handleRef.current?.stop();
       if (stateRef.current.status === "preview") {
         URL.revokeObjectURL(stateRef.current.audioUrl);
@@ -49,6 +51,7 @@ export function VoiceRecorder({ onSend }: VoiceRecorderProps) {
       setElapsedMs(0);
       setState({ status: "recording" });
       handle.result.then(({ blob, mimeType }) => {
+        if (!mountedRef.current) return;
         setState({ status: "preview", blob, mimeType, audioUrl: URL.createObjectURL(blob) });
       });
     } catch (error) {

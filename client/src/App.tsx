@@ -6,6 +6,7 @@ import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
 import { encryptMessage, decryptMessage } from "./crypto/messages";
 import { encryptVoiceClip, decryptVoiceClip } from "./crypto/media";
+import { measureClipDurationMs } from "./audio/clipDuration";
 import { advanceStatus } from "./protocol/messageStatus";
 import { shouldSendReadAck } from "./protocol/readAckDecision";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
@@ -24,21 +25,22 @@ const GHOST_MODE_STORAGE_KEY = "trojan-troy-ghost-mode";
 
 function maybeSendReadAck(
   client: RelayClient,
-  pendingReadIdRef: { current: string | null },
+  pendingReadIdsRef: { current: Set<string> },
   ghostModeRef: { current: boolean }
 ) {
-  const messageId = pendingReadIdRef.current;
-  if (!messageId) return;
+  if (pendingReadIdsRef.current.size === 0) return;
   const send = shouldSendReadAck({
     isFocused: document.hasFocus(),
     isVisible: document.visibilityState === "visible",
     ghostMode: ghostModeRef.current,
     alreadyAcked: false,
   });
-  if (send) {
+  if (!send) return;
+  // Flush every message received while blurred, not just the most recent one.
+  for (const messageId of pendingReadIdsRef.current) {
     client.send({ type: "read", messageId });
-    pendingReadIdRef.current = null;
   }
+  pendingReadIdsRef.current.clear();
 }
 
 type Screen =
@@ -57,11 +59,12 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const sessionKeysRef = useRef<SessionKeys | null>(null);
   const clientRef = useRef<RelayClient | null>(null);
+  const listenerCleanupsRef = useRef<Array<() => void>>([]);
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
   const { setTheme } = useTheme();
 
-  const pendingReadIdRef = useRef<string | null>(null);
+  const pendingReadIdsRef = useRef<Set<string>>(new Set());
   const [ghostMode, setGhostMode] = useState<boolean>(
     () => localStorage.getItem(GHOST_MODE_STORAGE_KEY) === "true"
   );
@@ -76,7 +79,7 @@ export default function App() {
   useEffect(() => {
     function handleFocusChange() {
       const client = clientRef.current;
-      if (client) maybeSendReadAck(client, pendingReadIdRef, ghostModeRef);
+      if (client) maybeSendReadAck(client, pendingReadIdsRef, ghostModeRef);
     }
     document.addEventListener("visibilitychange", handleFocusChange);
     window.addEventListener("focus", handleFocusChange);
@@ -116,7 +119,7 @@ export default function App() {
   ) {
     const handshakeStart = performance.now();
     let disconnected = false;
-    client.onMessage(async (envelope: Envelope) => {
+    listenerCleanupsRef.current.push(client.onMessage(async (envelope: Envelope) => {
       if (envelope.type === "peer-disconnected") {
         disconnected = true;
         setScreen({ name: "error", message: "Your friend disconnected." });
@@ -149,8 +152,8 @@ export default function App() {
             { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "text", text },
           ]);
           client.send({ type: "delivered", messageId: envelope.messageId });
-          pendingReadIdRef.current = envelope.messageId;
-          maybeSendReadAck(client, pendingReadIdRef, ghostModeRef);
+          pendingReadIdsRef.current.add(envelope.messageId);
+          maybeSendReadAck(client, pendingReadIdsRef, ghostModeRef);
         } catch {
           setMessages((prev) => [
             ...prev,
@@ -166,13 +169,14 @@ export default function App() {
         try {
           const blob = await decryptVoiceClip(keys.rx, envelope.payload, envelope.mimeType);
           const audioUrl = URL.createObjectURL(blob);
+          const durationMs = await measureClipDurationMs(blob).catch(() => 0);
           setMessages((prev) => [
             ...prev,
-            { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
+            { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl, durationMs },
           ]);
           client.send({ type: "delivered", messageId: envelope.messageId });
-          pendingReadIdRef.current = envelope.messageId;
-          maybeSendReadAck(client, pendingReadIdRef, ghostModeRef);
+          pendingReadIdsRef.current.add(envelope.messageId);
+          maybeSendReadAck(client, pendingReadIdsRef, ghostModeRef);
         } catch {
           setMessages((prev) => [
             ...prev,
@@ -190,7 +194,7 @@ export default function App() {
           )
         );
       }
-    });
+    }));
 
     client.send({ type: "pubkey", payload: await toBase64(own.publicKey) });
   }
@@ -203,12 +207,14 @@ export default function App() {
     try {
       await client.waitForOpen();
     } catch {
+      client.close();
+      clientRef.current = null;
       setConnectStatus("idle");
       setScreen({ name: "error", message: "Could not connect to the relay." });
       return;
     }
     let currentRoomCode = "";
-    client.onMessage((envelope) => {
+    listenerCleanupsRef.current.push(client.onMessage((envelope) => {
       if (envelope.type === "created") {
         currentRoomCode = envelope.roomCode;
         const code = envelope.roomCode;
@@ -227,7 +233,7 @@ export default function App() {
         setConnectStatus("idle");
         setScreen({ name: "error", message: envelope.message });
       }
-    });
+    }));
     client.send({ type: "create" });
   }
 
@@ -239,11 +245,13 @@ export default function App() {
     try {
       await client.waitForOpen();
     } catch {
+      client.close();
+      clientRef.current = null;
       setConnectStatus("idle");
       setScreen({ name: "error", message: "Could not connect to the relay." });
       return;
     }
-    client.onMessage((envelope) => {
+    listenerCleanupsRef.current.push(client.onMessage((envelope) => {
       if (envelope.type === "error") {
         setConnectStatus("idle");
         setScreen({ name: "error", message: envelope.message });
@@ -259,7 +267,7 @@ export default function App() {
           setScreen((prev) => (prev.name === "start" ? { name: "handshake", roomCode } : prev));
         }, CONNECT_COMPLETE_HOLD_MS);
       }
-    });
+    }));
     client.send({ type: "join", roomCode });
   }
 
@@ -284,17 +292,20 @@ export default function App() {
     const id = crypto.randomUUID();
     client.send({ type: "voice", payload, mimeType, messageId: id });
     const audioUrl = URL.createObjectURL(blob);
+    const durationMs = await measureClipDurationMs(blob).catch(() => 0);
     setMessages((prev) => [
       ...prev,
-      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, status: "sent" },
+      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, durationMs, status: "sent" },
     ]);
   }
 
   function handleLeave() {
+    for (const dispose of listenerCleanupsRef.current) dispose();
+    listenerCleanupsRef.current = [];
     clientRef.current?.close();
     clientRef.current = null;
     sessionKeysRef.current = null;
-    pendingReadIdRef.current = null;
+    pendingReadIdsRef.current.clear();
     setConnectStatus("idle");
     for (const message of messagesRef.current) {
       if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
@@ -360,6 +371,7 @@ export default function App() {
           roomCode="K7F-2QX"
           safetyNumber="21934 07741 66012 88304 55120 09937 41028 77650 30291 66104 82255 19073"
           onVerified={() => {}}
+          onMismatch={() => {}}
         />
       </HandshakeJourney>
     );
@@ -396,6 +408,18 @@ export default function App() {
           onVerified={() =>
             setScreen({ name: "chat", roomCode: screen.roomCode, safetyNumber: screen.safetyNumber })
           }
+          onMismatch={() => {
+            for (const dispose of listenerCleanupsRef.current) dispose();
+            listenerCleanupsRef.current = [];
+            clientRef.current?.close();
+            clientRef.current = null;
+            sessionKeysRef.current = null;
+            setScreen({
+              name: "error",
+              message:
+                "Safety numbers didn't match — the connection may be intercepted. It's been closed.",
+            });
+          }}
         />
       );
     } else {

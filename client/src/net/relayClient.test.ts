@@ -141,4 +141,21 @@ describe("RelayClient", () => {
 
     expect(received).toEqual([{ type: "error", message: "Relay connection error." }]);
   });
+
+  it("does not emit an error to listeners when closed intentionally", async () => {
+    const socket = fakeSocket();
+    const client = new RelayClient("ws://test", () => socket);
+    const opened = client.waitForOpen();
+    socket.onopen?.();
+    await opened;
+
+    const received: unknown[] = [];
+    client.onMessage((envelope) => received.push(envelope));
+
+    // Intentional local close, followed by the async onclose the browser fires.
+    client.close();
+    socket.onclose?.();
+
+    expect(received).toEqual([]);
+  });
 });

@@ -5,6 +5,7 @@ interface SafetyNumberScreenProps {
   roomCode: string;
   safetyNumber: string;
   onVerified: () => void;
+  onMismatch: () => void;
 }
 
 const TICKER_TEXT = "END-TO-END ENCRYPTED · ZERO KNOWLEDGE RELAY · KEYS STAY ON DEVICE · ";
@@ -26,7 +27,7 @@ function prefersReducedMotion(): boolean {
 // "Confirm Key" — compare the shared safety number, then drag the knob to seal
 // the channel. Ported 1:1 from ui/Confirm Key.html into React (orbs + gradient
 // backdrop come from HandshakeJourney, so this paints only the foreground).
-export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: SafetyNumberScreenProps) {
+export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified, onMismatch }: SafetyNumberScreenProps) {
   const groups = safetyNumber.trim().split(/\s+/).filter(Boolean);
 
   const [progress, setProgress] = useState(0);
@@ -299,9 +300,13 @@ export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: Safet
               <div className="confirm-key__warning" role="alert">
                 <div className="confirm-key__warning-title">Don't share anything sensitive</div>
                 <div className="confirm-key__warning-body">
-                  Rejoin the room to generate fresh keys, then compare again.
+                  If the numbers don't match, the connection may be intercepted. Close it and start
+                  over, or — if you just mistyped — compare again.
                 </div>
               </div>
+              <button type="button" className="confirm-key__abort" onClick={onMismatch}>
+                Close this connection
+              </button>
               <button type="button" className="confirm-key__back" onClick={backToVerify}>
                 ← I mistyped, compare again
               </button>
