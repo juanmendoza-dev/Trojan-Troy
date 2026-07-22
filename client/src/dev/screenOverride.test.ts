@@ -28,6 +28,23 @@ describe("parseScreenOverride", () => {
     expect(parseScreenOverride("?screen=safety")).toEqual({ screen: "safety" });
   });
 
+  it("parses the error screen and its scenario", () => {
+    expect(parseScreenOverride("?screen=error")).toEqual({ screen: "error" });
+    expect(parseScreenOverride("?screen=error&scenario=room_full")).toEqual({
+      screen: "error",
+      scenario: "room_full",
+    });
+  });
+
+  it("omits the scenario when invalid or on a non-error screen", () => {
+    expect(parseScreenOverride("?screen=error&scenario=nope")).toEqual({ screen: "error" });
+    // scenario is parsed regardless of screen, but only the error screen reads it
+    expect(parseScreenOverride("?screen=chat&scenario=bad_code")).toEqual({
+      screen: "chat",
+      scenario: "bad_code",
+    });
+  });
+
   it("omits theme when not given or invalid", () => {
     expect(parseScreenOverride("?screen=chat")).toEqual({ screen: "chat" });
     expect(parseScreenOverride("?screen=chat&theme=nope")).toEqual({ screen: "chat" });

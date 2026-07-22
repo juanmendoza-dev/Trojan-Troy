@@ -1,0 +1,203 @@
+/* client/src/screens/ErrorScreen.css
+   The error / "stranded" screen, ported from the Fable handoff
+   ("Trojan Troy - Error Screen.html"). Hardcoded Iris-Glass palette (not theme
+   tokens), like WaitingScreen.css / StartJoinScreen.css, since an error can
+   surface from any screen and should feel like the same world. */
+
+.error-screen {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: linear-gradient(160deg, #0d0f18 0%, #101223 100%);
+  font-family: 'Schibsted Grotesk', sans-serif;
+}
+
+/* ── "love from miami" signature (rainbow on hover) ──────── */
+.error-screen__signature {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 20px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #9ba1b5;
+  cursor: default;
+}
+.error-screen__signature:hover {
+  background: linear-gradient(90deg, #ff5f6d, #ffc371, #47e891, #47c9e8, #8fa6ff, #c47ce8, #ff5f6d);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rainbowShift 2s linear infinite;
+}
+@keyframes rainbowShift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* ── Frosted card ────────────────────────────────────────── */
+.error-screen__card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 460px;
+  box-sizing: border-box;
+  padding: 40px 36px 36px;
+  background: rgba(143, 166, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Beach scene illustration ────────────────────────────── */
+.error-screen__scene {
+  width: 100%;
+  max-width: 380px;
+  display: block;
+  margin-bottom: 26px;
+}
+.error-screen__sea {
+  animation: seaDrift 9s ease-in-out infinite;
+}
+.error-screen__palm {
+  animation: palmSway 7s ease-in-out infinite;
+  transform-origin: 87px 75px;
+  transform-box: view-box;
+}
+.error-screen__crab {
+  animation: crabScuttle 16s ease-in-out infinite;
+}
+.error-screen__crab-legs {
+  animation: crabLegs 16s steps(1) infinite;
+}
+@keyframes seaDrift {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(-9px); }
+  100% { transform: translateX(0); }
+}
+@keyframes palmSway {
+  0% { transform: rotate(-1.6deg); }
+  50% { transform: rotate(1.8deg); }
+  100% { transform: rotate(-1.6deg); }
+}
+@keyframes crabScuttle {
+  0%, 62% { transform: translateX(0); }
+  64% { transform: translateX(-5px); }
+  66% { transform: translateX(-10px); }
+  68% { transform: translateX(-14px); }
+  74%, 80% { transform: translateX(-14px); }
+  82% { transform: translateX(-9px); }
+  84% { transform: translateX(-4px); }
+  86%, 100% { transform: translateX(0); }
+}
+@keyframes crabLegs {
+  0%, 62% { transform: translateY(0); }
+  63%, 65%, 67%, 83%, 85% { transform: translateY(-0.8px); }
+  64%, 66%, 68%, 82%, 84% { transform: translateY(0.6px); }
+  70%, 100% { transform: translateY(0); }
+}
+
+/* ── Text ────────────────────────────────────────────────── */
+.error-screen__label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(143, 166, 255, 0.65);
+  margin-bottom: 14px;
+}
+.error-screen__headline {
+  margin: 0 0 10px;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #e8eaf2;
+  text-align: center;
+  text-wrap: pretty;
+  letter-spacing: -0.01em;
+}
+.error-screen__subcopy {
+  margin: 0 0 30px;
+  font-size: 15px;
+  color: #9ba1b5;
+  text-align: center;
+}
+
+/* ── Actions ─────────────────────────────────────────────── */
+.error-screen__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.error-screen__btn {
+  font-family: 'Schibsted Grotesk', sans-serif;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    color 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    border-color 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.error-screen__btn--primary {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0d0f18;
+  background: #8fa6ff;
+  border: none;
+  padding: 12px 26px;
+}
+.error-screen__btn--primary:hover {
+  background: #a5b7ff;
+}
+.error-screen__btn--ghost {
+  font-size: 15px;
+  font-weight: 500;
+  color: #8fa6ff;
+  background: rgba(143, 166, 255, 0.08);
+  border: 1px solid rgba(143, 166, 255, 0.35);
+  padding: 11px 24px;
+}
+.error-screen__btn--ghost:hover {
+  background: rgba(143, 166, 255, 0.16);
+  color: #e8eaf2;
+}
+
+/* ── Staggered rise-in entrances (signature easing) ──────── */
+.error-screen__signature,
+.error-screen__card {
+  animation: crossfadeIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.error-screen__signature {
+  animation-delay: 0.05s;
+}
+.error-screen__card {
+  animation-delay: 0.12s;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 520px) {
+  .error-screen__card {
+    padding: 32px 22px 28px;
+  }
+  .error-screen__headline {
+    font-size: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .error-screen,
+  .error-screen * {
+    animation: none !important;
+  }
+}
