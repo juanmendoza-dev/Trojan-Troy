@@ -19,7 +19,7 @@ and `decisions.md` for why things were done a certain way.
 | — Peer presence indicator: encrypted typing + recording (unscheduled, user-requested) | Built on `feat/typing-presence-indicator` — typecheck/tests/build green; visual eyeball + live round-trip pending |
 | — Seal-slider sparks: canvas ember effect on the safety-number slider (unscheduled, user-requested) | Merged to `main` — typecheck/95 tests/build green; visual eyeball via `?screen=safety` pending |
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
-| 5.1 + 5.1a — Persistent identity + contacts privacy settings | In progress — building together on `feat/persistent-identity-contacts` (ahead of 4.6/4.7 per Jay, see `decisions.md`) |
+| 5.1 + 5.1a — Persistent identity + contacts privacy settings | Built on `feat/persistent-identity-contacts` — typecheck/125 tests/build green; live round-trip + visual eyeball pending |
 
 ## Log
 
@@ -421,3 +421,23 @@ and `decisions.md` for why things were done a certain way.
   `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`; headline
   directions + delegated implementation calls in `decisions.md` (2026-07-22);
   `roadmap.md` gains a 5.1a note.
+
+- **2026-07-22** — Phase 5.1 (persistent identity) + 5.1a (contacts privacy)
+  built together on `feat/persistent-identity-contacts` (off `main`; the branch
+  also carries Jay's `0810ff2` error-screen commit that landed mid-build). New:
+  a persistent X25519 identity keypair in IndexedDB with a display name and
+  recovery code (`identity/` — `store`, `identity`, `atRest`, `recoveryCode`,
+  `lockState`); combined identity+ephemeral session-key derivation and an
+  identity-based (stable) safety number (`crypto/keys`); the `identity` relay
+  envelope replacing `pubkey`; key-based recognized/new safety-number branches;
+  per-contact pseudonyms via a "join as" picker (default/alias/anonymous) +
+  local-only labels; contacts-only mode + block list gated in `App` via a pure
+  `net/accessControl`; at-rest encryption of the identity/contacts vault behind
+  a PIN (Argon2id + secretbox) with idle re-lock and an `UnlockScreen`; new
+  `SetupScreen`/`UnlockScreen`/`ContactsScreen` and an expanded Settings →
+  Privacy. No server change; adopted the sumo libsodium build for Argon2id (see
+  `decisions.md`). Verified: `npm run typecheck` clean, 125 vitest tests pass
+  (20 new), `vite build` green. Manual two-browser round-trip + a visual
+  eyeball of the new screens still pending (no browser-automation tool here, as
+  in every prior visual phase). Plan:
+  `docs/superpowers/plans/2026-07-22-persistent-identity-contacts.md`.

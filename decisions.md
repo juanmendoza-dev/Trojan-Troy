@@ -8,6 +8,42 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-22 — Phase 5.1 + 5.1a built on `feat/persistent-identity-contacts`;
+  several implementation calls.** Persistent identity + the three privacy
+  settings, per the two specs. Non-obvious calls (Claude):
+  (1) **Client switched to the libsodium *sumo* build.** The standard
+  `libsodium-wrappers` omits `crypto_pwhash` (Argon2id) and
+  `crypto_scalarmult_base`, both needed here (at-rest KDF; recomputing a public
+  key from a restored secret). Done without import churn by aliasing the
+  dependency to `libsodium-wrappers-sumo` and pointing the existing
+  `resolve.alias` in `vite.config.ts`/`vitest.config.ts` at the sumo entry
+  (`dist/modules-sumo/…`). Still audited libsodium (satisfies the hard
+  constraint); bundle grows to ~1.2MB (389kB gzip) — acceptable for the
+  prototype.
+  (2) **Argon2id at INTERACTIVE limits**, not MODERATE — the right tier for an
+  interactive browser unlock (~64MiB) vs MODERATE's 256MiB, heavy for wasm.
+  (3) **Testing follows the repo convention over the specs' letter:** pure logic
+  is unit-tested (`atRest`, `keys`, `recoveryCode`, `accessControl`, `lockState`
+  — 20 new tests, 125 total), while the IndexedDB store, identity orchestration,
+  and screens are manually verified (no `fake-indexeddb` dependency added), same
+  as every other I/O boundary and screen here.
+  (4) **Idle re-lock only fires on the start screen**, never mid-chat —
+  implementing the spec's "re-lock doesn't kill an active chat" by simply not
+  re-locking during one (the session keys are independent of the identity vault
+  anyway).
+  (5) **Integrated with the error-screen feature that landed on the branch
+  mid-build** (`0810ff2`): access refusals reuse that scenario-based
+  `ErrorScreen` — a new additive `not_a_contact` scenario for contacts-only
+  refusals, and `handshake_failed` for a blocked key (kept generic).
+  (6) **The store is one sealed vault**, not per-record encryption: `self` +
+  contacts + blocked serialize to a single blob, plaintext when no PIN is set
+  and `pwhash`+`secretbox`-sealed when one is — simplest shape that supports
+  whole-vault at-rest encryption. Verified: typecheck clean, 125 vitest tests
+  pass, `vite build` green. Not yet eyeballed live (no browser-automation tool
+  here, as every prior visual phase); a two-browser round-trip plus the
+  setup/unlock/contacts/pseudonym/contacts-only flows still want a manual pass.
+  (Decided by: Jay (direction) + Claude (implementation calls))
+
 - **2026-07-22 — Building Phase 5.1 (persistent identity) + 5.1a (contacts
   privacy settings) now, together, ahead of the 4.6/4.7 ordering.** Jay asked to
   build the contacts-privacy spec; since it's an extension that sits entirely on
