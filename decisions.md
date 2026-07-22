@@ -8,6 +8,33 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-22 — Error screen extracted from the retired identity branch and
+  shipped to `main` on its own, rather than merging the stranded branch or
+  hand-redoing the wiring.** The error screen was already built (commit
+  `cf92d00`: a themed `ErrorScreen` + `errorScenario.ts` with six scenarios, a
+  `?screen=error` dev preview, the `App.tsx` wiring replacing the bare
+  `<h1>Something went wrong</h1>` placeholder, and the design HTML), but it sat
+  on `feat/error-screen`, which was stacked on top of the persistent-identity/PIN
+  work — the direction retired in favor of Local Profiles and rolled back off
+  `main` (`1ee0e35`, see the "Retired persistent identity" entry below). So the
+  screen had never reached production, and merging that branch as-is would have
+  re-shipped the rolled-back PIN work. Since it has no actual dependency on the
+  identity code (verified: `ErrorScreen`/`errorScenario` reference nothing about
+  identity/vault/PIN, and its `App.tsx` diff only touches error-handling paths
+  that also exist on `main`), the clean fix was to cherry-pick just `cf92d00`
+  onto a fresh branch off `main` — which applied with zero conflicts
+  (`screenOverride.ts` byte-identical to its base; main's `App.tsx` still had
+  every context line the patch expected, the identity wiring being elsewhere in
+  the file) — verify (typecheck / 104 tests / build all green), and fast-forward
+  merge to `main` (`275d834`) + push, chosen over merging the whole stranded
+  branch or re-implementing the wiring by hand. Committed directly on `main`,
+  like the other deploy/rollback commits. Note: the earlier PIN rollback
+  (`1ee0e35`) was never logged as a decision in its own right — it's captured
+  indirectly by the "Retired persistent identity" entry below. Residual: the six
+  error states are unverified pixel-wise (no browser automation here; preview via
+  `?screen=error&scenario=…`). (Decided by: Jay (asked to get it into
+  production) + Claude (extraction approach))
+
 - **2026-07-22 — Profile avatars on messages + a click-to-open profile card
   (extends Local Profiles).** Design calls with Jay: **hybrid, not full
   Discord** — keep the themed left/right bubbles and just add a small clickable

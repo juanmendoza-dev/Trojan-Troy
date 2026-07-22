@@ -18,6 +18,7 @@ and `decisions.md` for why things were done a certain way.
 | — Decrypt-reveal redesign: width-driven focus sweep (unscheduled, user-requested polish) | Merged to `main` — typecheck/tests/build green; manual eyeball pending |
 | — Peer presence indicator: encrypted typing + recording (unscheduled, user-requested) | Built on `feat/typing-presence-indicator` — typecheck/tests/build green; visual eyeball + live round-trip pending |
 | — Seal-slider sparks: canvas ember effect on the safety-number slider (unscheduled, user-requested) | Merged to `main` — typecheck/95 tests/build green; visual eyeball via `?screen=safety` pending |
+| — Error screen: themed six-scenario error screen (unscheduled; was built but stranded on the retired identity branch) | Merged to `main` (`275d834`) — typecheck/104 tests/build green; visual eyeball (`?screen=error`) pending |
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
 | 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
@@ -457,3 +458,27 @@ and `decisions.md` for why things were done a certain way.
   (6 new), build green. Manual eyeball (`?screen=chat`, and a live two-browser
   round-trip with sharing on) still pending — no browser-automation tool here.
   Built on `feat/profiles`.
+
+- **2026-07-22** — Error screen shipped to `main`/production (unscheduled — it
+  had already been built, but was stranded). A themed `ErrorScreen` with six
+  scenarios (friend left, handshake failed, relay unreachable, bad room code,
+  room full, generic), a `?screen=error&scenario=…` dev preview, and the
+  `App.tsx` wiring that replaces the old bare `<h1>Something went wrong</h1>`
+  placeholder on every error path — plus the `ui/Trojan Troy - Error Screen.html`
+  design file. It had been implemented earlier (commit `cf92d00`) on branch
+  `feat/error-screen`, which was stacked on top of the persistent-identity/PIN
+  work — the direction retired in favor of Local Profiles and rolled back off
+  `main` (`1ee0e35`, see `decisions.md`). So it was never merged, and merging
+  that branch as-is would have re-shipped the rolled-back PIN work. Since the
+  screen has no real dependency on the identity code, it was extracted:
+  cherry-picked just `cf92d00` onto a clean branch off `main` (applied with zero
+  conflicts — `screenOverride.ts` was byte-identical to its base and `App.tsx`
+  still had every context line the patch expected, because the identity wiring
+  lived elsewhere in the file), verified (`npm run typecheck` clean, 104 client
+  vitest tests pass, `npm run build` green), and fast-forward merged to `main`
+  (`275d834`) + pushed for the Vercel redeploy. The Local Profiles work later
+  landed on top (`42aadcb`) with the error screen still wired and intact. The six
+  error states' visuals still want a manual eyeball on the deploy (or
+  `npm run dev` → `?screen=error&scenario=…`) — no browser-automation tool in
+  this environment, as in every prior visual phase. See `decisions.md`
+  (2026-07-22).
