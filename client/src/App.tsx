@@ -23,6 +23,15 @@ import { ChatScreen, type ChatMessage } from "./screens/ChatScreen";
 import { useTheme } from "./theme/ThemeContext";
 import { LoadingScreen } from "./screens/loading/LoadingScreen";
 import { HandshakeJourney } from "./screens/HandshakeJourney";
+import { ProfileModal } from "./components/ProfileModal";
+import { resolveActiveProfile, ANONYMOUS_ID, type Profile } from "./profiles/profileModel";
+import {
+  listProfiles,
+  putProfile,
+  deleteProfile,
+  getActiveProfileId,
+  setActiveProfileId as persistActiveProfileId,
+} from "./profiles/profileStore";
 import { parseScreenOverride } from "./dev/screenOverride";
 
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
@@ -66,6 +75,30 @@ export default function App() {
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
   const { setTheme } = useTheme();
+
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [activeProfileId, setActiveProfileId] = useState<string>(() => getActiveProfileId());
+  const [profilesOpen, setProfilesOpen] = useState(false);
+  const activeProfile = resolveActiveProfile(profiles, activeProfileId);
+
+  useEffect(() => {
+    void listProfiles().then(setProfiles);
+  }, []);
+
+  function selectProfile(id: string) {
+    persistActiveProfileId(id);
+    setActiveProfileId(id);
+  }
+  async function handleCreateProfile(profile: Profile) {
+    await putProfile(profile);
+    setProfiles(await listProfiles());
+    selectProfile(profile.id);
+  }
+  async function handleDeleteProfile(id: string) {
+    await deleteProfile(id);
+    setProfiles(await listProfiles());
+    if (activeProfileId === id) selectProfile(ANONYMOUS_ID);
+  }
 
   const pendingReadIdRef = useRef<string | null>(null);
   const [ghostMode, setGhostMode] = useState<boolean>(
@@ -446,17 +479,64 @@ export default function App() {
     // Holds the connecting bar in its "alive" cold-start state so the sheen +
     // breathing glow can be eyeballed without a live relay.
     return (
-      <StartJoinScreen onStart={() => {}} onJoin={() => {}} connectStatus="connecting" />
+      <StartJoinScreen
+        onStart={() => {}}
+        onJoin={() => {}}
+        connectStatus="connecting"
+        activeProfile={{ kind: "anonymous" }}
+        onOpenProfiles={() => {}}
+      />
+    );
+  }
+  if (devOverride?.screen === "profiles") {
+    const sample: Profile[] = [
+      { id: "s1", name: "Jay", avatar: null, pinSalt: "", pinHash: "", createdAt: 0 },
+      { id: "s2", name: "Work", avatar: null, pinSalt: "", pinHash: "", createdAt: 0 },
+    ];
+    return (
+      <>
+        <StartJoinScreen
+          onStart={() => {}}
+          onJoin={() => {}}
+          connectStatus="idle"
+          activeProfile={{ kind: "anonymous" }}
+          onOpenProfiles={() => {}}
+        />
+        <ProfileModal
+          profiles={sample}
+          activeId={ANONYMOUS_ID}
+          onSelectAnonymous={() => {}}
+          onSelectNamed={() => {}}
+          onCreate={() => {}}
+          onDelete={() => {}}
+          onClose={() => {}}
+        />
+      </>
     );
   }
   if (screen.name === "start") {
     return (
-      <StartJoinScreen
-        onStart={handleStart}
-        onJoin={handleJoin}
-        connectStatus={connectStatus}
-        initialCode={initialJoinCode ?? undefined}
-      />
+      <>
+        <StartJoinScreen
+          onStart={handleStart}
+          onJoin={handleJoin}
+          connectStatus={connectStatus}
+          initialCode={initialJoinCode ?? undefined}
+          activeProfile={activeProfile}
+          onOpenProfiles={() => setProfilesOpen(true)}
+        />
+        {profilesOpen && (
+          <ProfileModal
+            profiles={profiles}
+            activeId={activeProfileId}
+            onSelectAnonymous={() => selectProfile(ANONYMOUS_ID)}
+            onSelectNamed={(profile) => selectProfile(profile.id)}
+            onCreate={handleCreateProfile}
+            onDelete={handleDeleteProfile}
+            onClose={() => setProfilesOpen(false)}
+          />
+        )}
+      </>
     );
   }
   if (screen.name === "waiting") {

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AmbientOrbs } from "../components/AmbientOrbs";
 import { ConnectingBar, type ConnectStatus } from "./ConnectingBar";
 import { SECURITY_TICKER_TEXT } from "./securityTicker";
+import { ProfileButton } from "../components/ProfileButton";
+import type { ActiveProfile } from "../profiles/profileModel";
 import "./StartJoinScreen.css";
 
 interface StartJoinScreenProps {
@@ -9,9 +11,18 @@ interface StartJoinScreenProps {
   onJoin: (code: string) => void;
   connectStatus: ConnectStatus;
   initialCode?: string;
+  activeProfile: ActiveProfile;
+  onOpenProfiles: () => void;
 }
 
-export function StartJoinScreen({ onStart, onJoin, connectStatus, initialCode }: StartJoinScreenProps) {
+export function StartJoinScreen({
+  onStart,
+  onJoin,
+  connectStatus,
+  initialCode,
+  activeProfile,
+  onOpenProfiles,
+}: StartJoinScreenProps) {
   const [code, setCode] = useState(initialCode ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
   const busy = connectStatus !== "idle";
@@ -47,6 +58,8 @@ export function StartJoinScreen({ onStart, onJoin, connectStatus, initialCode }:
         <span className="start-join-screen__badge-dot" />
         Secure channel ready
       </div>
+
+      <ProfileButton active={activeProfile} onClick={onOpenProfiles} />
 
       <div className="start-join-screen__hero">
         <h1 className="start-join-screen__wordmark">
