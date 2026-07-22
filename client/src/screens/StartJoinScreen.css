@@ -1,0 +1,275 @@
+/* client/src/screens/StartJoinScreen.css
+   The home/entry screen, ported from the Fable home handoff
+   ("Trojan Troy Home.dc.html"). Hardcoded Iris-Glass palette (not theme
+   tokens), like WaitingScreen.css / LoadingScreen.css, so the entry screen
+   flows straight into the waiting/loading screens it precedes. */
+
+.start-join-screen {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #0d0f18 0%, #101223 100%);
+  font-family: 'Schibsted Grotesk', sans-serif;
+  color: #e8eaf2;
+}
+
+/* ── Top-left "secure channel ready" badge ───────────────── */
+.start-join-screen__badge {
+  position: absolute;
+  top: 28px;
+  left: 32px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: #5e6478;
+}
+.start-join-screen__badge-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #8fa6ff;
+  animation: startJoinDotPulse 2.4s ease-in-out infinite;
+}
+@keyframes startJoinDotPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(143, 166, 255, 0.5); }
+  50% { opacity: 0.55; box-shadow: 0 0 0 5px rgba(143, 166, 255, 0); }
+}
+
+/* ── Hero ────────────────────────────────────────────────── */
+.start-join-screen__hero {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 96px 24px 72px;
+}
+
+.start-join-screen__wordmark {
+  margin: 0;
+  font-size: 92px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  line-height: 0.98;
+  text-align: center;
+  color: #e8eaf2;
+}
+.start-join-screen__period {
+  color: #8fa6ff;
+}
+
+.start-join-screen__tagline {
+  margin: 22px 0 0;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  text-align: center;
+  color: #9ba1b5;
+}
+
+/* ── Action card ─────────────────────────────────────────── */
+.start-join-screen__card {
+  margin-top: 48px;
+  width: 100%;
+  max-width: 420px;
+  padding: 36px 32px 28px;
+  border-radius: 20px;
+  background: rgba(143, 166, 255, 0.045);
+  border: 1px solid rgba(143, 166, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(232, 234, 242, 0.08),
+    inset 0 0 40px rgba(143, 166, 255, 0.04), 0 24px 60px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.start-join-screen__form {
+  transition: opacity 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.start-join-screen__form[data-busy='true'] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.start-join-screen__start {
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(143, 166, 255, 0.5);
+  background: linear-gradient(180deg, rgba(143, 166, 255, 0.22), rgba(143, 166, 255, 0.12));
+  color: #e8eaf2;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(143, 166, 255, 0);
+  transition: background 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    box-shadow 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    border-color 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.start-join-screen__start:hover {
+  background: linear-gradient(180deg, rgba(143, 166, 255, 0.32), rgba(143, 166, 255, 0.18));
+  box-shadow: 0 0 24px 0 rgba(143, 166, 255, 0.18);
+  border-color: rgba(143, 166, 255, 0.75);
+}
+.start-join-screen__start:active {
+  transform: translateY(1px);
+}
+
+.start-join-screen__divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 26px 0 18px;
+}
+.start-join-screen__divider-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(155, 161, 181, 0.16);
+}
+.start-join-screen__divider-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #5e6478;
+}
+
+.start-join-screen__joinrow {
+  display: flex;
+  gap: 10px;
+}
+.start-join-screen__input {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(155, 161, 181, 0.22);
+  background: rgba(13, 15, 24, 0.55);
+  color: #e8eaf2;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  transition: border-color 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    box-shadow 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.start-join-screen__input::placeholder {
+  color: #5e6478;
+  letter-spacing: 3px;
+}
+.start-join-screen__input:focus {
+  outline: none;
+  border-color: rgba(143, 166, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(143, 166, 255, 0.12);
+}
+
+.start-join-screen__join {
+  padding: 13px 22px;
+  border-radius: 10px;
+  border: 1px solid rgba(155, 161, 181, 0.25);
+  background: transparent;
+  color: #9ba1b5;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    color 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.start-join-screen__join:hover:not(:disabled) {
+  border-color: rgba(143, 166, 255, 0.5);
+  color: #e8eaf2;
+}
+.start-join-screen__join:disabled {
+  color: #5e6478;
+  cursor: default;
+}
+
+/* ── Security marquee + accent hairline ──────────────────── */
+.start-join-screen__marquee {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  padding: 14px 0 17px;
+  white-space: nowrap;
+}
+.start-join-screen__marquee-track {
+  display: inline-flex;
+  width: max-content;
+  animation: marqueeX 36s linear infinite;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  color: #5e6478;
+}
+.start-join-screen__marquee-track span {
+  padding-right: 48px;
+}
+.start-join-screen__hairline {
+  position: relative;
+  z-index: 1;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(143, 166, 255, 0.35),
+    #8fa6ff,
+    rgba(196, 160, 255, 0.7),
+    rgba(143, 166, 255, 0.35)
+  );
+}
+
+/* ── Staggered rise-in entrances (signature easing) ──────── */
+.start-join-screen__badge,
+.start-join-screen__wordmark,
+.start-join-screen__tagline,
+.start-join-screen__card,
+.start-join-screen__marquee {
+  animation: startJoinRise 0.9s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.start-join-screen__wordmark { animation-delay: 0.05s; }
+.start-join-screen__badge { animation-delay: 0.15s; }
+.start-join-screen__tagline { animation-delay: 0.2s; }
+.start-join-screen__card { animation-delay: 0.35s; }
+.start-join-screen__marquee { animation-delay: 0.55s; }
+@keyframes startJoinRise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive (from the handoff) ───────────────────────── */
+@media (max-height: 760px) {
+  .start-join-screen__wordmark { font-size: 68px; }
+  .start-join-screen__hero { padding-top: 76px; padding-bottom: 48px; }
+  .start-join-screen__card { margin-top: 32px; }
+}
+@media (max-width: 560px) {
+  .start-join-screen__wordmark { font-size: 64px; }
+  .start-join-screen__card { padding: 28px 22px; }
+  .start-join-screen__joinrow { flex-direction: column; }
+  .start-join-screen__join { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-join-screen__badge,
+  .start-join-screen__wordmark,
+  .start-join-screen__tagline,
+  .start-join-screen__card,
+  .start-join-screen__marquee,
+  .start-join-screen__marquee-track,
+  .start-join-screen__badge-dot {
+    animation: none;
+  }
+}

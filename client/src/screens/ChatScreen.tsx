@@ -46,7 +46,7 @@ function renderMessage(message: ChatMessage, showStatus: boolean, delayMs: numbe
       />
     );
   }
-  return <MessageBubble from={message.from} text={message.text} status={status} delayMs={delayMs} />;
+  return <MessageBubble id={message.id} from={message.from} text={message.text} status={status} delayMs={delayMs} />;
 }
 
 export function ChatScreen({

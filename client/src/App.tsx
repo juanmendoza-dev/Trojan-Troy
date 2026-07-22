@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RelayClient, type Envelope } from "./net/relayClient";
+import { parseInviteCode } from "./net/inviteLink";
 import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
@@ -9,6 +10,8 @@ import { measureClipDurationMs } from "./audio/clipDuration";
 import { advanceStatus } from "./protocol/messageStatus";
 import { shouldSendReadAck } from "./protocol/readAckDecision";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
+import { type ConnectStatus } from "./screens/ConnectingBar";
+import { CONNECT_COMPLETE_HOLD_MS } from "./screens/barPhases";
 import { WaitingScreen } from "./screens/WaitingScreen";
 import { SafetyNumberScreen } from "./screens/SafetyNumberScreen";
 import { ChatScreen, type ChatMessage } from "./screens/ChatScreen";
@@ -51,6 +54,8 @@ type Screen =
 export default function App() {
   const devOverride = import.meta.env.DEV ? parseScreenOverride(window.location.search) : null;
   const [screen, setScreen] = useState<Screen>({ name: "start" });
+  const [initialJoinCode] = useState<string | null>(() => parseInviteCode(window.location.hash));
+  const [connectStatus, setConnectStatus] = useState<ConnectStatus>("idle");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const sessionKeysRef = useRef<SessionKeys | null>(null);
   const clientRef = useRef<RelayClient | null>(null);
@@ -94,6 +99,14 @@ export default function App() {
 
   useEffect(() => {
     if (devOverride?.theme) setTheme(devOverride.theme);
+  }, []);
+
+  // An invite link (…/#CODE) prefills the join form on load; drop the hash
+  // afterward so a refresh doesn't re-trigger it.
+  useEffect(() => {
+    if (initialJoinCode && window.location.hash) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
   }, []);
 
   const HANDSHAKE_MIN_MS = 2600;
@@ -187,6 +200,7 @@ export default function App() {
   }
 
   async function handleStart() {
+    setConnectStatus("connecting");
     const own = await generateKeypair();
     const client = new RelayClient(RELAY_URL);
     clientRef.current = client;
@@ -195,6 +209,7 @@ export default function App() {
     } catch {
       client.close();
       clientRef.current = null;
+      setConnectStatus("idle");
       setScreen({ name: "error", message: "Could not connect to the relay." });
       return;
     }
@@ -202,13 +217,20 @@ export default function App() {
     listenerCleanupsRef.current.push(client.onMessage((envelope) => {
       if (envelope.type === "created") {
         currentRoomCode = envelope.roomCode;
-        setScreen({ name: "waiting", roomCode: envelope.roomCode });
+        const code = envelope.roomCode;
+        // Snap the connecting bar to 100%, then hold a beat before advancing.
+        setConnectStatus("connected");
+        window.setTimeout(() => {
+          setConnectStatus("idle");
+          setScreen((prev) => (prev.name === "start" ? { name: "waiting", roomCode: code } : prev));
+        }, CONNECT_COMPLETE_HOLD_MS);
       }
       if (envelope.type === "peer-connected") {
         setScreen({ name: "handshake", roomCode: currentRoomCode });
         void exchangeKeys(client, own, "initiator", currentRoomCode);
       }
       if (envelope.type === "error") {
+        setConnectStatus("idle");
         setScreen({ name: "error", message: envelope.message });
       }
     }));
@@ -216,6 +238,7 @@ export default function App() {
   }
 
   async function handleJoin(roomCode: string) {
+    setConnectStatus("connecting");
     const own = await generateKeypair();
     const client = new RelayClient(RELAY_URL);
     clientRef.current = client;
@@ -224,16 +247,25 @@ export default function App() {
     } catch {
       client.close();
       clientRef.current = null;
+      setConnectStatus("idle");
       setScreen({ name: "error", message: "Could not connect to the relay." });
       return;
     }
     listenerCleanupsRef.current.push(client.onMessage((envelope) => {
       if (envelope.type === "error") {
+        setConnectStatus("idle");
         setScreen({ name: "error", message: envelope.message });
       }
       if (envelope.type === "peer-connected") {
-        setScreen({ name: "handshake", roomCode });
+        // Start the key exchange right away (listeners stack — delaying it would
+        // drop the peer's pubkey), but hold the finished bar a beat on the home
+        // screen before swapping in the handshake/loading screen.
+        setConnectStatus("connected");
         void exchangeKeys(client, own, "responder", roomCode);
+        window.setTimeout(() => {
+          setConnectStatus("idle");
+          setScreen((prev) => (prev.name === "start" ? { name: "handshake", roomCode } : prev));
+        }, CONNECT_COMPLETE_HOLD_MS);
       }
     }));
     client.send({ type: "join", roomCode });
@@ -274,6 +306,7 @@ export default function App() {
     clientRef.current = null;
     sessionKeysRef.current = null;
     pendingReadIdsRef.current.clear();
+    setConnectStatus("idle");
     for (const message of messagesRef.current) {
       if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
     }
@@ -328,11 +361,40 @@ export default function App() {
       </HandshakeJourney>
     );
   }
+  if (devOverride?.screen === "waiting") {
+    return <WaitingScreen roomCode="K7F-2QX" onCancel={() => {}} />;
+  }
+  if (devOverride?.screen === "safety") {
+    return (
+      <HandshakeJourney activeKey="safety-number">
+        <SafetyNumberScreen
+          roomCode="K7F-2QX"
+          safetyNumber="21934 07741 66012 88304 55120 09937 41028 77650 30291 66104 82255 19073"
+          onVerified={() => {}}
+          onMismatch={() => {}}
+        />
+      </HandshakeJourney>
+    );
+  }
+  if (devOverride?.screen === "connecting") {
+    // Holds the connecting bar in its "alive" cold-start state so the sheen +
+    // breathing glow can be eyeballed without a live relay.
+    return (
+      <StartJoinScreen onStart={() => {}} onJoin={() => {}} connectStatus="connecting" />
+    );
+  }
   if (screen.name === "start") {
-    return <StartJoinScreen onStart={handleStart} onJoin={handleJoin} />;
+    return (
+      <StartJoinScreen
+        onStart={handleStart}
+        onJoin={handleJoin}
+        connectStatus={connectStatus}
+        initialCode={initialJoinCode ?? undefined}
+      />
+    );
   }
   if (screen.name === "waiting") {
-    return <WaitingScreen roomCode={screen.roomCode} />;
+    return <WaitingScreen roomCode={screen.roomCode} onCancel={handleLeave} />;
   }
   if (screen.name === "handshake" || screen.name === "safety-number" || screen.name === "chat") {
     let content: ReactNode;
@@ -341,6 +403,7 @@ export default function App() {
     } else if (screen.name === "safety-number") {
       content = (
         <SafetyNumberScreen
+          roomCode={screen.roomCode}
           safetyNumber={screen.safetyNumber}
           onVerified={() =>
             setScreen({ name: "chat", roomCode: screen.roomCode, safetyNumber: screen.safetyNumber })

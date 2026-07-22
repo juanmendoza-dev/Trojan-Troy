@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CipherWord } from "./CipherWord";
 import { percentAt } from "./percent";
+import { SECURITY_TICKER_TEXT } from "../securityTicker";
 import "./LoadingScreen.css";
 
 interface LoadingScreenProps {
@@ -8,8 +9,6 @@ interface LoadingScreenProps {
   durationMs?: number;
 }
 
-const TICKER_TEXT =
-  "END-TO-END ENCRYPTED · ZERO KNOWLEDGE RELAY · KEYS STAY ON DEVICE · NO ACCOUNTS · NO METADATA · ";
 const WORDMARK_FONT_FAMILY = "'Schibsted Grotesk', sans-serif";
 
 export function LoadingScreen({ roomCode, durationMs = 2600 }: LoadingScreenProps) {
@@ -91,8 +90,8 @@ export function LoadingScreen({ roomCode, durationMs = 2600 }: LoadingScreenProp
 
       <div className="loading-screen__marquee">
         <div className="loading-screen__marquee-track">
-          <span>{TICKER_TEXT.repeat(2)}</span>
-          <span>{TICKER_TEXT.repeat(2)}</span>
+          <span>{SECURITY_TICKER_TEXT.repeat(2)}</span>
+          <span>{SECURITY_TICKER_TEXT.repeat(2)}</span>
         </div>
       </div>
 
