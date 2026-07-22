@@ -145,10 +145,15 @@ earlier ones:
   `decisions.md`, 2026-07-20). Revisit embedding it inside the encrypted
   payload instead once back in a security-hardening phase — see the chat
   UI polish spec's design for the exact current mechanism.
-- Add a "peer is typing" indicator. Explicitly cut from Phase 4's UI-only
-  scope because it needs a new relay event/protocol change (see
-  `decisions.md`, 2026-07-19) — Jay requested it be picked back up,
-  2026-07-20.
+- Add a "peer is typing" indicator. Cut from Phase 4's UI-only scope (see
+  `decisions.md`, 2026-07-19); Jay requested it back on 2026-07-20. Now
+  designed as an **encrypted presence indicator** (typing *and* voice
+  recording) — spec at
+  `docs/superpowers/specs/2026-07-22-typing-presence-design.md`. The Phase 4
+  note that this needs a "relay event/protocol change" is corrected there:
+  the relay forwards unknown envelope types opaquely (as it already does for
+  `ciphertext`/`voice`/`delivered`/`read`), so it's a client-only change with
+  no server work. Spec'd, not yet built.
 
 ## Phase 6 — Polish
 - [ ] Harden and polish whatever Phase 5 sub-projects actually get built —

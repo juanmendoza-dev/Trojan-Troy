@@ -7,6 +7,8 @@ import { Composer } from "../components/Composer";
 import { Settings } from "../components/Settings";
 import type { MessageStatus } from "../protocol/messageStatus";
 import { staggerDelayMs } from "../components/messageStagger";
+import { PresenceIndicator } from "../components/PresenceIndicator";
+import type { PresenceState } from "../protocol/presenceState";
 import "./ChatScreen.css";
 
 export type ChatMessage =
@@ -20,6 +22,8 @@ interface ChatScreenProps {
   messages: ChatMessage[];
   ghostMode: boolean;
   onGhostModeChange: (next: boolean) => void;
+  peerPresence: PresenceState;
+  onPresence: (state: PresenceState) => void;
   onSend: (text: string) => void;
   onSendVoice: (blob: Blob, mimeType: string) => void;
   onLeave: () => void;
@@ -54,6 +58,8 @@ export function ChatScreen({
   messages,
   ghostMode,
   onGhostModeChange,
+  peerPresence,
+  onPresence,
   onSend,
   onSendVoice,
   onLeave,
@@ -78,8 +84,14 @@ export function ChatScreen({
                 {renderMessage(message, index === lastMeIndex, staggerDelayMs(messages, index))}
               </div>
             ))}
+            <PresenceIndicator state={peerPresence} />
           </div>
-          <Composer onSend={onSend} onSendVoice={onSendVoice} />
+          <Composer
+            onSend={onSend}
+            onSendVoice={onSendVoice}
+            onTypingChange={(isTyping) => onPresence(isTyping ? "typing" : "idle")}
+            onRecordingChange={(isRecording) => onPresence(isRecording ? "recording" : "idle")}
+          />
         </div>
       </div>
       {settingsOpen && (

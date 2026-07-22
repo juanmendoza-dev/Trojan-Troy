@@ -15,7 +15,8 @@ and `decisions.md` for why things were done a certain way.
 | 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
 | — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | Complete — verified end-to-end |
 | — Chat polish: themed bubble animations, read receipts, Ghost Mode (unscheduled, user-requested) | Complete — verified end-to-end |
-| — Decrypt-reveal redesign: width-driven focus sweep (unscheduled, user-requested polish) | Code complete on branch `feat/decrypt-focus-sweep` — typecheck/tests/build green; manual eyeball + merge pending |
+| — Decrypt-reveal redesign: width-driven focus sweep (unscheduled, user-requested polish) | Merged to `main` — typecheck/tests/build green; manual eyeball pending |
+| — Peer presence indicator: encrypted typing + recording (unscheduled, user-requested) | Built on `feat/typing-presence-indicator` — typecheck/tests/build green; visual eyeball + live round-trip pending |
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5 — Marketing/landing site | Not started |
 
@@ -357,3 +358,30 @@ and `decisions.md` for why things were done a certain way.
   `feat/decrypt-focus-sweep` off `main` (rebased clean onto `main` after it was
   initially branched on top of the unrelated typing-presence spec). See
   `decisions.md` (2026-07-22).
+
+- **2026-07-22** — Peer presence indicator (typing + voice recording)
+  brainstormed with Jay and spec'd. Not a scheduled phase — the Phase 5
+  backlog "peer is typing" item, pulled forward as a small self-contained
+  feature. Designed as an *encrypted* presence signal: a new client-only
+  `presence` envelope carrying a `secretbox`-sealed `{state}` (the relay
+  forwards it opaquely, no server change), an Instagram-style three-dot bubble
+  reskinned per theme (periwinkle glass beads + the currently-unused
+  `glowPulse` keyframe on Iris/Pulse, flat grey on Apple), gated behind an
+  expanded Ghost Mode ("don't broadcast my activity"). Heartbeat-send +
+  receiver auto-expiry, with the timing logic destined for a tested
+  `protocol/presenceState.ts` (matching `messageStatus.ts`/`readAckDecision.ts`).
+  Spec: `docs/superpowers/specs/2026-07-22-typing-presence-design.md`;
+  rationale + delegated calls in `decisions.md` (2026-07-22); `roadmap.md`
+  backlog note corrected (client-only, not a protocol change). Then implemented
+  on branch `feat/typing-presence-indicator` off `main`: the `presence` envelope
+  (`relayClient.ts`), a pure `protocol/presenceState.ts` (heartbeat-send decision
+  + defensive state parse, 9 unit tests), a themed `PresenceIndicator` component
+  (reuses the existing `typingDot`/`glowPulse` keyframes; SVG mic for the
+  recording variant; light fade-out for the hand-off to the arriving message),
+  and wiring through `Composer`/`VoiceRecorder`/`ChatScreen`/`App`.
+  `encryptMessage`/`decryptMessage` reused for the sealed `{state}` payload — no
+  new crypto primitive, no server change. Verified: `npm run typecheck` clean, 92
+  vitest tests pass (9 new for `presenceState`), `npm run build` green. Visual
+  eyeball (dev `?screen=chat` renders the indicator) + a live two-browser
+  round-trip still want a manual look — no browser-automation tool in this
+  environment, as in prior phases.
