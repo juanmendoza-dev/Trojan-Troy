@@ -22,6 +22,9 @@ interface ChatScreenProps {
   messages: ChatMessage[];
   ghostMode: boolean;
   onGhostModeChange: (next: boolean) => void;
+  contactsOnly: boolean;
+  onContactsOnlyChange: (next: boolean) => void;
+  onOpenContacts: () => void;
   peerPresence: PresenceState;
   onPresence: (state: PresenceState) => void;
   onSend: (text: string) => void;
@@ -58,6 +61,9 @@ export function ChatScreen({
   messages,
   ghostMode,
   onGhostModeChange,
+  contactsOnly,
+  onContactsOnlyChange,
+  onOpenContacts,
   peerPresence,
   onPresence,
   onSend,
@@ -100,6 +106,12 @@ export function ChatScreen({
           safetyNumber={safetyNumber}
           ghostMode={ghostMode}
           onGhostModeChange={onGhostModeChange}
+          contactsOnly={contactsOnly}
+          onContactsOnlyChange={onContactsOnlyChange}
+          onOpenContacts={() => {
+            setSettingsOpen(false);
+            onOpenContacts();
+          }}
           onLeave={onLeave}
           onClose={() => setSettingsOpen(false)}
         />

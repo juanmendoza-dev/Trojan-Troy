@@ -6,6 +6,8 @@ interface SafetyNumberScreenProps {
   roomCode: string;
   safetyNumber: string;
   onVerified: () => void;
+  recognized?: boolean;
+  contactName?: string;
 }
 
 const TICKER_TEXT = "END-TO-END ENCRYPTED · ZERO KNOWLEDGE RELAY · KEYS STAY ON DEVICE · ";
@@ -27,7 +29,13 @@ function prefersReducedMotion(): boolean {
 // "Confirm Key" — compare the shared safety number, then drag the knob to seal
 // the channel. Ported 1:1 from ui/Confirm Key.html into React (orbs + gradient
 // backdrop come from HandshakeJourney, so this paints only the foreground).
-export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: SafetyNumberScreenProps) {
+export function SafetyNumberScreen({
+  roomCode,
+  safetyNumber,
+  onVerified,
+  recognized,
+  contactName,
+}: SafetyNumberScreenProps) {
   const groups = safetyNumber.trim().split(/\s+/).filter(Boolean);
 
   const [progress, setProgress] = useState(0);
@@ -183,6 +191,61 @@ export function SafetyNumberScreen({ roomCode, safetyNumber, onVerified }: Safet
   const trailOpacity = sealed ? 0 : 1;
   const labelOpacity = Math.max(0, 1 - progress * 2);
   const phase: Phase = sealed ? "sealed" : mismatch ? "mismatch" : "verify";
+
+  // Recognized-contact fast path: their identity key matches one we've already
+  // verified, so skip the manual compare and just confirm (key-based
+  // recognition — see the contacts-privacy spec).
+  if (recognized) {
+    return (
+      <div className="confirm-key">
+        <div className="confirm-key__top">
+          <div className="confirm-key__status" data-phase="sealed">
+            <span>✓</span>
+            <span>ALREADY VERIFIED</span>
+          </div>
+          <div className="confirm-key__room">Room {roomCode}</div>
+        </div>
+        <div className="confirm-key__center">
+          <h1 className="confirm-key__title">Reconnected with {contactName || "a saved contact"}</h1>
+          <p className="confirm-key__subtitle">
+            Their identity key matches the one you verified before — no need to check the number
+            again.
+          </p>
+          <div className="confirm-key__card">
+            <div className="confirm-key__grid">
+              {groups.map((group, index) => (
+                <span
+                  key={index}
+                  className="confirm-key__group"
+                  style={{ animationDelay: `${0.2 + index * 0.05}s` }}
+                >
+                  {group}
+                </span>
+              ))}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onVerified}
+            style={{
+              marginTop: 22,
+              padding: "13px 30px",
+              borderRadius: 12,
+              border: "1px solid rgba(143,166,255,0.5)",
+              background: "rgba(143,166,255,0.16)",
+              color: "#dfe4ff",
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Continue to chat
+          </button>
+          <p className="confirm-key__reassurance">This number never leaves your device.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="confirm-key" style={{ transform: shakeTransform() }}>

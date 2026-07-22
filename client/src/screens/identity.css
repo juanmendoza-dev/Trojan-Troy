@@ -1,0 +1,194 @@
+/* Shared styling for the identity screens (Setup, Unlock, Contacts) — matches
+   the app's dark Iris-Glass world without depending on HandshakeJourney. */
+
+.id-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  box-sizing: border-box;
+  background: radial-gradient(1200px 800px at 50% -10%, #1a1f3a 0%, #0b0e1c 60%, #070912 100%);
+  color: #e8eaf2;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.id-screen--overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: auto;
+}
+
+.id-card {
+  width: 100%;
+  max-width: 460px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(143, 166, 255, 0.18);
+  border-radius: 20px;
+  padding: 32px;
+  backdrop-filter: blur(12px);
+}
+
+.id-card__title {
+  font-size: 22px;
+  font-weight: 650;
+  margin: 0 0 6px;
+}
+.id-card__subtitle {
+  font-size: 14px;
+  color: #9aa3c0;
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+.id-label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8fa6ff;
+  margin: 18px 0 8px;
+}
+
+.id-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(143, 166, 255, 0.25);
+  background: rgba(0, 0, 0, 0.25);
+  color: #e8eaf2;
+  font-size: 15px;
+  outline: none;
+}
+.id-input:focus {
+  border-color: #8fa6ff;
+}
+textarea.id-input {
+  resize: vertical;
+  min-height: 88px;
+  font-family: ui-monospace, "SF Mono", monospace;
+}
+
+.id-button {
+  width: 100%;
+  margin-top: 20px;
+  padding: 13px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #8fa6ff, #6f7dff);
+  color: #0b0e1c;
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.id-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.id-button--ghost {
+  background: transparent;
+  border: 1px solid rgba(143, 166, 255, 0.35);
+  color: #cdd4f0;
+}
+
+.id-link {
+  display: block;
+  background: none;
+  border: none;
+  color: #8fa6ff;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  margin-top: 16px;
+}
+.id-error {
+  color: #ff9a9a;
+  font-size: 13px;
+  margin-top: 12px;
+}
+.id-hint {
+  color: #9aa3c0;
+  font-size: 12px;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.id-code {
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 13px;
+  word-break: break-all;
+  line-height: 1.6;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(143, 166, 255, 0.2);
+  color: #cdd4f0;
+}
+
+.id-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.id-contact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(143, 166, 255, 0.14);
+}
+.id-contact__name {
+  font-weight: 600;
+  font-size: 15px;
+}
+.id-contact__meta {
+  font-size: 12px;
+  color: #9aa3c0;
+  font-family: ui-monospace, "SF Mono", monospace;
+  margin-top: 3px;
+}
+.id-contact__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.id-chip {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(143, 166, 255, 0.3);
+  background: transparent;
+  color: #cdd4f0;
+  cursor: pointer;
+}
+.id-chip--danger {
+  border-color: rgba(255, 120, 120, 0.4);
+  color: #ff9a9a;
+}
+.id-empty {
+  color: #9aa3c0;
+  font-size: 14px;
+  margin: 16px 0;
+  text-align: center;
+}
+.id-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.id-row .id-input {
+  flex: 1;
+}
+.id-row .id-button {
+  margin-top: 0;
+  width: auto;
+  padding: 11px 16px;
+  white-space: nowrap;
+}
