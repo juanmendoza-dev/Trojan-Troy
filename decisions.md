@@ -41,7 +41,7 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
   (5) Delegated calls: **continuity** is a light overlapping fade of the dots
   bubble into the arriving message (not a full shared-element morph — brittle
   across variable heights, and there's no layout-animation lib; the message's
-  existing `CipherText` decrypt reveal still carries the cipher flavor);
+  existing `DecryptReveal` reveal still carries the payoff);
   **recording variant** = mic glyph + dots labelled "recording audio…";
   **Apple theme** gets a flat grey iMessage-style bubble (not skipped),
   Iris/Pulse get periwinkle glass beads + the currently-unused `glowPulse`

@@ -158,15 +158,15 @@ fade + scale-down (~150ms, reusing the `Crossfade` sensibility) timed to
 overlap the incoming message bubble's own entrance animation — so the eye
 reads one continuous "it was forming, now it's here" beat rather than a hard
 swap. On Iris/Pulse, the arriving message then plays its existing **decrypt
-reveal** (`CipherText`), so the cipher flavor still lands at the payoff even
-though the lead-in is classic dots. A true shared-element morph (the dots
+reveal** (`DecryptReveal` — the width-driven focus sweep on `main`), so that
+reveal still lands at the payoff even though the lead-in is classic dots. A true shared-element morph (the dots
 bubble physically transforming into the message bubble) is deferred as
 polish — it's brittle across variable message heights and this codebase has
 no layout-animation library.
 
 **Reduced motion.** Under `prefers-reduced-motion: reduce`, the dots don't
 bounce and the glow doesn't breathe — a static "typing…" / "recording…"
-bubble is shown instead, matching how `CipherText` and `SafetyNumberScreen`
+bubble is shown instead, matching how `DecryptReveal` and `SafetyNumberScreen`
 already degrade.
 
 ## 7. Ghost Mode, expanded
