@@ -8,6 +8,39 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-22 — Building Phase 5.2 (forward-secrecy ratchet) now, ahead of any
+  remaining 5.1 work, and dropping 5.2's old dependence on persistent-identity
+  keys.** With the UI/features ship-ready, Jay chose to "turn up the complexity"
+  on the backend and strengthen the encryption for the submission (see the
+  `phase-5-security-direction` steer: keep the user-facing flow identical, focus
+  on data handling under the hood). The headline is a **Double Ratchet** — the
+  Signal-style per-message key rotation giving forward secrecy (a stolen key
+  can't read past messages) + post-compromise "self-healing" (a transient
+  compromise heals on the next DH step). Key call: **it does NOT need persistent
+  identity.** `roadmap.md` had 5.2 "built on top of 5.1's identity/ephemeral key
+  split," but persistent identity was retired for Local Profiles, which
+  deliberately left session crypto untouched — so the ratchet is seeded from the
+  existing ephemeral `crypto_kx` handshake instead, making 5.2 independent of 5.1
+  and buildable on today's `main`. This reorders the roadmap (5.2 before the rest
+  of 5.1); Jay green-lit it. Built entirely from primitives already in the shipped
+  `libsodium-wrappers` build (`crypto_scalarmult`, `crypto_aead_xchacha20poly1305`,
+  keyed `crypto_generichash`) — **no new dependency, no `-sumo`** (the Phase 4.7
+  review's note that `crypto_kdf` needs `-sumo` was checked and is wrong for this
+  build; that caveat only applies to `crypto_pwhash`/Argon2, a different feature).
+  The same refactor seals framing (channel/`messageId`/`mimeType` move inside the
+  ciphertext) and pads payloads to size buckets, collapsing the content/signal
+  envelopes into one opaque `msg` type (the relay still forwards it blindly — no
+  server change). This closes review findings H4, M2, M6, L4, H2 and partially
+  B12; the safety number and `crypto_kx` rx/tx separation are preserved unchanged.
+  A separate branch (`fix/relay-dos-limits`) hardens the relay itself
+  (H3/M1/M5/L5) — independent, no crypto. Full design:
+  `docs/superpowers/specs/2026-07-22-phase5.2-forward-secrecy-ratchet-design.md`;
+  plan: `docs/superpowers/plans/2026-07-22-phase5.2-forward-secrecy-ratchet.md`.
+  Deliberately NOT changing: first-contact MITM is still gated by the safety
+  number (the identity/TOFU option that would change the UX was set aside per the
+  steer). Branch: `feat/forward-secrecy-ratchet`. (Decided by: Jay (direction +
+  go-ahead) + Claude (crypto/design/implementation calls))
+
 - **2026-07-22 — Error screen extracted from the retired identity branch and
   shipped to `main` on its own, rather than merging the stranded branch or
   hand-redoing the wiring.** The error screen was already built (commit

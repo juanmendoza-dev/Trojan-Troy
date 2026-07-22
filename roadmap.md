@@ -131,11 +131,20 @@ earlier ones:
       `docs/superpowers/plans/2026-07-22-local-profiles.md`.
       The earlier persistent-identity (5.1) + contacts-privacy (5.1a) build was
       rolled back (`main` @ `1ee0e35`); those specs are shelved, not deleted.
-      NOTE: 5.2 (ratchet) and 5.3 (offline delivery) below were specced on top of
-      persistent identity keys — with identity retired, revisit their design
-      before building (neither is started).
-- [ ] 5.2 — Forward-secrecy ratchet (Double Ratchet-style per-message key
-      rotation), built on top of 5.1's identity/ephemeral key split.
+      NOTE: 5.2 (ratchet) has been re-specced independent of persistent identity
+      (it rides on the existing ephemeral crypto_kx handshake; spec + plan dated
+      2026-07-22) and is now in build on `feat/forward-secrecy-ratchet`. 5.3
+      (offline delivery) was specced on top of persistent identity keys — with
+      identity retired, revisit its design before building (not started).
+- [ ] 5.2 — Forward-secrecy ratchet (Double Ratchet: per-message key rotation →
+      forward secrecy + post-compromise self-healing), seeded from the existing
+      ephemeral crypto_kx handshake — independent of Local Profiles / retired
+      persistent identity, not built on top of it. Also seals framing
+      (channel/messageId/mimeType inside the ciphertext) and pads to size
+      buckets; collapses content/signal envelopes into one opaque `msg` (no
+      server change). Spec:
+      docs/superpowers/specs/2026-07-22-phase5.2-forward-secrecy-ratchet-design.md;
+      plan: docs/superpowers/plans/2026-07-22-phase5.2-forward-secrecy-ratchet.md.
 - [ ] 5.3 — Encrypted offline delivery: server holds ciphertext for a peer
       who isn't currently connected, addressed via 5.1's persistent
       identity, instead of dropping it.
