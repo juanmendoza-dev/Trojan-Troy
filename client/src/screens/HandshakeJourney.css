@@ -1,7 +1,14 @@
 /* client/src/screens/HandshakeJourney.css */
 .handshake-journey {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Visual-viewport height (published by useAppHeight) so the soft keyboard
+     shrinks the journey and the chat composer rides above it; 100dvh fallback.
+     Child screens (TitleBar/Composer/SafetyNumber) own their safe-area padding;
+     this stays full-bleed for the gradient + orbs. */
+  height: var(--app-height, 100dvh);
   background: linear-gradient(160deg, #0D0F18 0%, #101223 100%);
 }
 .handshake-journey[data-active-screen="chat"] .ambient-orbs__orb {
