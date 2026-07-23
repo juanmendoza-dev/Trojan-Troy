@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trojan Troy — multilingual tagline · motion preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400..800&family=JetBrains+Mono:wght@400..600&display=swap" rel="stylesheet" />
+<style>
+  /* Disposable preview — mirrors the real Iris Glass tokens so the motion
+     reads the way it will in the app. Not shipped; delete when done. */
+  :root{
+    --accent:#8FA6FF; --bg1:#0d0f18; --bg2:#101223;
+    --text:#E8EAF2; --text2:#9BA1B5; --text3:#5E6478;
+    --popover:#171a2b; --border:rgba(255,255,255,.09);
+    --line:#dfe4f5;
+    --blockh:104px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    min-height:100vh;
+    background:linear-gradient(135deg,var(--bg1) 0%,var(--bg2) 100%);
+    color:var(--text);
+    font-family:'Schibsted Grotesk',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:44px 24px 80px;
+  }
+  .wrap{max-width:920px;margin:0 auto}
+
+  /* ── context header: where the tagline lives ─────────────── */
+  .head{text-align:center;margin-bottom:8px}
+  .badge{
+    font-size:11px;font-weight:500;letter-spacing:2.5px;text-transform:uppercase;
+    color:var(--text3);display:inline-flex;align-items:center;gap:9px;margin-bottom:26px;
+  }
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 0 rgba(143,166,255,.5);animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(143,166,255,.5)}50%{opacity:.55;box-shadow:0 0 0 5px rgba(143,166,255,0)}}
+  .wordmark{margin:0;font-size:52px;font-weight:800;letter-spacing:-1.4px;line-height:.98}
+  .wordmark .period{color:var(--accent)}
+  .sub{margin:14px 0 0;color:var(--text2);font-size:13px}
+  .sub b{color:var(--accent);font-weight:600}
+
+  .hint{
+    text-align:center;margin:34px 0 22px;color:var(--text2);font-size:13px;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.3px;
+  }
+  .hint b{color:var(--text)}
+
+  /* ── the four numbered motion cards ──────────────────────── */
+  .cards{display:flex;flex-direction:column;gap:18px}
+  .card{
+    border:1px solid var(--border);border-radius:16px;
+    background:rgba(255,255,255,.018);
+    padding:18px 22px 8px;
+  }
+  .card-head{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+  .num{
+    flex:none;width:26px;height:26px;border-radius:50%;
+    display:grid;place-items:center;font-size:13px;font-weight:700;
+    color:var(--accent);border:1px solid rgba(143,166,255,.4);
+    background:rgba(143,166,255,.08);
+  }
+  .title{font-size:15px;font-weight:600}
+  .desc{color:var(--text3);font-size:12.5px;margin-left:auto;font-family:'JetBrains Mono',monospace}
+
+  /* the hover target: fixed-height so long languages don't jump the layout */
+  .line-area{
+    height:var(--blockh);
+    display:flex;align-items:center;justify-content:center;
+    text-align:center;position:relative;cursor:default;
+  }
+  .line{
+    font-size:25px;font-weight:500;line-height:1.34;color:var(--line);
+    max-width:820px;padding:0 6px;will-change:opacity,transform,filter;
+  }
+  .line-area.odo{overflow:hidden}
+  .odo-track{display:flex;flex-direction:column}
+  .odo-cell{height:var(--blockh);display:flex;align-items:center;justify-content:center;
+    font-size:25px;font-weight:500;line-height:1.34;color:var(--line);max-width:820px;padding:0 6px}
+
+  /* focus-sweep accent edge */
+  .sweep-edge{
+    position:absolute;top:8%;bottom:8%;width:46px;left:-8%;pointer-events:none;opacity:0;
+    background:linear-gradient(90deg,transparent,rgba(143,166,255,.65),transparent);
+    filter:blur(1px);
+    box-shadow:0 0 22px 6px rgba(143,166,255,.35);
+  }
+
+  /* ── the shared cursor tooltip — the exact .viz-tip box ──── */
+  .viz-tip{
+    position:fixed;z-index:2000;left:0;top:0;transform:translate(14px,14px);
+    pointer-events:none;padding:6px 11px;border-radius:8px;
+    background:var(--popover);border:1px solid var(--border);color:var(--text);
+    font-size:12px;white-space:nowrap;opacity:0;transition:opacity .15s ease;
+    box-shadow:0 8px 24px rgba(0,0,0,.35);
+    display:flex;align-items:center;gap:9px;
+  }
+  .viz-tip.is-visible{opacity:1}
+  .viz-tip img{width:20px;height:14px;border-radius:2.5px;object-fit:cover;
+    box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+  .viz-tip .tnat{color:var(--text2)}
+
+  .foot{margin-top:40px;color:var(--text3);font-size:12px;line-height:1.7;text-align:center;
+    font-family:'JetBrains Mono',monospace}
+  .foot b{color:var(--text2);font-weight:500}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="badge"><span class="dot"></span>Clear to talk</div>
+    <h1 class="wordmark">Trojan Troy<span class="period">.</span></h1>
+    <p class="sub">New tagline: <b>“Give up privacy for safety, and you will lose both.”</b> — cycling through the world's languages.</p>
+  </div>
+
+  <div class="hint">hover any line → <b>language + flag</b> &nbsp;·&nbsp; pick the motion by <b>number</b></div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="foot">
+    <b>Motion 1</b> crossfade + drift &nbsp;·&nbsp; <b>2</b> decrypt focus-sweep &nbsp;·&nbsp; <b>3</b> odometer roll &nbsp;·&nbsp; <b>4</b> blur focus-pull<br>
+    translations are AI-drafted &amp; provisional (want a native pass before ship) · flags via flagcdn for the preview; real build = bundled SVGs<br>
+    RTL scripts (Arabic, Hebrew) render right-to-left · reduced-motion + screen-reader handling comes in the real component
+  </div>
+</div>
+
+<script>
+/* ── the languages (English is the anchor) ───────────────────
+   text = the aphorism · code = flagcdn country · rtl for Arabic/Hebrew   */
+const LANGS = [
+  {name:"English",    native:"English",   code:"gb", rtl:false, text:"Give up privacy for safety, and you will lose both."},
+  {name:"Spanish",    native:"Español",   code:"es", rtl:false, text:"Renuncia a la privacidad por seguridad y perderás ambas."},
+  {name:"French",     native:"Français",  code:"fr", rtl:false, text:"Renoncez à la vie privée pour la sécurité, et vous perdrez les deux."},
+  {name:"German",     native:"Deutsch",   code:"de", rtl:false, text:"Gib die Privatsphäre für Sicherheit auf, und du verlierst beides."},
+  {name:"Arabic",     native:"العربية",   code:"sa", rtl:true,  text:"تخلَّ عن الخصوصية مقابل الأمان، وستخسر كليهما."},
+  {name:"Korean",     native:"한국어",     code:"kr", rtl:false, text:"안전을 위해 사생활을 포기하면 둘 다 잃게 됩니다."},
+  {name:"Russian",    native:"Русский",   code:"ru", rtl:false, text:"Откажитесь от приватности ради безопасности — и потеряете и то, и другое."},
+  {name:"Japanese",   native:"日本語",     code:"jp", rtl:false, text:"安全のためにプライバシーを手放せば、その両方を失う。"},
+  {name:"Chinese",    native:"中文",       code:"cn", rtl:false, text:"为了安全放弃隐私，你将失去两者。"},
+  {name:"Hindi",      native:"हिन्दी",     code:"in", rtl:false, text:"सुरक्षा के लिए निजता छोड़ेंगे तो दोनों खो देंगे।"},
+  {name:"Portuguese", native:"Português",  code:"pt", rtl:false, text:"Abra mão da privacidade pela segurança e perderá ambas."},
+  {name:"Hebrew",     native:"עברית",      code:"il", rtl:true,  text:"ותרו על הפרטיות למען הביטחון — ותאבדו את שניהם."},
+  {name:"Greek",      native:"Ελληνικά",   code:"gr", rtl:false, text:"Θυσιάστε την ιδιωτικότητα για ασφάλεια, και θα χάσετε και τα δύο."}
+];
+
+const CYCLE_MS = 3000;
+
+/* shared cursor tooltip — same box as the chat visualizers (.viz-tip) */
+const tip = document.createElement("div");
+tip.className = "viz-tip";
+document.body.appendChild(tip);
+function showTip(L){
+  const nat = L.native && L.native !== L.name ? `<span class="tnat">${L.native}</span>` : "";
+  tip.innerHTML = `<img src="https://flagcdn.com/${L.code}.svg" alt=""><span>${L.name}</span>${nat}`;
+  tip.classList.add("is-visible");
+}
+function moveTip(x,y){ tip.style.left = x+"px"; tip.style.top = y+"px"; }
+function hideTip(){ tip.classList.remove("is-visible"); }
+
+function setText(el,L){ el.textContent = L.text; el.dir = L.rtl ? "rtl" : "ltr"; }
+
+/* ── the four motions ── each init(area) returns apply(L) ──── */
+const STYLES = {
+  // 1 · crossfade + drift
+  crossfade(area){
+    const el = document.createElement("div"); el.className="line"; area.appendChild(el);
+    return (L)=>{
+      if(!el.textContent){ setText(el,L); el.style.opacity=0; requestAnimationFrame(()=>{ el.style.transition="opacity .3s ease"; el.style.opacity=1; }); return; }
+      el.style.transition="opacity .28s ease, transform .28s ease";
+      el.style.opacity=0; el.style.transform="translateY(-10px)";
+      clearTimeout(el._t); el._t=setTimeout(()=>{
+        setText(el,L); el.style.transition="none"; el.style.transform="translateY(10px)";
+        requestAnimationFrame(()=>{ el.style.transition="opacity .3s ease, transform .3s cubic-bezier(.2,.9,.3,1)"; el.style.opacity=1; el.style.transform="translateY(0)"; });
+      },280);
+    };
+  },
+  // 2 · decrypt focus-sweep (blur→sharp + accent edge, like DecryptReveal)
+  sweep(area){
+    const el = document.createElement("div"); el.className="line"; area.appendChild(el);
+    const edge = document.createElement("div"); edge.className="sweep-edge"; area.appendChild(edge);
+    return (L)=>{
+      setText(el,L);
+      el.style.transition="none"; el.style.filter="blur(10px)"; el.style.opacity=".35";
+      edge.style.transition="none"; edge.style.opacity="0"; edge.style.left = L.rtl ? "108%" : "-8%";
+      requestAnimationFrame(()=>{
+        el.style.transition="filter .56s ease, opacity .56s ease"; el.style.filter="blur(0)"; el.style.opacity="1";
+        edge.style.transition="left .56s cubic-bezier(.4,0,.2,1), opacity .56s ease"; edge.style.opacity="1"; edge.style.left = L.rtl ? "-8%" : "108%";
+        setTimeout(()=>{ edge.style.opacity="0"; },420);
+      });
+    };
+  },
+  // 3 · odometer roll (split-flap)
+  odometer(area){
+    area.classList.add("odo");
+    const track = document.createElement("div"); track.className="odo-track"; area.appendChild(track);
+    let cur=null, busy=false, pending=null;
+    const cell=(L)=>{ const d=document.createElement("div"); d.className="odo-cell"; d.textContent=L.text; d.dir=L.rtl?"rtl":"ltr"; return d; };
+    function apply(L){
+      if(!cur){ cur=cell(L); track.appendChild(cur); return; }
+      if(busy){ pending=L; return; }
+      busy=true;
+      const next=cell(L); track.appendChild(next);
+      const h=area.clientHeight;
+      track.style.transition="transform .5s cubic-bezier(.2,.9,.3,1)";
+      requestAnimationFrame(()=>{ track.style.transform="translateY(-"+h+"px)"; });
+      const done=()=>{ track.removeEventListener("transitionend",done);
+        track.style.transition="none"; track.style.transform="translateY(0)";
+        track.removeChild(cur); cur=next; busy=false;
+        if(pending){ const p=pending; pending=null; apply(p); } };
+      track.addEventListener("transitionend",done);
+    }
+    return apply;
+  },
+  // 4 · blur focus-pull (non-directional camera focus)
+  blur(area){
+    const el = document.createElement("div"); el.className="line"; area.appendChild(el);
+    return (L)=>{
+      if(!el.textContent){ setText(el,L); el.style.opacity=0; el.style.filter="blur(6px)"; requestAnimationFrame(()=>{ el.style.transition="opacity .42s ease, filter .42s ease"; el.style.opacity=1; el.style.filter="blur(0)"; }); return; }
+      el.style.transition="opacity .3s ease, filter .3s ease, transform .3s ease";
+      el.style.opacity=0; el.style.filter="blur(6px)"; el.style.transform="scale(1.06)";
+      clearTimeout(el._t); el._t=setTimeout(()=>{
+        setText(el,L); el.style.transition="none"; el.style.filter="blur(6px)"; el.style.transform="scale(.96)"; el.style.opacity=0;
+        requestAnimationFrame(()=>{ el.style.transition="opacity .44s ease, filter .44s ease, transform .44s cubic-bezier(.2,.9,.3,1)"; el.style.opacity=1; el.style.filter="blur(0)"; el.style.transform="scale(1)"; });
+      },300);
+    };
+  }
+};
+
+/* ── build the cards + wire the shared clock ─────────────── */
+const DEFS = [
+  {n:1, key:"crossfade", title:"Crossfade + drift",     desc:"quiet · minimal"},
+  {n:2, key:"sweep",     title:"Decrypt focus-sweep",   desc:"on-brand · cipher motif"},
+  {n:3, key:"odometer",  title:"Odometer roll",         desc:"mechanical · kinetic"},
+  {n:4, key:"blur",      title:"Blur focus-pull",       desc:"soft · non-directional"}
+];
+
+const subs=[]; let g=0;
+const cardsEl=document.getElementById("cards");
+
+for(const d of DEFS){
+  const card=document.createElement("div"); card.className="card";
+  card.innerHTML=`<div class="card-head"><span class="num">${d.n}</span><span class="title">${d.title}</span><span class="desc">${d.desc}</span></div>`;
+  const area=document.createElement("div"); area.className="line-area"; card.appendChild(area);
+  cardsEl.appendChild(card);
+
+  const apply=STYLES[d.key](area);
+  let shown=0, frozen=false;
+  const render=(i)=>{ shown=i; apply(LANGS[i]); };
+  subs.push((i)=>{ if(!frozen) render(i); });
+
+  area.addEventListener("mouseenter",()=>{ frozen=true; showTip(LANGS[shown]); });
+  area.addEventListener("mousemove",e=>moveTip(e.clientX,e.clientY));
+  area.addEventListener("mouseleave",()=>{ frozen=false; hideTip(); if(shown!==g) render(g); });
+  render(0);
+}
+
+setInterval(()=>{ g=(g+1)%LANGS.length; for(const s of subs) s(g); }, CYCLE_MS);
+</script>
+</body>
+</html>
