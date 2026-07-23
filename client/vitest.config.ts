@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
@@ -9,5 +9,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Vitest's default glob also matches *.spec.ts; keep it from trying to run
+    // the Playwright specs under e2e/ (those use @playwright/test, not vitest).
+    exclude: [...configDefaults.exclude, "e2e/**"],
   },
 });

@@ -8,7 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report",
+    "pw:install": "playwright install chromium webkit"
   },
   "dependencies": {
     "@noble/post-quantum": "^0.6.1",
@@ -18,6 +23,7 @@
     "react-dom": "^18.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/libsodium-wrappers": "^0.7.14",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
