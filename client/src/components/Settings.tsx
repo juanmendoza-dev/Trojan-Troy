@@ -99,9 +99,12 @@ export function Settings({
         <div className="settings__section">
           <div className="settings__section-label">About</div>
           <p className="settings__about-text">
-            Trojan Troy encrypts every message and voice note end-to-end. The relay only ever sees
-            ciphertext — your keys never leave this device. The safety number above verifies this
-            session; if it ever changes unexpectedly, don't trust the connection.
+            Trojan Troy encrypts every message and voice note end-to-end — the relay only ever sees
+            padded ciphertext, and your keys never leave this device. Every message gets its own key,
+            discarded right after (a Double Ratchet), so a stolen key can't unlock past messages, and
+            the connection re-secures itself after a compromise. The relay can still tell that you're
+            chatting and roughly how much, but never what's said. The safety number above verifies
+            this session; if it ever changes unexpectedly, don't trust the connection.
           </p>
         </div>
 

@@ -22,7 +22,7 @@ and `decisions.md` for why things were done a certain way.
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
 | 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
-| 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | In progress on `feat/forward-secrecy-ratchet` — Tasks 0-6 done: crypto foundation + `msg` wire format + `App.tsx` wired onto the ratchet (host-primer so either side can send first). typecheck clean, 156/156 tests, build green, throwaway protocol pass clean. Remaining: manual two-browser acceptance, docs (Task 7), relay hardening (Track B). See the log entry below + the plan's BUILD STATUS banner. |
+| 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | Ratchet track (Tasks 0-7) shipped to `main` (`683d3a3`, fast-forward) — Double Ratchet + sealed `msg` framing + padding + host-primer, plus honest about/security copy. typecheck/156 tests/build green; two-browser smoke (text both ways + joiner-first) confirmed live. Remaining: relay hardening (Track B, its own branch `fix/relay-dos-limits`) + a fuller voice/receipts/presence eyeball. |
 
 ## Log
 
@@ -583,3 +583,21 @@ and `decisions.md` for why things were done a certain way.
   manual two-browser acceptance (no browser-automation tool here, as every prior phase)
   and Task 7 (honest about/security copy). `crypto/messages.ts` / `media.ts` /
   `secretbox.ts` are now unused by the live path (kept for possible Layer-B history).
+
+- **2026-07-23** — Phase 5.2 ratchet track **shipped to `main`** (`683d3a3`,
+  fast-forward) + **Task 7** (honest security copy). After a two-browser smoke test
+  confirmed messages flow normally and — the key primer case — the joiner can send the
+  first message, the branch fast-forward-merged to `main` (Jay's call: merge now, copy
+  as an immediate follow-up). Task 7 updated the Settings → About blurb to state forward
+  secrecy honestly ("every message gets its own key, discarded right after… a stolen key
+  can't unlock past messages, and the connection re-secures itself after a compromise")
+  while keeping the residual honest ("the relay can still tell that you're chatting and
+  roughly how much, but never what's said") — no overselling. roadmap 5.2 checked. What
+  shipped: per-message forward secrecy + post-compromise self-healing, sealed framing
+  (channel/id/mimeType inside the ciphertext), size-bucket padding, one opaque `msg`
+  envelope, sealed unforgeable receipts, an H2 re-key guard, `PROTOCOL_VERSION`
+  negotiation, and zeroize-on-leave — closing review findings H4, M2, M6, L4, H2 and
+  partially B12, all with no server change. **Remaining for the 5.2 cluster:** Track B
+  (relay DoS/lifecycle hardening — H3/M1/M5/L5 — on its own branch `fix/relay-dos-limits`,
+  no crypto), and a fuller manual eyeball of voice + receipts + presence + profile
+  sharing (text + joiner-first were confirmed; no browser-automation tool here).

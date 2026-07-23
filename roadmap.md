@@ -136,7 +136,7 @@ earlier ones:
       2026-07-22) and is now in build on `feat/forward-secrecy-ratchet`. 5.3
       (offline delivery) was specced on top of persistent identity keys — with
       identity retired, revisit its design before building (not started).
-- [ ] 5.2 — Forward-secrecy ratchet (Double Ratchet: per-message key rotation →
+- [x] 5.2 — Forward-secrecy ratchet (Double Ratchet: per-message key rotation →
       forward secrecy + post-compromise self-healing), seeded from the existing
       ephemeral crypto_kx handshake — independent of Local Profiles / retired
       persistent identity, not built on top of it. Also seals framing
