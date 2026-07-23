@@ -7,9 +7,10 @@ describe("computeSafetyNumber", () => {
     await sodium.ready;
     const a = sodium.randombytes_buf(32);
     const b = sodium.randombytes_buf(32);
+    const rk = sodium.randombytes_buf(32);
 
-    const ab = await computeSafetyNumber(a, b);
-    const ba = await computeSafetyNumber(b, a);
+    const ab = await computeSafetyNumber(a, b, rk);
+    const ba = await computeSafetyNumber(b, a, rk);
 
     expect(ab).toBe(ba);
   });
@@ -18,8 +19,9 @@ describe("computeSafetyNumber", () => {
     await sodium.ready;
     const a = sodium.randombytes_buf(32);
     const b = sodium.randombytes_buf(32);
+    const rk = sodium.randombytes_buf(32);
 
-    const result = await computeSafetyNumber(a, b);
+    const result = await computeSafetyNumber(a, b, rk);
 
     expect(result).toMatch(/^(\d{5} )*\d{5}$/);
   });
@@ -29,10 +31,24 @@ describe("computeSafetyNumber", () => {
     const a = sodium.randombytes_buf(32);
     const b = sodium.randombytes_buf(32);
     const c = sodium.randombytes_buf(32);
+    const rk = sodium.randombytes_buf(32);
 
-    const ab = await computeSafetyNumber(a, b);
-    const ac = await computeSafetyNumber(a, c);
+    const ab = await computeSafetyNumber(a, b, rk);
+    const ac = await computeSafetyNumber(a, c, rk);
 
     expect(ab).not.toBe(ac);
+  });
+
+  it("changes when the root key changes, even for the same key pair (downgrade/MITM detector)", async () => {
+    await sodium.ready;
+    const a = sodium.randombytes_buf(32);
+    const b = sodium.randombytes_buf(32);
+    const rk1 = sodium.randombytes_buf(32);
+    const rk2 = sodium.randombytes_buf(32);
+
+    const withRk1 = await computeSafetyNumber(a, b, rk1);
+    const withRk2 = await computeSafetyNumber(a, b, rk2);
+
+    expect(withRk1).not.toBe(withRk2);
   });
 });
