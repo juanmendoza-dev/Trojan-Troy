@@ -22,7 +22,7 @@ and `decisions.md` for why things were done a certain way.
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
 | 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
-| 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | In progress on `feat/forward-secrecy-ratchet` — crypto foundation (Tasks 0-4: aead/kdf/framing/ratchet) built + committed, 150/150 client tests green; wire format + App wiring (Tasks 5-7) + relay hardening (Track B) remain. See the log entry below + the plan's BUILD STATUS banner. |
+| 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | In progress on `feat/forward-secrecy-ratchet` — crypto foundation + `msg` wire format (Tasks 0-5: aead/kdf/framing/ratchet + envelope collapse/ratchetSession) built + committed, 156/156 client tests green; App wiring (Task 6) + docs (Task 7) + relay hardening (Track B) remain. `npm run typecheck` red (App.tsx only) until Task 6. See the log entry below + the plan's BUILD STATUS banner. |
 
 ## Log
 
@@ -534,3 +534,28 @@ and `decisions.md` for why things were done a certain way.
   still runs per-file. No live two-browser round-trip yet (that's Task 6's manual
   acceptance) — no browser-automation tool in this environment, as in every prior
   phase.
+
+- **2026-07-23** — Phase 5.2 **Task 5 done** (`63a4b08`, pushed): the wire format +
+  session binding. `net/relayClient.ts`'s `Envelope` union now collapses the
+  post-handshake `ciphertext`/`voice`/`presence`/`profile`/`delivered`/`read` types
+  into one opaque `{ type:"msg", c, header?, payload }` (`c`: 0=content, 1=presence,
+  2=ack, 3=profile), adds `v` to `pubkey` + exports `PROTOCOL_VERSION = 2`, and
+  re-exports `RatchetHeader`. New `protocol/ratchetSession.ts` binds the ratchet +
+  static directional subkeys to a session: `initSession` (initiator → `initAlice`
+  against the peer's handshake key; responder → `initBob` reusing his own handshake
+  keypair), `sealContent` (ratcheted, `c:0`), `sealStatic` (presence/ack/profile,
+  sealed under a per-channel subkey with the channel name as AAD), `openMsg` (decrypt
+  + `unframe`; throws so the caller drops — the ratchet's transactional decrypt keeps
+  the live session intact on a bad packet). 6 new `ratchetSession` tests (content /
+  voice / each static channel round-trips; content-relabeled-as-static dropped;
+  presence-relabeled-as-ack dropped; corrupt payload dropped with the session still
+  usable) + the 3 stale `relayClient` tests rewritten to `msg`. Full suite **156/156**;
+  `npm run typecheck` intentionally RED on **`App.tsx` only** (still on the old
+  envelope types) until Task 6 — vitest green. **Resume at Task 6** (`App.tsx` wiring:
+  seed the session in `exchangeKeys`, route send/receive through `ratchetSession`,
+  static subkeys for presence/ack/profile, the H2 re-key guard, zeroize on leave).
+  **Flag for Task 6:** by the Double Ratchet's design the responder has *no sending
+  chain until he receives the initiator's first content message* — so a joiner who
+  sends the very first text before receiving anything hits "no sending chain yet."
+  Confirm the two-browser acceptance sends initiator-first, or handle the
+  send-before-receive case explicitly.
