@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateKeypair, deriveSessionKeys } from "../crypto/keys";
+import { generateKemKeypair, kemEncapsulate, kemDecapsulate } from "../crypto/pqkem";
 import { frame } from "../crypto/framing";
 import type { Envelope } from "../net/relayClient";
 import { initSession, sealContent, sealStatic, openMsg, type SessionCrypto } from "./ratchetSession";
@@ -13,20 +14,31 @@ function asMsg(env: Envelope): Msg {
   return env;
 }
 
-// Pair two sessions the way App.tsx will: a real crypto_kx handshake, then the
-// initiator seeds against the responder's handshake pubkey while the responder
-// reuses his handshake keypair as his initial ratchet key.
+// Pair two sessions the way App.tsx will: a real crypto_kx handshake plus a real
+// ML-KEM-768 exchange (the responder holds the KEM keypair; the initiator
+// encapsulates to it), then the initiator seeds against the responder's handshake
+// pubkey while the responder reuses his handshake keypair as his initial ratchet
+// key. Both sides feed the same PQ secret into the hybrid root key.
 async function pair(): Promise<{ a: SessionCrypto; b: SessionCrypto }> {
   const alice = await generateKeypair();
   const bob = await generateKeypair();
   const aliceKeys = await deriveSessionKeys(alice, bob.publicKey, "initiator");
   const bobKeys = await deriveSessionKeys(bob, alice.publicKey, "responder");
-  const a = await initSession(aliceKeys, "initiator", alice, bob.publicKey);
-  const b = await initSession(bobKeys, "responder", bob, alice.publicKey);
+  const bobKem = generateKemKeypair();
+  const { cipherText, sharedSecret: pqAlice } = kemEncapsulate(bobKem.publicKey);
+  const pqBob = kemDecapsulate(cipherText, bobKem.secretKey);
+  const a = await initSession(aliceKeys, "initiator", alice, bob.publicKey, pqAlice);
+  const b = await initSession(bobKeys, "responder", bob, alice.publicKey, pqBob);
   return { a, b };
 }
 
 describe("ratchetSession", () => {
+  it("derives an identical hybrid root key on both sides", async () => {
+    const { a, b } = await pair();
+    expect(a.rootKey.length).toBe(32);
+    expect(Array.from(a.rootKey)).toEqual(Array.from(b.rootKey));
+  });
+
   it("round-trips a content message and a reply", async () => {
     const { a, b } = await pair();
 

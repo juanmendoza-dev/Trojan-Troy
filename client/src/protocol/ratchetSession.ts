@@ -30,6 +30,9 @@ export interface SessionCrypto {
   ratchet: RatchetState;
   txSub: Record<StaticChannel, Uint8Array>;
   rxSub: Record<StaticChannel, Uint8Array>;
+  // The initial hybrid root key. Kept so the safety number can bind to the
+  // derived session (see crypto/safetyNumber.ts); zeroized on leave.
+  rootKey: Uint8Array;
 }
 
 const STATIC_CHANNELS: StaticChannel[] = ["presence", "ack", "profile"];
@@ -64,9 +67,10 @@ export async function initSession(
   sessionKeys: SessionKeys,
   role: "initiator" | "responder",
   ownKeypair: KeyPair,
-  peerPublicKey: Uint8Array
+  peerPublicKey: Uint8Array,
+  pqSecret: Uint8Array
 ): Promise<SessionCrypto> {
-  const rk0 = await deriveRootKey(sessionKeys.rx, sessionKeys.tx);
+  const rk0 = await deriveRootKey(sessionKeys.rx, sessionKeys.tx, pqSecret);
   const ratchet =
     role === "initiator"
       ? await initAlice(rk0, peerPublicKey)
@@ -75,6 +79,7 @@ export async function initSession(
     ratchet,
     txSub: await deriveSubkeys(sessionKeys.tx),
     rxSub: await deriveSubkeys(sessionKeys.rx),
+    rootKey: rk0,
   };
 }
 
