@@ -15,6 +15,15 @@ const ROOM_CODE_LENGTH = 6;
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_ROOMS = 5000;
 
+const ROOM_CODE_RE = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${ROOM_CODE_LENGTH}}$`);
+
+// Structural check for a room code arriving off the wire: a string of exactly
+// the expected length drawn from the code alphabet. Lets the relay reject a
+// malformed `join` before it ever touches the room map. (Review M5.)
+export function isValidRoomCode(value: unknown): value is string {
+  return typeof value === "string" && ROOM_CODE_RE.test(value);
+}
+
 export class RoomManager {
   private rooms = new Map<string, Room>();
   private peerRooms = new Map<Peer, string>();
@@ -40,6 +49,12 @@ export class RoomManager {
   }
 
   createRoom(creator: Peer): string {
+    // One room per peer: if this socket already holds a room, tear it down
+    // first — that clears the prior TTL timer and notifies any real partner —
+    // so a repeated `create` can't strand the earlier room. (Review M5.)
+    if (this.peerRooms.has(creator)) {
+      this.disconnect(creator);
+    }
     let code = this.generateCode();
     while (this.rooms.has(code)) {
       code = this.generateCode();
@@ -53,6 +68,17 @@ export class RoomManager {
   }
 
   joinRoom(code: string, joiner: Peer): { ok: true } | { ok: false; message: string } {
+    // Reject a self-join: a peer already in the target room (e.g. the creator
+    // joining their own code) would otherwise be added as both peers. Checked
+    // before the one-room-per-peer teardown below, which would erase the
+    // evidence. (Review M5.)
+    if (this.peerRooms.get(joiner) === code) {
+      return { ok: false, message: "Cannot join your own room" };
+    }
+    // One room per peer: leave any other room first, same as createRoom.
+    if (this.peerRooms.has(joiner)) {
+      this.disconnect(joiner);
+    }
     const room = this.rooms.get(code);
     if (!room) {
       return { ok: false, message: "Room not found" };

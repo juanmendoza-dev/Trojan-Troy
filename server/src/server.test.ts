@@ -65,7 +65,8 @@ describe("relay server", () => {
 
     const client = new WebSocket(url);
     await waitForOpen(client);
-    client.send(JSON.stringify({ type: "join", roomCode: "NOPE12" }));
+    // A well-formed code (right length + alphabet) that simply doesn't exist.
+    client.send(JSON.stringify({ type: "join", roomCode: "ABCDEF" }));
     const response = await waitForMessage(client);
 
     expect(response).toEqual({ type: "error", message: "Room not found" });
@@ -156,6 +157,90 @@ describe("relay server", () => {
     expect(await cClosed).toBe(1013);
     a.close();
     b.close();
+  });
+
+  it("replies with an error to a malformed join and does not forward it", async () => {
+    server = startRelay(0);
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const missing = new WebSocket(url);
+    await waitForOpen(missing);
+    missing.send(JSON.stringify({ type: "join" }));
+    expect(await waitForMessage(missing)).toEqual({ type: "error", message: "Invalid room code" });
+
+    const badShape = new WebSocket(url);
+    await waitForOpen(badShape);
+    badShape.send(JSON.stringify({ type: "join", roomCode: "nope" }));
+    expect(await waitForMessage(badShape)).toEqual({ type: "error", message: "Invalid room code" });
+
+    missing.close();
+    badShape.close();
+  });
+
+  it("rejects joining your own room", async () => {
+    server = startRelay(0);
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const client = new WebSocket(url);
+    await waitForOpen(client);
+    client.send(JSON.stringify({ type: "create" }));
+    const created = await waitForMessage(client);
+
+    client.send(JSON.stringify({ type: "join", roomCode: created.roomCode }));
+    expect(await waitForMessage(client)).toEqual({
+      type: "error",
+      message: "Cannot join your own room",
+    });
+    client.close();
+  });
+
+  it("does not crash on a null/non-object envelope and stays usable", async () => {
+    server = startRelay(0);
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const client = new WebSocket(url);
+    await waitForOpen(client);
+    client.send("null");
+    client.send(JSON.stringify([1, 2, 3]));
+    // The connection must still work after the malformed frames.
+    client.send(JSON.stringify({ type: "create" }));
+    expect((await waitForMessage(client)).type).toBe("created");
+    client.close();
+  });
+
+  it("still forwards unknown (opaque) envelope types after validation", async () => {
+    server = startRelay(0);
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const alice = new WebSocket(url);
+    await waitForOpen(alice);
+    alice.send(JSON.stringify({ type: "create" }));
+    const roomCode = (await waitForMessage(alice)).roomCode;
+
+    const bob = new WebSocket(url);
+    await waitForOpen(bob);
+    const aliceConnected = waitForMessage(alice);
+    bob.send(JSON.stringify({ type: "join", roomCode }));
+    await waitForMessage(bob);
+    await aliceConnected;
+
+    // The unified opaque "msg" envelope the E2EE layer relies on must pass
+    // through the relay verbatim, untouched by create/join validation.
+    const bobReceives = waitForMessage(bob);
+    const opaque = { type: "msg", c: 0, header: { dh: "x", pn: 0, n: 1 }, payload: "deadbeef" };
+    alice.send(JSON.stringify(opaque));
+    expect(await bobReceives).toEqual(opaque);
+
+    alice.close();
+    bob.close();
   });
 
   it("reaps a connection that stops responding to pings", async () => {

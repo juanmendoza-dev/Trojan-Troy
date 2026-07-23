@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { RoomManager, type Peer } from "./rooms";
+import { RoomManager, isValidRoomCode, type Peer } from "./rooms";
 
 function fakePeer(): Peer & { messages: string[] } {
   const messages: string[] = [];
@@ -111,5 +111,72 @@ describe("RoomManager", () => {
     expect(rooms.atRoomCapacity()).toBe(false);
     rooms.createRoom(fakePeer());
     expect(rooms.atRoomCapacity()).toBe(true);
+  });
+
+  it("drops a peer's previous room when they create a second one", () => {
+    const rooms = new RoomManager();
+    const creator = fakePeer();
+
+    const first = rooms.createRoom(creator);
+    const second = rooms.createRoom(creator);
+
+    expect(first).not.toBe(second);
+    expect(rooms.hasRoom(first)).toBe(false); // no orphaned room / leaked timer
+    expect(rooms.hasRoom(second)).toBe(true);
+  });
+
+  it("notifies the partner when a peer abandons a paired room to create a new one", () => {
+    const rooms = new RoomManager();
+    const creator = fakePeer();
+    const joiner = fakePeer();
+    const code = rooms.createRoom(creator);
+    rooms.joinRoom(code, joiner);
+
+    rooms.createRoom(creator);
+
+    expect(joiner.messages).toContain(JSON.stringify({ type: "peer-disconnected" }));
+  });
+
+  it("moves a peer out of their old room when they join another", () => {
+    const rooms = new RoomManager();
+    const a = fakePeer();
+    const b = fakePeer();
+    const roomA = rooms.createRoom(a);
+    const roomB = rooms.createRoom(b);
+
+    const result = rooms.joinRoom(roomB, a);
+
+    expect(result).toEqual({ ok: true });
+    expect(rooms.hasRoom(roomA)).toBe(false); // a's empty old room is torn down
+    rooms.forward(a, "hi");
+    expect(b.messages).toContain("hi"); // a and b are paired in roomB
+  });
+
+  it("rejects a peer joining their own room", () => {
+    const rooms = new RoomManager();
+    const creator = fakePeer();
+    const code = rooms.createRoom(creator);
+
+    const result = rooms.joinRoom(code, creator);
+
+    expect(result).toEqual({ ok: false, message: "Cannot join your own room" });
+    expect(rooms.hasRoom(code)).toBe(true); // room left intact
+  });
+});
+
+describe("isValidRoomCode", () => {
+  it("accepts a well-formed code", () => {
+    expect(isValidRoomCode("ABCDEF")).toBe(true);
+    expect(isValidRoomCode("23456789".slice(0, 6))).toBe(true);
+  });
+
+  it("rejects wrong length, wrong alphabet, and non-strings", () => {
+    expect(isValidRoomCode("ABCDE")).toBe(false); // too short
+    expect(isValidRoomCode("ABCDEFG")).toBe(false); // too long
+    expect(isValidRoomCode("ABCDE1")).toBe(false); // 1 is not in the alphabet
+    expect(isValidRoomCode("abcdef")).toBe(false); // lowercase
+    expect(isValidRoomCode(123456)).toBe(false);
+    expect(isValidRoomCode(null)).toBe(false);
+    expect(isValidRoomCode(undefined)).toBe(false);
   });
 });

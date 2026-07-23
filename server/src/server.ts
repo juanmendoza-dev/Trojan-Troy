@@ -1,11 +1,6 @@
 import { WebSocketServer, type WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
-import { RoomManager, type Peer } from "./rooms.js";
-
-interface Envelope {
-  type: string;
-  roomCode?: string;
-}
+import { RoomManager, isValidRoomCode, type Peer } from "./rooms.js";
 
 // --- Abuse-control defaults (all in-memory, no new deps). --------------------
 // maxPayload is sized to the largest legitimate encrypted voice envelope: a 60s
@@ -18,9 +13,14 @@ const DEFAULT_MAX_CONNECTIONS = 1000;
 const DEFAULT_MAX_CONNECTIONS_PER_IP = 30;
 // Token bucket per connection: a normal 2-person chat peaks at a few msgs/sec
 // (presence heartbeats every 2.5s, user-paced text/voice), so this is generous
-// for real use but trips a flood well before it costs anything.
+// for real use but trips a flood well before it costs anything. (Review H3.)
 const DEFAULT_MSG_BURST = 60;
 const DEFAULT_MSG_REFILL_PER_SEC = 30;
+// A tighter bucket just for `join` attempts: a real user joins once, so this
+// still lets legitimate use through while throttling blind room-code
+// enumeration to a crawl. (Review M1.)
+const DEFAULT_JOIN_BURST = 10;
+const DEFAULT_JOIN_REFILL_PER_SEC = 1;
 // Ping every connection on this interval; a socket that misses a whole interval
 // without a pong is presumed dead and terminated. Reaps half-open sockets that
 // would otherwise accumulate forever. (Review H3.)
@@ -37,6 +37,8 @@ export interface RelayOptions {
   maxRooms?: number;
   msgBurst?: number;
   msgRefillPerSec?: number;
+  joinBurst?: number;
+  joinRefillPerSec?: number;
   heartbeatIntervalMs?: number;
   // If set, only these exact origins (plus localhost) may connect. Overrides
   // the ALLOWED_ORIGINS env var; mainly here for tests.
@@ -44,16 +46,37 @@ export interface RelayOptions {
   roomTtlMs?: number;
 }
 
-interface ConnState {
-  ip: string;
-  tokens: number;
-  lastRefill: number;
-}
-
 // `ws` doesn't type per-socket app state, so we tag the heartbeat liveness flag
 // onto the socket the way the ws docs recommend.
 interface TrackedSocket extends WebSocket {
   isAlive?: boolean;
+}
+
+interface Bucket {
+  tokens: number;
+  lastRefill: number;
+}
+
+interface ConnState {
+  ip: string;
+  msg: Bucket;
+  join: Bucket;
+}
+
+// Refill then try to spend one token. Returns false when the bucket is empty,
+// i.e. the caller is going faster than the sustained rate allows.
+function consume(bucket: Bucket, burst: number, refillPerSec: number): boolean {
+  const now = Date.now();
+  const elapsedSec = (now - bucket.lastRefill) / 1000;
+  bucket.tokens = Math.min(burst, bucket.tokens + elapsedSec * refillPerSec);
+  bucket.lastRefill = now;
+  if (bucket.tokens < 1) return false;
+  bucket.tokens -= 1;
+  return true;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // A loopback origin — always allowed so `npm run dev` keeps working regardless
@@ -81,24 +104,14 @@ function resolveAllowedOrigins(options: RelayOptions): string[] | null {
   return list.length > 0 ? list : null;
 }
 
-// Refill then try to spend one token. Returns false when the bucket is empty,
-// i.e. the connection is sending faster than the sustained rate allows.
-function consumeToken(state: ConnState, burst: number, refillPerSec: number): boolean {
-  const now = Date.now();
-  const elapsedSec = (now - state.lastRefill) / 1000;
-  state.tokens = Math.min(burst, state.tokens + elapsedSec * refillPerSec);
-  state.lastRefill = now;
-  if (state.tokens < 1) return false;
-  state.tokens -= 1;
-  return true;
-}
-
 export function startRelay(port: number, options: RelayOptions = {}): WebSocketServer {
   const maxPayload = options.maxPayload ?? DEFAULT_MAX_PAYLOAD;
   const maxConnections = options.maxConnections ?? DEFAULT_MAX_CONNECTIONS;
   const maxConnectionsPerIp = options.maxConnectionsPerIp ?? DEFAULT_MAX_CONNECTIONS_PER_IP;
   const msgBurst = options.msgBurst ?? DEFAULT_MSG_BURST;
   const msgRefillPerSec = options.msgRefillPerSec ?? DEFAULT_MSG_REFILL_PER_SEC;
+  const joinBurst = options.joinBurst ?? DEFAULT_JOIN_BURST;
+  const joinRefillPerSec = options.joinRefillPerSec ?? DEFAULT_JOIN_REFILL_PER_SEC;
   const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS;
 
   const allowedOrigins = resolveAllowedOrigins(options);
@@ -166,7 +179,12 @@ export function startRelay(port: number, options: RelayOptions = {}): WebSocketS
     totalConnections++;
     connectionsPerIp.set(ip, ipCount + 1);
 
-    const state: ConnState = { ip, tokens: msgBurst, lastRefill: Date.now() };
+    const now = Date.now();
+    const state: ConnState = {
+      ip,
+      msg: { tokens: msgBurst, lastRefill: now },
+      join: { tokens: joinBurst, lastRefill: now },
+    };
     const peer: Peer = { send: (data: string) => ws.send(data) };
 
     const tracked = ws as TrackedSocket;
@@ -181,20 +199,27 @@ export function startRelay(port: number, options: RelayOptions = {}): WebSocketS
 
     ws.on("message", (raw) => {
       // Per-connection message-rate throttle; close on breach.
-      if (!consumeToken(state, msgBurst, msgRefillPerSec)) {
+      if (!consume(state.msg, msgBurst, msgRefillPerSec)) {
         ws.close(CLOSE_POLICY, "Rate limit exceeded");
         return;
       }
 
-      let envelope: Envelope;
+      let parsed: unknown;
       try {
-        envelope = JSON.parse(raw.toString());
+        parsed = JSON.parse(raw.toString());
       } catch {
         peer.send(JSON.stringify({ type: "error", message: "Invalid message" }));
         return;
       }
 
-      if (envelope.type === "create") {
+      // Only the structural create/join branches below are validated.
+      // Everything else — "pubkey" and the unified opaque "msg" envelope that
+      // carries all real traffic — is forwarded verbatim; the E2EE layer relies
+      // on the relay never inspecting it, so this path must stay untouched.
+      const envelope = isPlainObject(parsed) ? parsed : null;
+      const type = envelope && typeof envelope.type === "string" ? envelope.type : undefined;
+
+      if (type === "create") {
         if (rooms.atRoomCapacity()) {
           peer.send(JSON.stringify({ type: "error", message: "Server at capacity" }));
           return;
@@ -204,16 +229,26 @@ export function startRelay(port: number, options: RelayOptions = {}): WebSocketS
         return;
       }
 
-      if (envelope.type === "join") {
-        const result = rooms.joinRoom(envelope.roomCode ?? "", peer);
+      if (type === "join") {
+        // Dedicated join-attempt throttle on top of the message throttle, to
+        // make blind room-code enumeration impractical.
+        if (!consume(state.join, joinBurst, joinRefillPerSec)) {
+          ws.close(CLOSE_POLICY, "Too many join attempts");
+          return;
+        }
+        const roomCode = envelope?.roomCode;
+        if (!isValidRoomCode(roomCode)) {
+          peer.send(JSON.stringify({ type: "error", message: "Invalid room code" }));
+          return;
+        }
+        const result = rooms.joinRoom(roomCode, peer);
         if (!result.ok) {
           peer.send(JSON.stringify({ type: "error", message: result.message }));
         }
         return;
       }
 
-      // Anything else (e.g. "pubkey", and the unified "msg" envelope) is an
-      // opaque blob the relay just forwards without inspecting.
+      // Opaque pass-through: forward verbatim, never inspected.
       rooms.forward(peer, raw.toString());
     });
 
