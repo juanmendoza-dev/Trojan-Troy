@@ -22,7 +22,7 @@ and `decisions.md` for why things were done a certain way.
 | 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
 | 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
 | 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
-| 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | Ratchet track (Tasks 0-7) shipped to `main` (`683d3a3`, fast-forward) — Double Ratchet + sealed `msg` framing + padding + host-primer, plus honest about/security copy. typecheck/156 tests/build green; two-browser smoke (text both ways + joiner-first) confirmed live. Remaining: relay hardening (Track B, its own branch `fix/relay-dos-limits`) + a fuller voice/receipts/presence eyeball. |
+| 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | Ratchet track (Tasks 0-7) shipped to `main` (`683d3a3`, fast-forward) — Double Ratchet + sealed `msg` framing + padding + host-primer, plus honest about/security copy. typecheck/156 tests/build green; two-browser smoke (text both ways + joiner-first) confirmed live. Track B (relay DoS/lifecycle hardening — H3/M1/M5/L5) built + green on `fix/relay-dos-limits` (server 30/30, build clean, probe-verified), **pending Jay's go-ahead to fast-forward merge** (deploys the relay to Render). Remaining after that: a fuller voice/receipts/presence eyeball. |
 
 ## Log
 
@@ -601,3 +601,33 @@ and `decisions.md` for why things were done a certain way.
   (relay DoS/lifecycle hardening — H3/M1/M5/L5 — on its own branch `fix/relay-dos-limits`,
   no crypto), and a fuller manual eyeball of voice + receipts + presence + profile
   sharing (text + joiner-first were confirmed; no browser-automation tool here).
+
+- **2026-07-23** — Phase 5.2 **Track B (relay DoS/lifecycle hardening) built** on
+  `fix/relay-dos-limits` off `main` — server-only, no crypto, no wire change,
+  closing review H3/M1/M5/L5 and finishing the 5.2 cluster. Three commits:
+  **B1** (`bd97d6f`) `maxPayload` (2 MiB) + a per-connection token-bucket
+  message-rate throttle (closes the socket on breach) + per-IP (30) and global
+  (1000) connection caps + a global active-room cap (5000, via a new
+  `RoomManager.atRoomCapacity()` pre-check); **B2** (`42e1388`) an `isAlive`
+  ping/pong heartbeat sweep (30s; terminates a socket that misses a pong) + an
+  env-configurable origin allowlist (`ALLOWED_ORIGINS`) via `verifyClient` that
+  *fails open* when unset (localhost always allowed, one-time startup warning) so
+  it can't accidentally lock out prod; **B3** (`a2efcf9`) one-room-per-peer (a
+  second `create`/`join` calls the existing `disconnect(peer)` first — clears the
+  stale TTL timer, notifies a real partner), self-join rejection, `create`/`join`
+  shape validation with a room-code format check (`isValidRoomCode`) replying
+  `error` — while the unknown-type pass-through (`pubkey`, the opaque `msg`) stays
+  forwarded verbatim — and a tighter dedicated join-attempt bucket (10 / 1-per-sec)
+  against blind enumeration. All limits are code constants overridable via a new
+  `startRelay` options arg (tests inject tiny values). Verified: `server` **30/30**
+  vitest (oversized→1009, flood→1008, per-IP/global cap→1013, dead-socket reaping,
+  origin reject/allow/localhost, double-create drops the orphan, self-join
+  rejected, malformed join→error while the opaque `msg` still forwards), `npm run
+  build` (tsc) clean, and a manual boot of both dev servers + a throwaway
+  two-client protocol probe (deleted) that forwarded a 1.78 MiB voice-sized
+  envelope and saw a 3 MiB frame rejected with close 1009 — confirming 2 MiB isn't
+  too tight for a 60s voice message. A real browser text+voice eyeball through the
+  hardened relay still wants a human (no browser-automation tool here, as every
+  prior phase). Refuted finding §C.2 left alone (no try/catch around `peer.send()`).
+  **Not yet merged** — a fast-forward merge redeploys the relay to Render
+  (production), so it waits on Jay's go-ahead. See `decisions.md` (2026-07-23).

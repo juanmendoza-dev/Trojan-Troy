@@ -8,6 +8,59 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-23 — Track B relay hardening (`fix/relay-dos-limits`): DoS + lifecycle
+  limits on the relay; several implementation calls, all server-only (no crypto,
+  no wire change).** Closes review H3/M1/M5/L5 — the last piece of the Phase 5.2
+  cluster, built as direct-patch `superpowers:receiving-code-review` work per the
+  review's routing (three commits B1-B3 + this log). Calls:
+  (1) **`maxPayload` = 2 MiB**, the review's recommended size. Confirmed against a
+  realistic worst-case voice send *at the protocol level* rather than a real
+  browser recording (no browser-automation tool here, as in every prior phase): a
+  throwaway two-client probe against the running hardened relay forwarded a
+  1.78 MiB opaque `msg` envelope (well above a real ~1.35 MB 60s Opus envelope) and
+  a 3 MiB frame was rejected with close 1009. The recorder sets no
+  `audioBitsPerSecond`, so the browser picks a conservative Opus voice bitrate —
+  2 MiB has comfortable headroom. It's one constant; bump it if a real 60s clip is
+  ever seen near the cap.
+  (2) **Origin allowlist fails OPEN, by design.** The relay is live on Render and
+  the exact production Vercel origin isn't known here; a strict default could lock
+  out prod. So `verifyClient` allows any origin when the `ALLOWED_ORIGINS` (comma-
+  separated) env var is unset — logging a one-time startup warning — and *always*
+  allows localhost so `npm run dev` works. **Action for Jay:** set the real Vercel
+  origin(s) in Render's env to actually restrict it, or leave it permissive. (L5.)
+  (3) **Abuse limits are code constants, overridable via a new `startRelay` options
+  arg** (tests inject tiny values); only the origin allowlist reads env, since it's
+  the one that needs per-deploy config. Values: 2 MiB payload; 1000 global / 30
+  per-IP connections; 5000 active rooms; a 60-token / 30-per-sec message bucket
+  (generous — a real 2-person chat peaks at a few msgs/sec) that closes the socket
+  on breach; a tighter **dedicated join bucket** (10 / 1-per-sec) so blind
+  room-code enumeration is throttled without affecting a legit one-time join; a 30s
+  ping/pong heartbeat reaping half-open sockets.
+  (4) **Connection caps are enforced in the `connection` handler (post-upgrade,
+  close 1013), not `verifyClient`** — simpler correct increment/decrement paired
+  with the socket's `close` event, at the cost of completing the WS handshake
+  before rejecting an over-cap socket (negligible; the rate limiter + per-IP cap
+  are the real flood defenses).
+  (5) **Global active-room cap is a pre-check (`RoomManager.atRoomCapacity()`)
+  rather than changing `createRoom`'s return type** — keeps its `string` signature
+  and every existing call site/test intact. Marginal edge case accepted (a peer
+  alone in a room re-creating at exactly the cap is rejected even though create
+  would free their old room first — noise at a 5000-room cap).
+  (6) **One-room-per-peer + self-join live in `RoomManager` (`createRoom`/
+  `joinRoom`)**, calling the existing `disconnect(peer)` first on a second
+  create/join (clears the stale TTL timer, notifies a real partner) — closing the
+  M5 orphan/timer leak; self-join is rejected *before* that teardown so it isn't
+  erased. **Create/join SHAPE validation lives at the wire layer (`server.ts`)**
+  and gates ONLY those two structural branches — the unknown-type pass-through
+  (`pubkey`, the unified opaque `msg`) is forwarded verbatim and untouched, since
+  all post-handshake E2EE traffic depends on the relay never inspecting it.
+  Refuted finding §C.2 left alone: no try/catch was added around `peer.send()` —
+  `ws.send()` on a closing/closed socket doesn't throw synchronously. Verified:
+  `server` 30/30 vitest, `npm run build` (tsc) clean, both dev servers boot, probe
+  as above. Not merged yet — a fast-forward merge redeploys the relay to Render
+  (production), so it waits on Jay. (Decided by: Jay (direction: harden the
+  backend, keep the UX identical) + Claude (implementation calls))
+
 - **2026-07-22 — Building Phase 5.2 (forward-secrecy ratchet) now, ahead of any
   remaining 5.1 work, and dropping 5.2's old dependence on persistent-identity
   keys.** With the UI/features ship-ready, Jay chose to "turn up the complexity"
