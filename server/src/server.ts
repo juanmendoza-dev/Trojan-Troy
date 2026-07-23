@@ -21,6 +21,10 @@ const DEFAULT_MAX_CONNECTIONS_PER_IP = 30;
 // for real use but trips a flood well before it costs anything.
 const DEFAULT_MSG_BURST = 60;
 const DEFAULT_MSG_REFILL_PER_SEC = 30;
+// Ping every connection on this interval; a socket that misses a whole interval
+// without a pong is presumed dead and terminated. Reaps half-open sockets that
+// would otherwise accumulate forever. (Review H3.)
+const DEFAULT_HEARTBEAT_MS = 30_000;
 
 // WebSocket close codes we use for policy rejections.
 const CLOSE_POLICY = 1008; // rate-limit / protocol abuse
@@ -33,6 +37,10 @@ export interface RelayOptions {
   maxRooms?: number;
   msgBurst?: number;
   msgRefillPerSec?: number;
+  heartbeatIntervalMs?: number;
+  // If set, only these exact origins (plus localhost) may connect. Overrides
+  // the ALLOWED_ORIGINS env var; mainly here for tests.
+  allowedOrigins?: string[];
   roomTtlMs?: number;
 }
 
@@ -40,6 +48,37 @@ interface ConnState {
   ip: string;
   tokens: number;
   lastRefill: number;
+}
+
+// `ws` doesn't type per-socket app state, so we tag the heartbeat liveness flag
+// onto the socket the way the ws docs recommend.
+interface TrackedSocket extends WebSocket {
+  isAlive?: boolean;
+}
+
+// A loopback origin — always allowed so `npm run dev` keeps working regardless
+// of the configured allowlist.
+function isLocalhostOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+// Resolve the origin allowlist from options (tests) or the ALLOWED_ORIGINS env
+// var (comma-separated). Returns null when none is configured — the caller then
+// fails OPEN so a missing env var can't accidentally lock out production.
+function resolveAllowedOrigins(options: RelayOptions): string[] | null {
+  if (options.allowedOrigins) return options.allowedOrigins;
+  const env = process.env.ALLOWED_ORIGINS;
+  if (!env) return null;
+  const list = env
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : null;
 }
 
 // Refill then try to spend one token. Returns false when the bucket is empty,
@@ -60,15 +99,58 @@ export function startRelay(port: number, options: RelayOptions = {}): WebSocketS
   const maxConnectionsPerIp = options.maxConnectionsPerIp ?? DEFAULT_MAX_CONNECTIONS_PER_IP;
   const msgBurst = options.msgBurst ?? DEFAULT_MSG_BURST;
   const msgRefillPerSec = options.msgRefillPerSec ?? DEFAULT_MSG_REFILL_PER_SEC;
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS;
+
+  const allowedOrigins = resolveAllowedOrigins(options);
+  if (!allowedOrigins && !process.env.VITEST) {
+    console.warn(
+      "[relay] ALLOWED_ORIGINS is unset — accepting connections from any origin. " +
+        "Set ALLOWED_ORIGINS (comma-separated) in production to lock this down.",
+    );
+  }
+
+  // Cross-site WebSocket hijack guard. Fail-safe by design: browserless clients
+  // (no Origin header) and localhost are always allowed, and an unconfigured
+  // allowlist fails OPEN rather than rejecting live production traffic. (L5.)
+  function isOriginAllowed(origin: string | undefined): boolean {
+    if (!origin) return true;
+    if (isLocalhostOrigin(origin)) return true;
+    if (!allowedOrigins) return true;
+    return allowedOrigins.includes(origin);
+  }
 
   const rooms = new RoomManager(options.roomTtlMs, options.maxRooms);
-  const wss = new WebSocketServer({ port, maxPayload });
+  const wss = new WebSocketServer({
+    port,
+    maxPayload,
+    verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) =>
+      isOriginAllowed(info.origin),
+  });
 
   let totalConnections = 0;
   const connectionsPerIp = new Map<string, number>();
 
+  // Heartbeat sweep: terminate any socket that didn't pong since the last tick,
+  // then ping the rest. `unref` so it can't by itself keep the process alive.
+  const heartbeat = setInterval(() => {
+    for (const client of wss.clients) {
+      const tracked = client as TrackedSocket;
+      if (tracked.isAlive === false) {
+        tracked.terminate();
+        continue;
+      }
+      tracked.isAlive = false;
+      tracked.ping();
+    }
+  }, heartbeatIntervalMs);
+  heartbeat.unref?.();
+
   wss.on("error", (err) => {
     console.error("WebSocketServer error:", err);
+  });
+
+  wss.on("close", () => {
+    clearInterval(heartbeat);
   });
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
@@ -86,6 +168,12 @@ export function startRelay(port: number, options: RelayOptions = {}): WebSocketS
 
     const state: ConnState = { ip, tokens: msgBurst, lastRefill: Date.now() };
     const peer: Peer = { send: (data: string) => ws.send(data) };
+
+    const tracked = ws as TrackedSocket;
+    tracked.isAlive = true;
+    ws.on("pong", () => {
+      tracked.isAlive = true;
+    });
 
     ws.on("error", (err) => {
       console.error("WebSocket connection error:", err);

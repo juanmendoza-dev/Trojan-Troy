@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import WebSocket from "ws";
 import type { AddressInfo } from "node:net";
 import { startRelay } from "./server";
@@ -156,6 +156,71 @@ describe("relay server", () => {
     expect(await cClosed).toBe(1013);
     a.close();
     b.close();
+  });
+
+  it("reaps a connection that stops responding to pings", async () => {
+    server = startRelay(0, { heartbeatIntervalMs: 40 });
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const serverSideWs: Promise<WebSocket> = new Promise((resolve) =>
+      server!.once("connection", (ws) => resolve(ws)),
+    );
+
+    const client = new WebSocket(url);
+    await waitForOpen(client);
+    client.on("error", () => {});
+    const aliceServerSide = await serverSideWs;
+    const terminateSpy = vi.spyOn(aliceServerSide, "terminate");
+
+    // Pause the client's socket so it never reads the ping frame and therefore
+    // never pongs — exactly how a half-open/hung connection looks to the relay.
+    client.pause();
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(terminateSpy).toHaveBeenCalled();
+  });
+
+  it("rejects a connection from a disallowed origin", async () => {
+    server = startRelay(0, { allowedOrigins: ["https://good.example"] });
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const client = new WebSocket(url, { origin: "https://evil.example" });
+    const rejected = new Promise<boolean>((resolve) => {
+      client.once("error", () => resolve(true));
+      client.once("open", () => resolve(false));
+    });
+
+    expect(await rejected).toBe(true);
+  });
+
+  it("allows a connection from an allowed origin", async () => {
+    server = startRelay(0, { allowedOrigins: ["https://good.example"] });
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const client = new WebSocket(url, { origin: "https://good.example" });
+    await waitForOpen(client);
+
+    expect(client.readyState).toBe(WebSocket.OPEN);
+    client.close();
+  });
+
+  it("always allows localhost origins even with an allowlist set", async () => {
+    server = startRelay(0, { allowedOrigins: ["https://good.example"] });
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const client = new WebSocket(url, { origin: "http://localhost:5173" });
+    await waitForOpen(client);
+
+    expect(client.readyState).toBe(WebSocket.OPEN);
+    client.close();
   });
 
   it("rejects connections beyond the global connection cap (1013)", async () => {
