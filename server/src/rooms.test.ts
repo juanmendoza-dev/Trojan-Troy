@@ -102,4 +102,14 @@ describe("RoomManager", () => {
     expect(rooms.hasRoom(code)).toBe(false);
     vi.useRealTimers();
   });
+
+  it("reports when the active-room cap is reached", () => {
+    const rooms = new RoomManager(undefined, 2);
+
+    expect(rooms.atRoomCapacity()).toBe(false);
+    rooms.createRoom(fakePeer());
+    expect(rooms.atRoomCapacity()).toBe(false);
+    rooms.createRoom(fakePeer());
+    expect(rooms.atRoomCapacity()).toBe(true);
+  });
 });

@@ -106,4 +106,74 @@ describe("relay server", () => {
     bob.close();
     alice.close();
   });
+
+  it("closes a connection that sends an oversized frame (1009)", async () => {
+    server = startRelay(0, { maxPayload: 1024 });
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const client = new WebSocket(url);
+    await waitForOpen(client);
+    client.on("error", () => {}); // ws surfaces the oversize as an error too
+
+    const closed = new Promise<number>((resolve) => client.once("close", (code) => resolve(code)));
+    client.send("x".repeat(4096));
+
+    expect(await closed).toBe(1009);
+  });
+
+  it("closes a connection that floods past the message-rate limit (1008)", async () => {
+    server = startRelay(0, { msgBurst: 5, msgRefillPerSec: 0 });
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const client = new WebSocket(url);
+    await waitForOpen(client);
+    client.on("error", () => {});
+
+    const closed = new Promise<number>((resolve) => client.once("close", (code) => resolve(code)));
+    for (let i = 0; i < 50; i++) client.send(JSON.stringify({ type: "noop", n: i }));
+
+    expect(await closed).toBe(1008);
+  });
+
+  it("rejects connections beyond the per-IP cap (1013)", async () => {
+    server = startRelay(0, { maxConnectionsPerIp: 2 });
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const a = new WebSocket(url);
+    const b = new WebSocket(url);
+    await Promise.all([waitForOpen(a), waitForOpen(b)]);
+
+    const c = new WebSocket(url);
+    c.on("error", () => {});
+    const cClosed = new Promise<number>((resolve) => c.once("close", (code) => resolve(code)));
+
+    expect(await cClosed).toBe(1013);
+    a.close();
+    b.close();
+  });
+
+  it("rejects connections beyond the global connection cap (1013)", async () => {
+    server = startRelay(0, { maxConnections: 2 });
+    await waitForListening(server);
+    const port = (server.address() as AddressInfo).port;
+    const url = `ws://localhost:${port}`;
+
+    const a = new WebSocket(url);
+    const b = new WebSocket(url);
+    await Promise.all([waitForOpen(a), waitForOpen(b)]);
+
+    const c = new WebSocket(url);
+    c.on("error", () => {});
+    const cClosed = new Promise<number>((resolve) => c.once("close", (code) => resolve(code)));
+
+    expect(await cClosed).toBe(1013);
+    a.close();
+    b.close();
+  });
 });

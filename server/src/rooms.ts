@@ -13,12 +13,23 @@ interface Room {
 const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const ROOM_CODE_LENGTH = 6;
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_MAX_ROOMS = 5000;
 
 export class RoomManager {
   private rooms = new Map<string, Room>();
   private peerRooms = new Map<Peer, string>();
 
-  constructor(private ttlMs: number = DEFAULT_TTL_MS) {}
+  constructor(
+    private ttlMs: number = DEFAULT_TTL_MS,
+    private maxRooms: number = DEFAULT_MAX_ROOMS,
+  ) {}
+
+  // Whether the global active-room cap is reached. The relay consults this
+  // before accepting a `create` so a flood of unpaired rooms (each holding a
+  // TTL timer) can't exhaust memory. (Review H3.)
+  atRoomCapacity(): boolean {
+    return this.rooms.size >= this.maxRooms;
+  }
 
   private generateCode(): string {
     let code = "";
