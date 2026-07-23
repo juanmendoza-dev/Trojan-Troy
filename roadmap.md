@@ -7,6 +7,15 @@ should never be able to read plaintext. Built for Hack Club Horizons Polaris
 Build in this order. Do not skip ahead to a later phase before the current
 one works.
 
+## Mobile web support (new scope — 2026-07-23)
+Cross-cutting, not a numbered phase. Make the existing web client work and feel
+like an app on mobile browsers (responsive layout, safe-area/notch, keyboard-aware
+composer, ≥44px touch targets) — reverses the 2026-07-18 "mobile not in scope for
+Version A" call (Jay's direction; see `decisions.md`). Chat sidebar → hamburger
+off-canvas drawer; "responsive + app-like polish", NOT a PWA. Spec:
+`docs/superpowers/specs/2026-07-23-mobile-web-support-design.md`. In build on
+`feat/mobile-web-support` (off `main`).
+
 ## Phase 1 — Foundation
 - [ ] Key generation and key exchange between two users, using an existing
       audited crypto library (libsodium.js or Web Crypto API — X25519 for

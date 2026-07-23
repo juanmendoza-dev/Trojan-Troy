@@ -8,6 +8,25 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-23 — Mobile web support: new scope, reversing the 2026-07-18 "mobile not in
+  scope for Version A" call.** With the desktop app + PQ handshake shipped, Jay directed a
+  mobile-browser version ("native mobile support via the browser"). The app was effectively
+  desktop-only (only 3 `@media` breakpoints existed; the chat surface had none). Headline
+  calls (Jay): (1) the chat's 256px sidebar becomes a **hamburger off-canvas drawer** on
+  mobile (chat full-width; the data-viz pauses while the drawer is closed); (2) scope is
+  **"responsive + app-like polish"** — safe-area/notch (`viewport-fit=cover` +
+  `env(safe-area-inset-*)`), keyboard-aware composer, no iOS focus-zoom, ≥44px tap targets —
+  but **NOT a PWA** (no manifest / install / service worker). Structured for **parallel
+  agents**: a foundation package (WP0 — reset + box-sizing, a `--app-height` visual-viewport
+  hook, safe-area vars) lands first, then six disjoint-file packages run in parallel. Also
+  set up **Playwright** in `client/` (projects `iphone-safari` + `android-chrome`) so visuals
+  can finally be verified in-tool instead of "manual eyeball pending" — though the
+  soft-keyboard riding and true iOS safe-area still need a real device. Built on
+  `feat/mobile-web-support` off `main` (independent of the crypto work). Spec:
+  `docs/superpowers/specs/2026-07-23-mobile-web-support-design.md`. (Decided by: Jay
+  (direction: mobile via browser, drawer, app-like-not-PWA) + Claude (decomposition +
+  implementation calls))
+
 - **2026-07-23 — Backend-only "post-quantum hardening" security round (4 specs) to
   deepen the crypto for the hackathon submission; building ①+② first. New crypto
   dependency accepted.** With the app ship-ready, Jay chose to make the encryption
