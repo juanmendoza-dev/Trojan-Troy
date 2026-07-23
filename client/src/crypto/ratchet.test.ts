@@ -21,8 +21,10 @@ async function setup(): Promise<{ alice: RatchetState; bob: RatchetState }> {
   const b = sodium.crypto_kx_keypair();
   const aKeys = sodium.crypto_kx_client_session_keys(a.publicKey, a.privateKey, b.publicKey);
   const bKeys = sodium.crypto_kx_server_session_keys(b.publicKey, b.privateKey, a.publicKey);
-  const rk0a = await deriveRootKey(aKeys.sharedRx, aKeys.sharedTx);
-  const rk0b = await deriveRootKey(bKeys.sharedRx, bKeys.sharedTx);
+  // Shared ML-KEM secret stand-in — both sides derive the same value from the KEM.
+  const pq = sodium.randombytes_buf(32);
+  const rk0a = await deriveRootKey(aKeys.sharedRx, aKeys.sharedTx, pq);
+  const rk0b = await deriveRootKey(bKeys.sharedRx, bKeys.sharedTx, pq);
   const alice = await initAlice(rk0a, b.publicKey);
   const bob = await initBob(rk0b, { publicKey: b.publicKey, privateKey: b.privateKey });
   return { alice, bob };

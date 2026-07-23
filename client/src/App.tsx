@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import sodium from "libsodium-wrappers";
 import { RelayClient, type Envelope, PROTOCOL_VERSION } from "./net/relayClient";
 import { parseInviteCode } from "./net/inviteLink";
-import { generateKeypair, deriveSessionKeys, type Keypair } from "./crypto/keys";
+import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
+import { generateKemKeypair, kemEncapsulate, kemDecapsulate } from "./crypto/pqkem";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
 import { frame, type Frame } from "./crypto/framing";
@@ -112,6 +113,7 @@ function zeroizeSession(sc: SessionCrypto | null) {
   r.MKSKIPPED.clear();
   for (const key of Object.values(sc.txSub)) sodium.memzero(key);
   for (const key of Object.values(sc.rxSub)) sodium.memzero(key);
+  sodium.memzero(sc.rootKey);
 }
 
 type Screen =
@@ -289,6 +291,146 @@ export default function App() {
   ) {
     const handshakeStart = performance.now();
     let disconnected = false;
+    // Hybrid post-quantum handshake state. The responder holds the ML-KEM
+    // keypair (published on its `pubkey`); the initiator encapsulates to it and
+    // returns the ciphertext (`kemct`). Each side stashes its classical
+    // crypto_kx result until the PQ secret is known and the root key derivable.
+    const kemKeypair = role === "responder" ? generateKemKeypair() : null;
+    let classicalKeys: SessionKeys | null = null;
+    let peerPub: Uint8Array | null = null;
+    // The initiator's primer/profile card can reach the responder before it has
+    // derived RK₀ (the async listener runs handlers concurrently). Buffer any
+    // `msg` until seeded, then drain in order.
+    const inbound: Extract<Envelope, { type: "msg" }>[] = [];
+
+    // Everything once BOTH the classical and PQ secrets are in hand: seed the
+    // ratchet, optionally share the profile, prime the responder's chain, show
+    // the session-bound safety number, and replay any buffered msgs.
+    async function finishHandshake(
+      sessionKeys: SessionKeys,
+      peerPublicKey: Uint8Array,
+      pqSecret: Uint8Array
+    ) {
+      const sc = await initSession(sessionKeys, role, own, peerPublicKey, pqSecret);
+      sessionCryptoRef.current = sc;
+      if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
+        const self = activeProfileRef.current.profile;
+        const card = JSON.stringify({ name: self.name, avatar: self.avatar, device: ownDevice });
+        client.send(
+          await sealStatic(sc, "profile", frame({ channel: "profile", id: "", body: textEncoder.encode(card) }))
+        );
+      }
+      // Host-primer: the responder has no sending chain until it receives the
+      // initiator's first content message, so the initiator sends a hidden one
+      // now. The responder decrypts it (gaining a sending chain) and drops it —
+      // invisible, but it lets either side type first.
+      if (role === "initiator") {
+        client.send(await sealContent(sc, frame({ channel: "primer", id: "", body: EMPTY_BODY })));
+      }
+      // The safety number now binds the derived hybrid root key (not just the
+      // relayed pubkeys), so a key swap or a PQ downgrade changes the digits.
+      const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey, sc.rootKey);
+      const elapsed = performance.now() - handshakeStart;
+      if (elapsed < HANDSHAKE_MIN_MS) {
+        await new Promise((resolve) => setTimeout(resolve, HANDSHAKE_MIN_MS - elapsed));
+      }
+      if (disconnected) return;
+      setScreen({ name: "safety-number", roomCode, safetyNumber });
+      const queued = inbound.splice(0);
+      for (const env of queued) await handleMsg(env);
+    }
+
+    async function handleMsg(envelope: Extract<Envelope, { type: "msg" }>) {
+      const sc = sessionCryptoRef.current;
+      const client = clientRef.current;
+      if (!sc || !client) return;
+      let received: Frame;
+      try {
+        received = await openMsg(sc, envelope);
+      } catch (err) {
+        // A content packet that genuinely won't decrypt gets a bubble; a bad
+        // static signal (or a replay) is dropped silently, as before.
+        if (envelope.c === 0 && !isSilentContentDrop(err)) {
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
+          ]);
+        }
+        return;
+      }
+      // A content receive advances the receiving ratchet and may have just
+      // established our sending chain (responder) — flush anything queued.
+      if (envelope.c === 0) void flushOutbox();
+
+      switch (received.channel) {
+        case "primer":
+          // Hidden bootstrap message: its only job was to advance the ratchet.
+          break;
+        case "text": {
+          const text = textDecoder.decode(received.body);
+          showPeerPresence("idle");
+          setMessages((prev) => [
+            ...prev,
+            { id: received.id, timestamp: Date.now(), from: "peer", kind: "text", text },
+          ]);
+          void sendAck(client, sc, "delivered", received.id);
+          pendingReadIdRef.current = received.id;
+          void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
+          break;
+        }
+        case "voice": {
+          const blob = new Blob([new Uint8Array(received.body)], { type: received.mimeType ?? "audio/webm" });
+          const audioUrl = URL.createObjectURL(blob);
+          showPeerPresence("idle");
+          setMessages((prev) => [
+            ...prev,
+            { id: received.id, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
+          ]);
+          void sendAck(client, sc, "delivered", received.id);
+          pendingReadIdRef.current = received.id;
+          void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
+          break;
+        }
+        case "presence": {
+          try {
+            const state = parsePresenceState(JSON.parse(textDecoder.decode(received.body))?.state);
+            if (state) showPeerPresence(state);
+          } catch {
+            // Ignore a malformed presence body — the next heartbeat recovers.
+          }
+          break;
+        }
+        case "ack": {
+          if (received.kind) {
+            const kind = received.kind;
+            setMessages((prev) =>
+              prev.map((message) =>
+                message.kind !== "decryption-error" && message.id === received.id
+                  ? { ...message, status: advanceStatus(message.status ?? "sent", kind) }
+                  : message
+              )
+            );
+          }
+          break;
+        }
+        case "profile": {
+          try {
+            const card = JSON.parse(textDecoder.decode(received.body));
+            if (card && typeof card.name === "string") {
+              setPeerProfile({
+                name: card.name,
+                avatar: typeof card.avatar === "string" ? card.avatar : null,
+                device: card.device === "phone" || card.device === "computer" ? card.device : null,
+              });
+            }
+          } catch {
+            // Ignore a malformed profile card.
+          }
+          break;
+        }
+      }
+    }
+
     client.onMessage(async (envelope: Envelope) => {
       if (envelope.type === "peer-disconnected") {
         disconnected = true;
@@ -296,144 +438,80 @@ export default function App() {
         return;
       }
       if (envelope.type === "pubkey") {
-        // H2: the handshake is single-shot. A second pubkey — a malicious
-        // relay/peer trying to re-key a live session — is a protocol violation,
-        // never a silent re-seed.
-        if (sessionCryptoRef.current) {
+        // H2 (extended to the pre-seed window): the handshake is single-shot. A
+        // second pubkey — before or after seeding — is a protocol violation,
+        // never a silent re-key.
+        if (sessionCryptoRef.current || peerPub) {
           setScreen({ name: "error", scenario: "handshake_failed" });
           return;
         }
-        // Refuse to derive keys against a wire format we don't speak (cheap
-        // version negotiation for a single-deploy app).
+        // Refuse to derive keys against a wire format we don't speak.
         if (envelope.v !== PROTOCOL_VERSION) {
           setScreen({ name: "error", scenario: "handshake_failed" });
           return;
         }
         try {
-          const peerPublicKey = await fromBase64(envelope.payload);
-          const sessionKeys = await deriveSessionKeys(own, peerPublicKey, role);
-          const sc = await initSession(sessionKeys, role, own, peerPublicKey);
-          sessionCryptoRef.current = sc;
-          if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
-            const self = activeProfileRef.current.profile;
-            const card = JSON.stringify({ name: self.name, avatar: self.avatar, device: ownDevice });
-            client.send(
-              await sealStatic(sc, "profile", frame({ channel: "profile", id: "", body: textEncoder.encode(card) }))
-            );
-          }
-          // Host-primer: the responder has no sending chain until it receives
-          // the initiator's first content message, so the initiator sends a
-          // hidden one now. The responder decrypts it (gaining a sending chain)
-          // and drops it — invisible, but it lets either side type first.
+          peerPub = await fromBase64(envelope.payload);
+          classicalKeys = await deriveSessionKeys(own, peerPub, role);
           if (role === "initiator") {
-            client.send(await sealContent(sc, frame({ channel: "primer", id: "", body: EMPTY_BODY })));
+            // Fail closed: a v3 responder MUST supply a KEM key. A missing one
+            // is a downgrade attempt — never fall back to classical-only.
+            if (!envelope.kem) {
+              setScreen({ name: "error", scenario: "handshake_failed" });
+              return;
+            }
+            const { cipherText, sharedSecret } = kemEncapsulate(await fromBase64(envelope.kem));
+            client.send({ type: "kemct", payload: await toBase64(cipherText) });
+            await finishHandshake(classicalKeys, peerPub, sharedSecret);
           }
-          const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey);
-          const elapsed = performance.now() - handshakeStart;
-          if (elapsed < HANDSHAKE_MIN_MS) {
-            await new Promise((resolve) => setTimeout(resolve, HANDSHAKE_MIN_MS - elapsed));
-          }
-          if (disconnected) return;
-          setScreen({ name: "safety-number", roomCode, safetyNumber });
+          // Responder: wait for the kemct before seeding.
+        } catch {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+        }
+        return;
+      }
+      if (envelope.type === "kemct") {
+        // Only the responder decapsulates, only after its pubkey step, only once.
+        if (
+          role !== "responder" ||
+          !classicalKeys ||
+          !peerPub ||
+          !kemKeypair ||
+          sessionCryptoRef.current
+        ) {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        try {
+          const sharedSecret = kemDecapsulate(await fromBase64(envelope.payload), kemKeypair.secretKey);
+          await finishHandshake(classicalKeys, peerPub, sharedSecret);
         } catch {
           setScreen({ name: "error", scenario: "handshake_failed" });
         }
         return;
       }
       if (envelope.type === "msg") {
-        const sc = sessionCryptoRef.current;
-        const client = clientRef.current;
-        if (!sc || !client) return;
-        let received: Frame;
-        try {
-          received = await openMsg(sc, envelope);
-        } catch (err) {
-          // A content packet that genuinely won't decrypt gets a bubble; a bad
-          // static signal (or a replay) is dropped silently, as before.
-          if (envelope.c === 0 && !isSilentContentDrop(err)) {
-            setMessages((prev) => [
-              ...prev,
-              { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
-            ]);
-          }
+        // Buffer until RK₀ exists (responder, pre-kemct), then handle in order.
+        if (!sessionCryptoRef.current) {
+          inbound.push(envelope);
           return;
         }
-        // A content receive advances the receiving ratchet and may have just
-        // established our sending chain (responder) — flush anything queued.
-        if (envelope.c === 0) void flushOutbox();
-
-        switch (received.channel) {
-          case "primer":
-            // Hidden bootstrap message: its only job was to advance the ratchet.
-            break;
-          case "text": {
-            const text = textDecoder.decode(received.body);
-            showPeerPresence("idle");
-            setMessages((prev) => [
-              ...prev,
-              { id: received.id, timestamp: Date.now(), from: "peer", kind: "text", text },
-            ]);
-            void sendAck(client, sc, "delivered", received.id);
-            pendingReadIdRef.current = received.id;
-            void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
-            break;
-          }
-          case "voice": {
-            const blob = new Blob([new Uint8Array(received.body)], { type: received.mimeType ?? "audio/webm" });
-            const audioUrl = URL.createObjectURL(blob);
-            showPeerPresence("idle");
-            setMessages((prev) => [
-              ...prev,
-              { id: received.id, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
-            ]);
-            void sendAck(client, sc, "delivered", received.id);
-            pendingReadIdRef.current = received.id;
-            void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
-            break;
-          }
-          case "presence": {
-            try {
-              const state = parsePresenceState(JSON.parse(textDecoder.decode(received.body))?.state);
-              if (state) showPeerPresence(state);
-            } catch {
-              // Ignore a malformed presence body — the next heartbeat recovers.
-            }
-            break;
-          }
-          case "ack": {
-            if (received.kind) {
-              const kind = received.kind;
-              setMessages((prev) =>
-                prev.map((message) =>
-                  message.kind !== "decryption-error" && message.id === received.id
-                    ? { ...message, status: advanceStatus(message.status ?? "sent", kind) }
-                    : message
-                )
-              );
-            }
-            break;
-          }
-          case "profile": {
-            try {
-              const card = JSON.parse(textDecoder.decode(received.body));
-              if (card && typeof card.name === "string") {
-                setPeerProfile({
-                  name: card.name,
-                  avatar: typeof card.avatar === "string" ? card.avatar : null,
-                  device: card.device === "phone" || card.device === "computer" ? card.device : null,
-                });
-              }
-            } catch {
-              // Ignore a malformed profile card.
-            }
-            break;
-          }
-        }
+        await handleMsg(envelope);
         return;
       }
     });
 
-    client.send({ type: "pubkey", payload: await toBase64(own.publicKey), v: PROTOCOL_VERSION });
+    const payload = await toBase64(own.publicKey);
+    if (kemKeypair) {
+      client.send({
+        type: "pubkey",
+        payload,
+        v: PROTOCOL_VERSION,
+        kem: await toBase64(kemKeypair.publicKey),
+      });
+    } else {
+      client.send({ type: "pubkey", payload, v: PROTOCOL_VERSION });
+    }
   }
 
   async function handleStart() {
