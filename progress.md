@@ -23,6 +23,7 @@ and `decisions.md` for why things were done a certain way.
 | 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
 | 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
 | 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | Ratchet track (Tasks 0-7) shipped to `main` (`683d3a3`, fast-forward) — Double Ratchet + sealed `msg` framing + padding + host-primer, plus honest about/security copy. typecheck/156 tests/build green; two-browser smoke (text both ways + joiner-first) confirmed live. Track B (relay DoS/lifecycle hardening — H3/M1/M5/L5) built + green on `fix/relay-dos-limits` (server 30/30, build clean, probe-verified), **pending Jay's go-ahead to fast-forward merge** (deploys the relay to Render). Remaining after that: a fuller voice/receipts/presence eyeball. |
+| PQ hardening ①+② — hybrid post-quantum handshake (X25519 + ML-KEM-768) + safety-number binding | Built on `feat/pq-hybrid-handshake` — typecheck/163 tests/build green; full handshake choreography verified via a throwaway real-module test (root-key agreement, session-bound safety number, joiner-first via primer, corrupt-`kemct` fails). Manual two-browser eyeball pending. ③ traffic-analysis + ④ at-rest specced, not built. |
 
 ## Log
 
@@ -631,3 +632,33 @@ and `decisions.md` for why things were done a certain way.
   prior phase). Refuted finding §C.2 left alone (no try/catch around `peer.send()`).
   **Not yet merged** — a fast-forward merge redeploys the relay to Render
   (production), so it waits on Jay's go-ahead. See `decisions.md` (2026-07-23).
+
+- **2026-07-23** — Post-quantum hardening ①+② built on `feat/pq-hybrid-handshake`
+  (first of the four-spec backend-only security round — see `decisions.md` 2026-07-23
+  and the specs/plan dated 2026-07-23). The session-key agreement is now **hybrid
+  post-quantum**: alongside the existing ephemeral `crypto_kx` (X25519), the responder
+  publishes an **ML-KEM-768** public key (`@noble/post-quantum` — the first crypto
+  dependency beyond libsodium), the initiator encapsulates and returns a `kemct`, and
+  both shared secrets are folded into the Double Ratchet's initial root key `RK₀` via a
+  two-step keyed-BLAKE2b combiner (`deriveRootKey`, domain `v3`) — so a session is safe
+  unless BOTH X25519 and ML-KEM break (defeats "harvest now, decrypt later"). The
+  handshake became role-asymmetric (responder = KEM holder/decapsulator, initiator =
+  encapsulator), **fails closed** if the KEM material is stripped (no classical
+  fallback), bumps `PROTOCOL_VERSION` 2→3, buffers inbound `msg` until `RK₀` exists (the
+  primer/profile card can race the responder's seed), and extends the H2 guard to the
+  KEM leg. ② the **safety number now binds `RK₀`** (a one-way commitment) + domain tags,
+  so a key swap or a PQ downgrade changes the digits (closes review L2); zeroize covers
+  the root key. No server change — the KEM fields ride the relay's opaque pass-through.
+  Honest about/security copy updated (hybrid PQ protects the key agreement / recorded
+  traffic; deliberately **not** claimed "fully post-quantum" — the ongoing ratchet DH
+  stays classical, a documented residual in the spec). Verified: `npm run typecheck`
+  clean, **163** client tests (7 new: pqkem ×4, kdf pq-binding, session root-key
+  agreement, safety-number binding), `npm run build` green, and a throwaway real-module
+  handshake test (run then deleted) confirmed both sides reach an identical `RK₀` +
+  safety number, the primer lets the joiner send first, and a corrupted `kemct` makes
+  the primer fail to open. Manual two-browser eyeball still pending (no browser-automation
+  tool here, as every prior phase). Remaining in the round: ④ at-rest Argon2id, then ③
+  traffic-analysis, plus the optional ultracode adversarial crypto-review pass. Specs:
+  `docs/superpowers/specs/2026-07-23-pq-hybrid-handshake-design.md` +
+  `…-safety-number-binding-design.md`; plan:
+  `docs/superpowers/plans/2026-07-23-pq-hybrid-handshake.md`.

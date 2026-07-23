@@ -4,19 +4,21 @@
 > - `docs/superpowers/specs/2026-07-23-pq-hybrid-handshake-design.md` (spec ①)
 > - `docs/superpowers/specs/2026-07-23-safety-number-binding-design.md` (spec ②)
 
-> **BUILD STATUS — 2026-07-23 (IN PROGRESS).** Building ① (hybrid X25519 + ML-KEM-768
-> handshake) and ② (safety-number bound to the derived root key) together on
-> `feat/pq-hybrid-handshake`. Both invisible to the user — handshake bytes + safety-number
-> digits only.
+> **BUILD STATUS — 2026-07-23 (BUILT; manual two-browser eyeball pending).** ① (hybrid
+> X25519 + ML-KEM-768 handshake) and ② (safety-number bound to the derived root key) built
+> on `feat/pq-hybrid-handshake`. `npm run typecheck` clean, **163** client tests, build
+> green; the full handshake choreography (root-key agreement, session-bound safety number,
+> joiner-first via primer, corrupt-`kemct` fails) verified with a throwaway real-module
+> test. Both invisible to the user — handshake bytes + safety-number digits only.
 >
-> - [ ] **Task 0** — log the security round + new-dependency reversal (`decisions.md`, `roadmap.md`)
-> - [ ] **Task 1** — `crypto/pqkem.ts` ML-KEM-768 wrapper (+ tests)
-> - [ ] **Task 2** — `crypto/kdf.ts` hybrid `deriveRootKey(rx, tx, pqSecret)`, domain tag → v3 (+ tests)
-> - [ ] **Task 3** — `protocol/ratchetSession.ts` thread `pqSecret` into `initSession`; expose `rootKey` (+ tests)
-> - [ ] **Task 4** — `crypto/safetyNumber.ts` bind `rootKey` + domain tags (spec ②) (+ tests)
-> - [ ] **Task 5** — `net/relayClient.ts` `kem?` on pubkey, new `kemct` envelope, `PROTOCOL_VERSION = 3`
-> - [ ] **Task 6** — `App.tsx` handshake wiring: KEM roles, fail-closed downgrade, buffered inbound, extended H2 guard, safety number after seed, zeroize rootKey
-> - [ ] **Task 7** — protocol-script + two-browser verification; honest about/security copy; `progress.md`
+> - [x] **Task 0** — logged the security round + new-dependency reversal (`decisions.md`, `roadmap.md`)
+> - [x] **Task 1** — `crypto/pqkem.ts` ML-KEM-768 wrapper (4 tests)
+> - [x] **Task 2** — `crypto/kdf.ts` hybrid `deriveRootKey(rx, tx, pqSecret)`, domain tag → v3
+> - [x] **Task 3** — `protocol/ratchetSession.ts` threads `pqSecret`; exposes `rootKey`
+> - [x] **Task 4** — `crypto/safetyNumber.ts` binds `rootKey` + domain tags (spec ②)
+> - [x] **Task 5** — `net/relayClient.ts` `kem?` on pubkey, `kemct` envelope, `PROTOCOL_VERSION = 3`
+> - [x] **Task 6** — `App.tsx` handshake wiring: KEM roles, fail-closed downgrade, buffered inbound, extended H2, safety number after seed, zeroize rootKey
+> - [x] **Task 7** — honest about/security copy + `progress.md`; **manual two-browser eyeball still pending**
 >
 > **⚠ Scouted gotchas:**
 > - The handshake stops being symmetric. Today both sides send `pubkey` and seed on
