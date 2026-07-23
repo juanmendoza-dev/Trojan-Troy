@@ -1,16 +1,25 @@
+import type { RatchetHeader } from "../crypto/ratchet";
+
+// Bumped whenever the post-handshake wire format changes. Sent on `pubkey` and
+// checked by the peer, so a stale client hits an error screen instead of
+// deriving keys against a format it can't speak.
+export const PROTOCOL_VERSION = 2;
+
+export type { RatchetHeader };
+
+// After the handshake, every content/signal envelope collapses into one opaque
+// `msg` so the relay can't tell text from voice from a receipt. `c` selects the
+// key class: 0 = ratcheted content (carries a RatchetHeader), 1 = presence,
+// 2 = ack, 3 = profile (each sealed under a static per-channel subkey). The
+// channel, id, mimeType, ack kind, and exact size all live sealed in `payload`.
 export type Envelope =
   | { type: "create" }
   | { type: "created"; roomCode: string }
   | { type: "join"; roomCode: string }
   | { type: "peer-connected" }
   | { type: "peer-disconnected" }
-  | { type: "pubkey"; payload: string }
-  | { type: "ciphertext"; payload: string; messageId: string }
-  | { type: "voice"; payload: string; mimeType: string; messageId: string }
-  | { type: "delivered"; messageId: string }
-  | { type: "read"; messageId: string }
-  | { type: "presence"; payload: string }
-  | { type: "profile"; payload: string }
+  | { type: "pubkey"; payload: string; v: number }
+  | { type: "msg"; c: 0 | 1 | 2 | 3; header?: RatchetHeader; payload: string }
   | { type: "error"; message: string };
 
 export interface MinimalWebSocket {

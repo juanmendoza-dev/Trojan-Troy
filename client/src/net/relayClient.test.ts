@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RelayClient, type MinimalWebSocket } from "./relayClient";
+import { RelayClient, type Envelope, type MinimalWebSocket } from "./relayClient";
 
 function fakeSocket(): MinimalWebSocket & { sent: string[] } {
   const sent: string[] = [];
@@ -24,43 +24,52 @@ describe("RelayClient", () => {
     expect(socket.sent).toEqual([JSON.stringify({ type: "create" })]);
   });
 
-  it("includes messageId when sending a ciphertext envelope", () => {
+  it("sends a content msg envelope with its ratchet header", () => {
     const socket = fakeSocket();
     const client = new RelayClient("ws://test", () => socket);
 
-    client.send({ type: "ciphertext", payload: "encrypted", messageId: "abc-123" });
+    const env: Envelope = {
+      type: "msg",
+      c: 0,
+      header: { dh: "Zm9v", pn: 0, n: 3 },
+      payload: "sealed",
+    };
+    client.send(env);
 
-    expect(socket.sent).toEqual([
-      JSON.stringify({ type: "ciphertext", payload: "encrypted", messageId: "abc-123" }),
-    ]);
+    expect(socket.sent).toEqual([JSON.stringify(env)]);
   });
 
-  it("passes through delivered and read acks", () => {
+  it("passes msg envelopes through to listeners", () => {
     const socket = fakeSocket();
     const client = new RelayClient("ws://test", () => socket);
     const received: unknown[] = [];
     client.onMessage((envelope) => received.push(envelope));
 
-    socket.onmessage?.({ data: JSON.stringify({ type: "delivered", messageId: "abc-123" }) });
-    socket.onmessage?.({ data: JSON.stringify({ type: "read", messageId: "abc-123" }) });
+    const content: Envelope = {
+      type: "msg",
+      c: 0,
+      header: { dh: "Zm9v", pn: 0, n: 0 },
+      payload: "one",
+    };
+    const ack: Envelope = { type: "msg", c: 2, payload: "two" };
+    socket.onmessage?.({ data: JSON.stringify(content) });
+    socket.onmessage?.({ data: JSON.stringify(ack) });
 
-    expect(received).toEqual([
-      { type: "delivered", messageId: "abc-123" },
-      { type: "read", messageId: "abc-123" },
-    ]);
+    expect(received).toEqual([content, ack]);
   });
 
-  it("passes a profile card envelope through in both directions", () => {
+  it("sends and receives a static msg envelope both ways", () => {
     const socket = fakeSocket();
     const client = new RelayClient("ws://test", () => socket);
     const received: unknown[] = [];
     client.onMessage((envelope) => received.push(envelope));
 
-    client.send({ type: "profile", payload: "sealed-card" });
-    socket.onmessage?.({ data: JSON.stringify({ type: "profile", payload: "sealed-card" }) });
+    const card: Envelope = { type: "msg", c: 3, payload: "sealed-card" };
+    client.send(card);
+    socket.onmessage?.({ data: JSON.stringify(card) });
 
-    expect(socket.sent).toEqual([JSON.stringify({ type: "profile", payload: "sealed-card" })]);
-    expect(received).toEqual([{ type: "profile", payload: "sealed-card" }]);
+    expect(socket.sent).toEqual([JSON.stringify(card)]);
+    expect(received).toEqual([card]);
   });
 
   it("notifies listeners when a message arrives", () => {
