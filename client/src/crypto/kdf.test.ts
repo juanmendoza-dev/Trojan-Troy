@@ -10,18 +10,29 @@ describe("kdf", () => {
     await sodium.ready;
     const k1 = rand();
     const k2 = rand();
-    const initiator = await deriveRootKey(k1, k2); // rx=k1, tx=k2
-    const responder = await deriveRootKey(k2, k1); // rx=k2, tx=k1
+    const pq = rand();
+    const initiator = await deriveRootKey(k1, k2, pq); // rx=k1, tx=k2
+    const responder = await deriveRootKey(k2, k1, pq); // rx=k2, tx=k1
     expect(same(initiator, responder)).toBe(true);
     expect(initiator.length).toBe(32);
   });
 
-  it("deriveRootKey depends on the key material", async () => {
+  it("deriveRootKey depends on the classical key material", async () => {
     await sodium.ready;
     const k1 = rand();
     const k2 = rand();
     const k3 = rand();
-    expect(same(await deriveRootKey(k1, k2), await deriveRootKey(k1, k3))).toBe(false);
+    const pq = rand();
+    expect(same(await deriveRootKey(k1, k2, pq), await deriveRootKey(k1, k3, pq))).toBe(false);
+  });
+
+  it("deriveRootKey depends on the post-quantum secret (a downgrade changes the root)", async () => {
+    await sodium.ready;
+    const k1 = rand();
+    const k2 = rand();
+    const pq1 = rand();
+    const pq2 = rand();
+    expect(same(await deriveRootKey(k1, k2, pq1), await deriveRootKey(k1, k2, pq2))).toBe(false);
   });
 
   it("kdfRoot is deterministic and separates rk from ck", async () => {
