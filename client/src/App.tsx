@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { RelayClient, type Envelope } from "./net/relayClient";
+import sodium from "libsodium-wrappers";
+import { RelayClient, type Envelope, PROTOCOL_VERSION } from "./net/relayClient";
 import { parseInviteCode } from "./net/inviteLink";
-import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
+import { generateKeypair, deriveSessionKeys, type Keypair } from "./crypto/keys";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
-import { encryptMessage, decryptMessage } from "./crypto/messages";
-import { encryptVoiceClip, decryptVoiceClip } from "./crypto/media";
+import { frame, type Frame } from "./crypto/framing";
+import {
+  initSession,
+  sealContent,
+  sealStatic,
+  openMsg,
+  type SessionCrypto,
+} from "./protocol/ratchetSession";
 import { advanceStatus } from "./protocol/messageStatus";
 import { shouldSendReadAck } from "./protocol/readAckDecision";
 import {
@@ -42,8 +49,25 @@ import { parseScreenOverride } from "./dev/screenOverride";
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
 const GHOST_MODE_STORAGE_KEY = "trojan-troy-ghost-mode";
 
-function maybeSendReadAck(
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+const EMPTY_BODY = new Uint8Array(0);
+
+// Seal + send a receipt for a specific message id. Acks now ride the sealed
+// "ack" channel (unforgeable, wire-indistinguishable from any other msg)
+// instead of the old cleartext delivered/read envelopes.
+async function sendAck(
   client: RelayClient,
+  sc: SessionCrypto,
+  kind: "delivered" | "read",
+  id: string
+) {
+  client.send(await sealStatic(sc, "ack", frame({ channel: "ack", id, kind, body: EMPTY_BODY })));
+}
+
+async function maybeSendReadAck(
+  client: RelayClient,
+  sc: SessionCrypto,
   pendingReadIdRef: { current: string | null },
   ghostModeRef: { current: boolean }
 ) {
@@ -56,9 +80,38 @@ function maybeSendReadAck(
     alreadyAcked: false,
   });
   if (send) {
-    client.send({ type: "read", messageId });
+    await sendAck(client, sc, "read", messageId);
     pendingReadIdRef.current = null;
   }
+}
+
+// Content that fails to open is shown as a "couldn't decrypt" bubble — but a
+// replayed / stale / over-skipped packet (which a malicious relay could spam)
+// is dropped silently, matching the ratchet's own drop semantics.
+function isSilentContentDrop(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : "";
+  return (
+    msg.includes("replayed") ||
+    msg.includes("stale") ||
+    msg.includes("too many skipped") ||
+    msg.includes("no receiving chain")
+  );
+}
+
+// Best-effort wipe of the ratchet secrets + channel subkeys on leave (review
+// L3/B13). JS can't guarantee no copies linger, but this clears the live
+// buffers we hold.
+function zeroizeSession(sc: SessionCrypto | null) {
+  if (!sc) return;
+  const r = sc.ratchet;
+  sodium.memzero(r.RK);
+  if (r.CKs) sodium.memzero(r.CKs);
+  if (r.CKr) sodium.memzero(r.CKr);
+  sodium.memzero(r.DHs.privateKey);
+  for (const mk of r.MKSKIPPED.values()) sodium.memzero(mk);
+  r.MKSKIPPED.clear();
+  for (const key of Object.values(sc.txSub)) sodium.memzero(key);
+  for (const key of Object.values(sc.rxSub)) sodium.memzero(key);
 }
 
 type Screen =
@@ -80,7 +133,11 @@ export default function App() {
   const [initialJoinCode] = useState<string | null>(() => parseInviteCode(window.location.hash));
   const [connectStatus, setConnectStatus] = useState<ConnectStatus>("idle");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const sessionKeysRef = useRef<SessionKeys | null>(null);
+  const sessionCryptoRef = useRef<SessionCrypto | null>(null);
+  // Outgoing content the responder tried to send before it had a sending chain
+  // (i.e. before receiving the initiator's primer/first message) — flushed the
+  // moment a content receive establishes the chain.
+  const outboxRef = useRef<Uint8Array[]>([]);
   const clientRef = useRef<RelayClient | null>(null);
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
@@ -162,8 +219,8 @@ export default function App() {
   // and suppressed by Ghost Mode (see protocol/presenceState.ts).
   async function sendPresence(next: PresenceState) {
     const client = clientRef.current;
-    const keys = sessionKeysRef.current;
-    if (!client || !keys) return;
+    const sc = sessionCryptoRef.current;
+    if (!client || !sc) return;
     const now = performance.now();
     const last = presenceSentRef.current;
     if (
@@ -178,14 +235,15 @@ export default function App() {
       return;
     }
     presenceSentRef.current = { state: next, at: now };
-    const payload = await encryptMessage(keys.tx, JSON.stringify({ state: next }));
-    client.send({ type: "presence", payload });
+    const body = textEncoder.encode(JSON.stringify({ state: next }));
+    client.send(await sealStatic(sc, "presence", frame({ channel: "presence", id: "", body })));
   }
 
   useEffect(() => {
     function handleFocusChange() {
       const client = clientRef.current;
-      if (client) maybeSendReadAck(client, pendingReadIdRef, ghostModeRef);
+      const sc = sessionCryptoRef.current;
+      if (client && sc) void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
     }
     document.addEventListener("visibilitychange", handleFocusChange);
     window.addEventListener("focus", handleFocusChange);
@@ -238,13 +296,37 @@ export default function App() {
         return;
       }
       if (envelope.type === "pubkey") {
+        // H2: the handshake is single-shot. A second pubkey — a malicious
+        // relay/peer trying to re-key a live session — is a protocol violation,
+        // never a silent re-seed.
+        if (sessionCryptoRef.current) {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        // Refuse to derive keys against a wire format we don't speak (cheap
+        // version negotiation for a single-deploy app).
+        if (envelope.v !== PROTOCOL_VERSION) {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
         try {
           const peerPublicKey = await fromBase64(envelope.payload);
-          sessionKeysRef.current = await deriveSessionKeys(own, peerPublicKey, role);
+          const sessionKeys = await deriveSessionKeys(own, peerPublicKey, role);
+          const sc = await initSession(sessionKeys, role, own, peerPublicKey);
+          sessionCryptoRef.current = sc;
           if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
             const self = activeProfileRef.current.profile;
             const card = JSON.stringify({ name: self.name, avatar: self.avatar, device: ownDevice });
-            client.send({ type: "profile", payload: await encryptMessage(sessionKeysRef.current.tx, card) });
+            client.send(
+              await sealStatic(sc, "profile", frame({ channel: "profile", id: "", body: textEncoder.encode(card) }))
+            );
+          }
+          // Host-primer: the responder has no sending chain until it receives
+          // the initiator's first content message, so the initiator sends a
+          // hidden one now. The responder decrypts it (gaining a sending chain)
+          // and drops it — invisible, but it lets either side type first.
+          if (role === "initiator") {
+            client.send(await sealContent(sc, frame({ channel: "primer", id: "", body: EMPTY_BODY })));
           }
           const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey);
           const elapsed = performance.now() - handshakeStart;
@@ -258,92 +340,100 @@ export default function App() {
         }
         return;
       }
-      if (envelope.type === "ciphertext") {
-        const keys = sessionKeysRef.current;
+      if (envelope.type === "msg") {
+        const sc = sessionCryptoRef.current;
         const client = clientRef.current;
-        if (!keys || !client) return;
+        if (!sc || !client) return;
+        let received: Frame;
         try {
-          const text = await decryptMessage(keys.rx, envelope.payload);
-          showPeerPresence("idle");
-          setMessages((prev) => [
-            ...prev,
-            { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "text", text },
-          ]);
-          client.send({ type: "delivered", messageId: envelope.messageId });
-          pendingReadIdRef.current = envelope.messageId;
-          maybeSendReadAck(client, pendingReadIdRef, ghostModeRef);
-        } catch {
-          setMessages((prev) => [
-            ...prev,
-            { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
-          ]);
-        }
-        return;
-      }
-      if (envelope.type === "voice") {
-        const keys = sessionKeysRef.current;
-        const client = clientRef.current;
-        if (!keys || !client) return;
-        try {
-          const blob = await decryptVoiceClip(keys.rx, envelope.payload, envelope.mimeType);
-          const audioUrl = URL.createObjectURL(blob);
-          showPeerPresence("idle");
-          setMessages((prev) => [
-            ...prev,
-            { id: envelope.messageId, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
-          ]);
-          client.send({ type: "delivered", messageId: envelope.messageId });
-          pendingReadIdRef.current = envelope.messageId;
-          maybeSendReadAck(client, pendingReadIdRef, ghostModeRef);
-        } catch {
-          setMessages((prev) => [
-            ...prev,
-            { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
-          ]);
-        }
-        return;
-      }
-      if (envelope.type === "presence") {
-        const keys = sessionKeysRef.current;
-        if (!keys) return;
-        try {
-          const text = await decryptMessage(keys.rx, envelope.payload);
-          const state = parsePresenceState(JSON.parse(text)?.state);
-          if (state) showPeerPresence(state);
-        } catch {
-          // Ignore malformed/undecryptable presence — the next heartbeat recovers.
-        }
-        return;
-      }
-      if (envelope.type === "profile") {
-        const keys = sessionKeysRef.current;
-        if (!keys) return;
-        try {
-          const card = JSON.parse(await decryptMessage(keys.rx, envelope.payload));
-          if (card && typeof card.name === "string") {
-            setPeerProfile({
-              name: card.name,
-              avatar: typeof card.avatar === "string" ? card.avatar : null,
-              device: card.device === "phone" || card.device === "computer" ? card.device : null,
-            });
+          received = await openMsg(sc, envelope);
+        } catch (err) {
+          // A content packet that genuinely won't decrypt gets a bubble; a bad
+          // static signal (or a replay) is dropped silently, as before.
+          if (envelope.c === 0 && !isSilentContentDrop(err)) {
+            setMessages((prev) => [
+              ...prev,
+              { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
+            ]);
           }
-        } catch {
-          // Ignore a malformed/undecryptable profile card.
+          return;
+        }
+        // A content receive advances the receiving ratchet and may have just
+        // established our sending chain (responder) — flush anything queued.
+        if (envelope.c === 0) void flushOutbox();
+
+        switch (received.channel) {
+          case "primer":
+            // Hidden bootstrap message: its only job was to advance the ratchet.
+            break;
+          case "text": {
+            const text = textDecoder.decode(received.body);
+            showPeerPresence("idle");
+            setMessages((prev) => [
+              ...prev,
+              { id: received.id, timestamp: Date.now(), from: "peer", kind: "text", text },
+            ]);
+            void sendAck(client, sc, "delivered", received.id);
+            pendingReadIdRef.current = received.id;
+            void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
+            break;
+          }
+          case "voice": {
+            const blob = new Blob([new Uint8Array(received.body)], { type: received.mimeType ?? "audio/webm" });
+            const audioUrl = URL.createObjectURL(blob);
+            showPeerPresence("idle");
+            setMessages((prev) => [
+              ...prev,
+              { id: received.id, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
+            ]);
+            void sendAck(client, sc, "delivered", received.id);
+            pendingReadIdRef.current = received.id;
+            void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
+            break;
+          }
+          case "presence": {
+            try {
+              const state = parsePresenceState(JSON.parse(textDecoder.decode(received.body))?.state);
+              if (state) showPeerPresence(state);
+            } catch {
+              // Ignore a malformed presence body — the next heartbeat recovers.
+            }
+            break;
+          }
+          case "ack": {
+            if (received.kind) {
+              const kind = received.kind;
+              setMessages((prev) =>
+                prev.map((message) =>
+                  message.kind !== "decryption-error" && message.id === received.id
+                    ? { ...message, status: advanceStatus(message.status ?? "sent", kind) }
+                    : message
+                )
+              );
+            }
+            break;
+          }
+          case "profile": {
+            try {
+              const card = JSON.parse(textDecoder.decode(received.body));
+              if (card && typeof card.name === "string") {
+                setPeerProfile({
+                  name: card.name,
+                  avatar: typeof card.avatar === "string" ? card.avatar : null,
+                  device: card.device === "phone" || card.device === "computer" ? card.device : null,
+                });
+              }
+            } catch {
+              // Ignore a malformed profile card.
+            }
+            break;
+          }
         }
         return;
-      }
-      if (envelope.type === "delivered" || envelope.type === "read") {
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.kind !== "decryption-error" && message.id === envelope.messageId
-              ? { ...message, status: advanceStatus(message.status ?? "sent", envelope.type) }
-              : message
-          )
-        );
       }
     });
 
-    client.send({ type: "pubkey", payload: await toBase64(own.publicKey) });
+    client.send({ type: "pubkey", payload: await toBase64(own.publicKey), v: PROTOCOL_VERSION });
   }
 
   async function handleStart() {
@@ -422,13 +512,36 @@ export default function App() {
     client.send({ type: "join", roomCode });
   }
 
-  async function handleSend(text: string) {
-    const keys = sessionKeysRef.current;
+  // Send ratcheted content, or — if we're the responder and haven't received
+  // the initiator's primer yet — queue it until our sending chain exists.
+  async function sendContent(frameBytes: Uint8Array) {
+    const sc = sessionCryptoRef.current;
     const client = clientRef.current;
-    if (!keys || !client) return;
-    const payload = await encryptMessage(keys.tx, text);
+    if (!sc || !client) return;
+    if (!sc.ratchet.CKs) {
+      outboxRef.current.push(frameBytes);
+      return;
+    }
+    client.send(await sealContent(sc, frameBytes));
+  }
+
+  async function flushOutbox() {
+    const sc = sessionCryptoRef.current;
+    const client = clientRef.current;
+    if (!sc || !client || !sc.ratchet.CKs || outboxRef.current.length === 0) return;
+    const pending = outboxRef.current;
+    outboxRef.current = [];
+    for (const frameBytes of pending) {
+      client.send(await sealContent(sc, frameBytes));
+    }
+  }
+
+  async function handleSend(text: string) {
+    const sc = sessionCryptoRef.current;
+    const client = clientRef.current;
+    if (!sc || !client) return;
     const id = crypto.randomUUID();
-    client.send({ type: "ciphertext", payload, messageId: id });
+    await sendContent(frame({ channel: "text", id, body: textEncoder.encode(text) }));
     setMessages((prev) => [
       ...prev,
       { id, timestamp: Date.now(), from: "me", kind: "text", text, status: "sent" },
@@ -436,12 +549,12 @@ export default function App() {
   }
 
   async function handleSendVoice(blob: Blob, mimeType: string) {
-    const keys = sessionKeysRef.current;
+    const sc = sessionCryptoRef.current;
     const client = clientRef.current;
-    if (!keys || !client) return;
-    const payload = await encryptVoiceClip(keys.tx, blob);
+    if (!sc || !client) return;
     const id = crypto.randomUUID();
-    client.send({ type: "voice", payload, mimeType, messageId: id });
+    const body = new Uint8Array(await blob.arrayBuffer());
+    await sendContent(frame({ channel: "voice", id, mimeType, body }));
     const audioUrl = URL.createObjectURL(blob);
     setMessages((prev) => [
       ...prev,
@@ -452,7 +565,9 @@ export default function App() {
   function handleLeave() {
     clientRef.current?.close();
     clientRef.current = null;
-    sessionKeysRef.current = null;
+    zeroizeSession(sessionCryptoRef.current);
+    sessionCryptoRef.current = null;
+    outboxRef.current = [];
     pendingReadIdRef.current = null;
     if (presenceExpiryRef.current !== null) {
       clearTimeout(presenceExpiryRef.current);

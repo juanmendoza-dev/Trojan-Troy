@@ -9,7 +9,9 @@
 // bytes (no base64) so voice clips don't inflate. Padding to a bucket hides
 // the exact length from the relay.
 
-export type Channel = "text" | "voice" | "presence" | "ack" | "profile";
+// "primer" is a hidden bootstrap message the initiator sends so the responder
+// gains a sending chain (see the Double Ratchet init); it renders nothing.
+export type Channel = "text" | "voice" | "presence" | "ack" | "profile" | "primer";
 
 export interface Frame {
   channel: Channel;
