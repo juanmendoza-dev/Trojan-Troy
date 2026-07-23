@@ -8,6 +8,46 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-23 — Backend-only "post-quantum hardening" security round (4 specs) to
+  deepen the crypto for the hackathon submission; building ①+② first. New crypto
+  dependency accepted.** With the app ship-ready, Jay chose to make the encryption
+  "more complex to impress reviewers," under a hard filter: **backend/data-handling
+  only — do not change the user experience** (extends the `phase-5-security-direction`
+  steer). Brainstormed to four UX-invisible features, all specced
+  (`docs/superpowers/specs/2026-07-23-*-design.md`, drafts):
+  (①) **hybrid post-quantum handshake** — X25519 **+ ML-KEM-768**, both shared secrets
+  folded into the ratchet root key `RK₀`, defeating "harvest now, decrypt later"; (②)
+  **safety-number binding** — hash `RK₀` into the safety number so a PQ downgrade / key
+  swap changes the digits (review L2); (③) **traffic-analysis resistance** — cover
+  traffic + cadence jitter (review B12); (④) **at-rest Argon2id** profile encryption
+  (review S1). Build order ①+② → ④ → ③; ①+② ship together on `feat/pq-hybrid-handshake`.
+  Key calls:
+  (1) **New dependency accepted — `@noble/post-quantum` (ML-KEM-768, FIPS 203,
+  Cure53-audited).** libsodium has no PQC, so this is the **first crypto dep beyond
+  libsodium** — a deliberate reversal of the prior "libsodium-only, zero new deps"
+  point of pride. It's still an audited library, so the hard constraint holds; the
+  hybrid combiner itself is keyed BLAKE2b (existing `crypto_generichash`), not a new
+  primitive. (④ likewise swaps `libsodium-wrappers` → `-sumo` for Argon2id — same
+  vendor, bigger build.)
+  (2) **`PROTOCOL_VERSION` 2 → 3.** The handshake adds a KEM public key on `pubkey`
+  and a new `kemct` envelope. A v3 client **fails closed** if the PQ material is
+  stripped (no classical fallback path); a version mismatch errors, as today. No
+  server change — both ride the relay's opaque unknown-type pass-through.
+  (3) **The ongoing ratchet stays classical (honest residual).** ① makes the *initial*
+  key agreement post-quantum; the Double Ratchet's per-step DH is still X25519, so the
+  copy says "protects the key agreement," never "fully post-quantum." A PQ ratchet
+  (Signal's SPQR direction) is a separate stretch.
+  (4) **H1 *enforcement* deliberately excluded from ②.** Binding the safety number to
+  `RK₀` is backend-only; forcing an explicit "these match" affirmation + a persistent
+  unverified banner (review H1) changes the flow, so it's out under the UX filter —
+  flagged as the biggest remaining real-world residual for a future UX-relaxed pass.
+  (5) **Recommended run mode: stay on `max`, not ultracode, for the build.** ①+② is a
+  tight dependency chain (`pqkem → kdf → ratchetSession → relayClient → App`), the
+  wrong shape for parallel fan-out; ultracode's value here is a dedicated adversarial
+  crypto-review pass on the finished code. (Decided by: Jay (direction: more complex
+  crypto, keep UX identical, infinite compute) + Claude (feature set + all crypto/
+  design/implementation calls))
+
 - **2026-07-23 — Track B relay hardening (`fix/relay-dos-limits`): DoS + lifecycle
   limits on the relay; several implementation calls, all server-only (no crypto,
   no wire change).** Closes review H3/M1/M5/L5 — the last piece of the Phase 5.2

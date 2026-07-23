@@ -119,6 +119,13 @@ sub-projects, each with its own spec in `docs/superpowers/specs/` and its
 own plan/implementation cycle. Build in this order — later items depend on
 earlier ones:
 
+- [ ] **Security hardening round (2026-07-23, backend-only, UX-invisible)** — four
+      specs Jay green-lit to deepen the crypto for the submission, all under
+      `docs/superpowers/specs/2026-07-23-*`: post-quantum hybrid handshake
+      (X25519 + ML-KEM-768) + safety-number binding (in build on
+      `feat/pq-hybrid-handshake`), traffic-analysis resistance (cover traffic), and
+      at-rest Argon2id profile encryption. Orthogonal to the 5.x feature order below;
+      keeps the UX identical. See `decisions.md` (2026-07-23).
 - [ ] 5.1 — **Local Profiles** (REPLACES the retired persistent-identity
       approach — Jay's call, 2026-07-22, see `decisions.md`). Device-local,
       PIN-gated profiles (name + picture) with an always-present Anonymous
