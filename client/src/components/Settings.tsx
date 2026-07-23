@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { ThemeSwitcher } from "../theme/ThemeSwitcher";
+import { Icon } from "./Icon";
 import "./Settings.css";
 
 interface SettingsProps {
@@ -37,7 +38,7 @@ export function Settings({
         <div className="settings__header">
           <span className="settings__title">Settings</span>
           <button className="settings__close" onClick={onClose} aria-label="Close settings">
-            ✕
+            <Icon name="x" size={16} />
           </button>
         </div>
 

@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import type { MessageStatus } from "../protocol/messageStatus";
+import { Icon } from "./Icon";
 import "./VoiceMessageBubble.css";
 
 interface VoiceMessageBubbleProps {
@@ -53,7 +54,7 @@ export function VoiceMessageBubble({
             onEnded={() => setPlaying(false)}
           />
           <button className="voice-bubble__play" onClick={toggle} aria-label={playing ? "Pause" : "Play"}>
-            {playing ? "❚❚" : "▶"}
+            {playing ? <Icon name="pause" size={14} /> : <Icon name="play" size={13} />}
           </button>
           <div className="voice-bubble__waveform" data-playing={playing}>
             {BAR_HEIGHTS.map((height, index) => (

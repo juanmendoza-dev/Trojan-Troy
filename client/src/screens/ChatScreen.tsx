@@ -95,6 +95,7 @@ export function ChatScreen({
   onLeave,
 }: ChatScreenProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [roomHidden, setRoomHidden] = useState(false);
   const [openCard, setOpenCard] = useState<{ data: PeerProfile; anchor: DOMRect } | null>(null);
   const peerCard: PeerProfile = peerProfile ?? { name: "Anonymous", avatar: null, device: null };
 
@@ -103,11 +104,25 @@ export function ChatScreen({
     -1
   );
 
+  // Text the user has sent, newest last — feeds the sidebar's live "data" visualizer.
+  const sentTexts = messages.flatMap((m) => (m.kind === "text" && m.from === "me" ? [m.text] : []));
+
   return (
     <div className="chat-screen">
-      <TitleBar roomCode={roomCode} peerProfile={peerProfile} onOpenSettings={() => setSettingsOpen(true)} />
+      <TitleBar
+        roomCode={roomCode}
+        peerProfile={peerProfile}
+        roomHidden={roomHidden}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
       <div className="chat-screen__body">
-        <Sidebar roomCode={roomCode} onNewChat={() => {}} />
+        <Sidebar
+          roomCode={roomCode}
+          onNewChat={() => {}}
+          sentMessages={sentTexts}
+          roomHidden={roomHidden}
+          onToggleRoomHidden={() => setRoomHidden((v) => !v)}
+        />
         <div className="chat-screen__main">
           <div className="chat-screen__messages">
             <div className="chat-screen__day-divider">Today</div>

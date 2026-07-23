@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { VoiceRecorder } from "../screens/VoiceRecorder";
+import { Icon } from "./Icon";
 import "./Composer.css";
 
 interface ComposerProps {
@@ -47,11 +48,10 @@ export function Composer({ onSend, onSendVoice, onTypingChange, onRecordingChang
           placeholder="Message — encrypted end-to-end"
           autoComplete="off"
         />
-        <span className="composer__caret" />
       </div>
       <VoiceRecorder onSend={onSendVoice} onRecordingChange={onRecordingChange} />
       <button className="composer__send-button" type="submit" aria-label="Send">
-        ↑
+        <Icon name="arrow-up" size={18} strokeWidth={2.25} />
       </button>
     </form>
   );

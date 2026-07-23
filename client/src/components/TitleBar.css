@@ -9,19 +9,18 @@
   border-bottom: 1px solid var(--border-soft);
   backdrop-filter: blur(20px) saturate(180%);
 }
+/* 1:1 with the StartJoinScreen hero wordmark (Schibsted Grotesk, heavy, tight
+   tracking, lilac accent period) — just scaled down to sit in the 46px bar.
+   Hardcoded like the hero so it reads as the brand mark across every theme. */
 .title-bar__wordmark {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.224px;
+  font-family: 'Schibsted Grotesk', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
   color: var(--text-primary);
 }
-:root[data-theme="iris"] .title-bar__wordmark,
-:root[data-theme="pulse"] .title-bar__wordmark {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+.title-bar__wordmark-dot {
   color: var(--accent);
 }
 .title-bar__peer {
@@ -88,12 +87,14 @@
   animation-name: statusPulse;
 }
 .title-bar__settings-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 15px;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 5px;
   border-radius: var(--radius-pill);
 }
 .title-bar__settings-button:hover {

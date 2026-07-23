@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CipherWord } from "./CipherWord";
 import { percentAt } from "./percent";
+import { Icon } from "../../components/Icon";
 import { SECURITY_TICKER_TEXT } from "../securityTicker";
 import "./LoadingScreen.css";
 
@@ -30,7 +31,7 @@ export function LoadingScreen({ roomCode, durationMs = 2600 }: LoadingScreenProp
       <div className="loading-screen__top-row">
         <div className="loading-screen__status">
           <span className="loading-screen__status-dot" />
-          ESTABLISHING SECURE CHANNEL
+          SEALING THE LINE
         </div>
         <div className="loading-screen__room-code">Room {roomCode}</div>
       </div>
@@ -61,19 +62,19 @@ export function LoadingScreen({ roomCode, durationMs = 2600 }: LoadingScreenProp
         <div className="loading-screen__checklist">
           <div className="loading-screen__row" style={{ animationDelay: "1.3s" }}>
             <span className="loading-screen__check" style={{ animationDelay: "1.6s" }}>
-              ✓
+              <Icon name="check" size={11} strokeWidth={3} />
             </span>
             <span>Keypair generated on this device</span>
           </div>
           <div className="loading-screen__row" style={{ animationDelay: "1.7s" }}>
             <span className="loading-screen__check" style={{ animationDelay: "2.2s" }}>
-              ✓
+              <Icon name="check" size={11} strokeWidth={3} />
             </span>
             <span>Keys exchanged through the relay</span>
           </div>
           <div className="loading-screen__row" style={{ animationDelay: "2.1s" }}>
             <span className="loading-screen__pending" />
-            <span className="loading-screen__row-label--pending">Sealing the channel…</span>
+            <span className="loading-screen__row-label--pending">Sealing the line…</span>
           </div>
         </div>
       </div>

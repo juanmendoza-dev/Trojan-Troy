@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { ANONYMOUS_ID, type Profile } from "../profiles/profileModel";
 import { isValidPin, hashPin, verifyPin, newSalt } from "../profiles/pin";
 import { avatarSrc, defaultAvatar, downscaleToDataUrl } from "../profiles/avatar";
+import { Icon } from "./Icon";
 import "./ProfileModal.css";
 
 interface ProfileModalProps {
@@ -57,14 +58,14 @@ export function ProfileModal({
               onClick={() => setView({ name: "list" })}
               aria-label="Back"
             >
-              ‹
+              <Icon name="chevron-left" size={18} />
             </button>
           ) : (
             <span className="profile-modal__header-spacer" />
           )}
           <span className="profile-modal__title">{TITLES[view.name]}</span>
           <button className="profile-modal__close" onClick={onClose} aria-label="Close">
-            ✕
+            <Icon name="x" size={16} />
           </button>
         </div>
 
@@ -104,7 +105,7 @@ export function ProfileModal({
                     setView({ name: "confirm-delete", profile });
                   }}
                 >
-                  ✕
+                  <Icon name="x" size={12} strokeWidth={2.25} />
                 </button>
               </div>
             ))}
@@ -114,7 +115,9 @@ export function ProfileModal({
               className="profile-tile profile-tile--new"
               onClick={() => setView({ name: "create" })}
             >
-              <span className="profile-tile__plus">＋</span>
+              <span className="profile-tile__plus">
+                <Icon name="plus" size={26} strokeWidth={1.75} />
+              </span>
               <span className="profile-tile__name">New profile</span>
             </button>
           </div>

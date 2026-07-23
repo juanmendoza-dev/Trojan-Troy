@@ -6,6 +6,7 @@ import {
   RecordingUnsupportedError,
   type RecordingHandle,
 } from "../audio/recorder";
+import { Icon } from "../components/Icon";
 
 interface VoiceRecorderProps {
   onSend: (blob: Blob, mimeType: string) => void;
@@ -96,7 +97,7 @@ export function VoiceRecorder({ onSend, onRecordingChange }: VoiceRecorderProps)
         onClick={handleStart}
         aria-label="Record voice message"
       >
-        🎙
+        <Icon name="mic" size={18} />
       </button>
     );
   }

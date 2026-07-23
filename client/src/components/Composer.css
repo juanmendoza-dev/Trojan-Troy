@@ -32,20 +32,17 @@
 .composer__input::placeholder {
   color: var(--text-secondary);
 }
-.composer__caret {
-  width: 1.5px;
-  height: 16px;
-  background: var(--accent);
-  animation: caretBlink 1.1s step-end infinite;
-}
 .composer__mic,
 .composer__send-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
   width: 42px;
   height: 42px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
-  font-size: 15px;
   transition: transform 0.12s ease;
 }
 .composer__mic:active,
