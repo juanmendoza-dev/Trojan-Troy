@@ -42,3 +42,40 @@
     animation: none;
   }
 }
+
+/* cursor-following tooltip (portaled to <body>, same idiom as DataMonitor's
+   .viz-tip) — hardcoded Iris-Glass palette to match StartJoinScreen.css. */
+.rotating-tagline__tip {
+  position: fixed;
+  z-index: 2000;
+  left: 0;
+  top: 0;
+  transform: translate(14px, 14px);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  background: #171a2b;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #e8eaf2;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.rotating-tagline__tip.is-visible {
+  opacity: 1;
+}
+.rotating-tagline__tip-flag {
+  width: 20px;
+  height: 14px;
+  border-radius: 2.5px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.rotating-tagline__tip-native {
+  color: #9ba1b5;
+}
