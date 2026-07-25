@@ -89,13 +89,23 @@ these with Fable (the same external design-tool workflow used for the
 original Phase 4 handoff), taking advantage of a window of substantially
 higher compute availability starting 2026-07-21.
 
+Important: a Fable design is only half the work. Each screen still has to be
+**implemented** in the repo afterward (real React + CSS, wired into the app
+and matching the existing theme system) — not just produced as a mockup. That
+implementation is its own effort and burns its own compute/token budget, so
+the high-compute window has to cover *both* designing and implementing all
+three screens, not the design pass alone. Don't treat a screen as done when
+it's only been designed.
+
 - [ ] Fable design handoff for `StartJoinScreen`, `WaitingScreen`, and
       `SafetyNumberScreen`, matching the existing chat-theme visual
       language (Apple / Iris Glass / Pulse Slate) established in Phase 4.
-- [ ] Implement the handoff via this project's usual workflow
+- [ ] Implement each design in the repo via this project's usual workflow
       (superpowers:brainstorming → spec → plan →
       superpowers:subagent-driven-development) — don't build ahead of the
-      handoff landing.
+      handoff landing. A screen isn't done until its design is actually
+      coded, wired in, and verified — budget tokens for this, not just the
+      design.
 
 ## Phase 4.7 — Fable Ultra code review
 Jay plans to run an ultra-depth code review of the existing codebase using

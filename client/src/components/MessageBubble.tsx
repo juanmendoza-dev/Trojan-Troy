@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import "./MessageBubble.css";
-import type { MessageStatus } from "../protocol/messageStatus";
+import { STATUS_TICKS, type MessageStatus } from "../protocol/messageStatus";
 import { useTheme } from "../theme/ThemeContext";
 import { DecryptReveal } from "./DecryptReveal";
 
@@ -12,12 +12,6 @@ interface MessageBubbleProps {
   delayMs?: number;
   avatar?: ReactNode;
 }
-
-const STATUS_TICKS: Record<MessageStatus, string> = {
-  sent: "✓",
-  delivered: "✓✓",
-  read: "✓✓",
-};
 
 // Incoming messages on the dark themes "decrypt" into view once, on arrival.
 // Your own messages appear instantly — there's nothing to decrypt.
