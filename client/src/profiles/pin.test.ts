@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { isValidPin, newSalt, hashPin, verifyPin } from "./pin";
+import sodium from "libsodium-wrappers-sumo";
+import { describe, expect, it, beforeAll } from "vitest";
+import { isValidPin, newSalt, deriveVaultKey, defaultKdfParams } from "./pin";
+
+beforeAll(async () => {
+  await sodium.ready;
+});
 
 describe("isValidPin", () => {
   it("accepts exactly 4 digits", () => {
@@ -15,20 +20,37 @@ describe("isValidPin", () => {
   });
 });
 
-describe("hashPin / verifyPin", () => {
-  it("verifies a matching pin against its salted hash", async () => {
+describe("deriveVaultKey", () => {
+  it("is deterministic for the same pin/salt/params", async () => {
     const salt = await newSalt();
-    const hash = await hashPin("1234", salt);
-    expect(await verifyPin("1234", salt, hash)).toBe(true);
+    const params = await defaultKdfParams();
+    const a = await deriveVaultKey("1234", salt, params);
+    const b = await deriveVaultKey("1234", salt, params);
+    expect(Array.from(a)).toEqual(Array.from(b));
+    expect(a.length).toBe(sodium.crypto_secretbox_KEYBYTES);
   });
-  it("rejects a wrong pin", async () => {
+
+  it("gives a different key for a different pin", async () => {
     const salt = await newSalt();
-    const hash = await hashPin("1234", salt);
-    expect(await verifyPin("9999", salt, hash)).toBe(false);
+    const params = await defaultKdfParams();
+    const a = await deriveVaultKey("1234", salt, params);
+    const b = await deriveVaultKey("9999", salt, params);
+    expect(Array.from(a)).not.toEqual(Array.from(b));
   });
-  it("produces different hashes for the same pin under different salts", async () => {
-    const s1 = await newSalt();
-    const s2 = await newSalt();
-    expect(await hashPin("1234", s1)).not.toBe(await hashPin("1234", s2));
+
+  it("gives a different key for a different salt", async () => {
+    const params = await defaultKdfParams();
+    const a = await deriveVaultKey("1234", await newSalt(), params);
+    const b = await deriveVaultKey("1234", await newSalt(), params);
+    expect(Array.from(a)).not.toEqual(Array.from(b));
+  });
+});
+
+describe("KDF cost sanity", () => {
+  it("is Argon2id at least INTERACTIVE (guards against a fast-hash regression)", async () => {
+    const p = await defaultKdfParams();
+    expect(p.alg).toBe(sodium.crypto_pwhash_ALG_ARGON2ID13);
+    expect(p.ops).toBeGreaterThanOrEqual(sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE);
+    expect(p.mem).toBeGreaterThanOrEqual(sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE);
   });
 });
