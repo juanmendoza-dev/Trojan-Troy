@@ -1,0 +1,67 @@
+.profile-card__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+/* Opaque, glowing popover. It starts at opacity 0 and is faded/scaled in from
+   ProfileCard.tsx as the canvas "coalesce" dots settle onto its footprint. The
+   old see-through look came from --bg-elevated being undefined in Iris/Pulse
+   (10%-opacity fallback); --bg-popover is a solid surface in every theme. */
+.profile-card {
+  position: fixed;
+  box-sizing: border-box;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  opacity: 0;
+  transform-origin: center bottom;
+  background: var(--bg-popover, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.38),
+    0 0 44px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* Full-viewport overlay the reveal is painted on; never intercepts clicks. */
+.profile-card__fx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.profile-card__avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  object-fit: cover;
+  background: var(--bg-card);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+.profile-card__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.profile-card__device {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* JS skips the particle reveal and simply fades the card in. */
+  .profile-card {
+    transition: opacity 0.18s ease;
+  }
+}

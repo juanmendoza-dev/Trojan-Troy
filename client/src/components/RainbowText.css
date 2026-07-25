@@ -1,0 +1,25 @@
+.rainbow-text__char {
+  display: inline-block;
+  transition: color 0.5s ease;
+}
+.rainbow-text--always .rainbow-text__char {
+  animation: rainbowSweep 1.6s linear infinite;
+  animation-delay: calc(var(--i) * 0.08s);
+}
+.rainbow-text--hover:hover .rainbow-text__char {
+  animation: rainbowSweep 1.6s linear infinite;
+  animation-delay: calc(var(--i) * 0.08s);
+}
+@keyframes rainbowSweep {
+  0% { color: #ff6b6b; }
+  20% { color: #ffc46e; }
+  40% { color: #7ed9b7; }
+  60% { color: #8fa6ff; }
+  80% { color: #c48fff; }
+  100% { color: #ff6b6b; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rainbow-text__char {
+    animation: none;
+  }
+}

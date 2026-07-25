@@ -15,8 +15,15 @@ and `decisions.md` for why things were done a certain way.
 | 4.5 — Ambient orbs, Iris Glass default, Settings modal, deploy config | Complete — verified end-to-end |
 | — Continuous handshake-to-chat transition (unscheduled, user-requested polish) | Complete — verified end-to-end |
 | — Chat polish: themed bubble animations, read receipts, Ghost Mode (unscheduled, user-requested) | Complete — verified end-to-end |
-| 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` redesigned (Radar/Signal); `StartJoinScreen` & `SafetyNumberScreen` still pending |
-| 5 — Marketing/landing site | Not started |
+| — Decrypt-reveal redesign: width-driven focus sweep (unscheduled, user-requested polish) | Merged to `main` — typecheck/tests/build green; manual eyeball pending |
+| — Peer presence indicator: encrypted typing + recording (unscheduled, user-requested) | Built on `feat/typing-presence-indicator` — typecheck/tests/build green; visual eyeball + live round-trip pending |
+| — Seal-slider sparks: canvas ember effect on the safety-number slider (unscheduled, user-requested) | Merged to `main` — typecheck/95 tests/build green; visual eyeball via `?screen=safety` pending |
+| — Error screen: themed six-scenario error screen (unscheduled; was built but stranded on the retired identity branch) | Merged to `main` (`275d834`) — typecheck/104 tests/build green; visual eyeball (`?screen=error`) pending |
+| 4.6 — Style remaining unstyled screens | In progress — `WaitingScreen` (Radar/Signal) + `StartJoinScreen` (home + connecting bar) redesigned; `SafetyNumberScreen` still pending |
+| 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
+| 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
+| 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | Ratchet track (Tasks 0-7) shipped to `main` (`683d3a3`, fast-forward) — Double Ratchet + sealed `msg` framing + padding + host-primer, plus honest about/security copy. typecheck/156 tests/build green; two-browser smoke (text both ways + joiner-first) confirmed live. Track B (relay DoS/lifecycle hardening — H3/M1/M5/L5) built + green on `fix/relay-dos-limits` (server 30/30, build clean, probe-verified), **pending Jay's go-ahead to fast-forward merge** (deploys the relay to Render). Remaining after that: a fuller voice/receipts/presence eyeball. |
+| PQ hardening ①+② — hybrid post-quantum handshake (X25519 + ML-KEM-768) + safety-number binding | Built on `feat/pq-hybrid-handshake` — typecheck/163 tests/build green; full handshake choreography verified via a throwaway real-module test (root-key agreement, session-bound safety number, joiner-first via primer, corrupt-`kemct` fails). Manual two-browser eyeball pending. ③ traffic-analysis + ④ at-rest specced, not built. |
 
 ## Log
 
@@ -302,3 +309,356 @@ and `decisions.md` for why things were done a certain way.
   `feat/waiting-room-redesign` off `main` (does **not** include the in-flight
   `fix/security-review-findings` commit). Phase 4.6's `StartJoinScreen` and
   `SafetyNumberScreen` styling remain open. See `decisions.md` (2026-07-21).
+
+- **2026-07-21** — Home-screen redesign (part of Phase 4.6, `StartJoinScreen` +
+  the new connecting bar). Rebuilt the previously-unstyled home/entry screen to
+  the Fable handoff (`ui/Trojan Troy Home Screen/Trojan Troy Home.dc.html`; the
+  implemented React screens are the design's source of truth), matching the
+  Iris-Glass world: own fixed gradient shell + shared
+  `AmbientOrbs`, top-left "secure channel ready" badge, centered `Trojan Troy.`
+  wordmark + tagline, a frosted action card (Start button → "or join" divider →
+  room-code input + Join), a bottom security marquee (shared
+  `SECURITY_TICKER_TEXT`) and accent hairline, with staggered rise-in entrances
+  on the signature easing. The **connecting / waking-the-relay bar** (grassy
+  green `#6FBF78→#7BC97F→#A6E0A0`) is new: phase-driven (surge → hold → complete
+  → settle → exit) via CSS width transitions, with sheen + breathing-glow
+  "alive" layers kept separate from the fill % so a ~60s cold start never looks
+  frozen, plus a `prefers-reduced-motion` fallback. It's driven by the real
+  connection event — `App` passes a `connectStatus` prop
+  (`idle|connecting|connected`) down, flips it on tap and on `created`
+  (Start) / `peer-connected` (Join), and holds a beat
+  (`CONNECT_COMPLETE_HOLD_MS`) at 100% before transitioning; the error path
+  resets it so the bar never hangs. Pure phase→visual logic + timings factored
+  into a tested `barPhases.ts` (8 tests). Added a `?screen=connecting` dev
+  override (replacing the handoff's demo relay/warm/cold preview controls,
+  which were dropped as non-product UI) to eyeball the alive state without a
+  relay. Preserves the invite-link `initialCode` prefill/focus/select. Verified:
+  `npm run typecheck` clean, 74 vitest tests pass (8 new for `barPhases`, 1 for
+  the `connecting` override), `npm run build` green, and a dev-server smoke test
+  (home page + all new modules serve HTTP 200, grassy-green fill present).
+  Layout/bar motion + the ~60s cold-start hold still want a manual eyeball via
+  `npm run dev` (`/` and `?screen=connecting`) — no browser-automation tool in
+  this environment, as in prior phases. Built on branch
+  `feat/home-screen-redesign` off `main`. Phase 4.6's `SafetyNumberScreen`
+  styling remains open. See `decisions.md` (2026-07-21).
+
+- **2026-07-22** — Decrypt-reveal redesign (unscheduled, user-requested polish).
+  Replaced the incoming-message per-character scramble (`CipherText` /
+  `cipherReveal`) with a width-driven "focus sweep" (`DecryptReveal`): the message
+  arrives blurred + dim and a glowing `--accent`-colored edge sweeps left→right
+  bringing it into sharp focus, as one fixed-duration (560ms) CSS timeline masked
+  across the bubble width. Fixes the four things that made the scramble read as a
+  bug — horizontal glyph wobble (proportional font), flicker trailing past the
+  bubble entrance, a scramble alphabet that never matched real text, and the
+  short-message case ("hi" had nothing to sweep). Real glyphs throughout → no
+  wobble, no reflow, and more accessible (no rAF loop; the sharp text is present
+  from the first frame). Gate unchanged: incoming-only, Iris/Pulse-only, once per
+  message id, Apple instant, reduced-motion shows text immediately; the old
+  per-bubble `bubbleDecryptGlow` bloom was removed (the sweep edge replaces it).
+  Retired `cipherReveal.ts` + its test (no per-char timing logic left to
+  unit-test); `npm run typecheck` clean, 75/75 client vitest tests pass,
+  `npm run build` green. No browser-automation tool in this environment (as in
+  every prior visual phase), so the sweep's pixels still want a manual eyeball via
+  `npm run dev` → `?screen=chat` (toggle Iris/Pulse) before merge. Built on branch
+  `feat/decrypt-focus-sweep` off `main` (rebased clean onto `main` after it was
+  initially branched on top of the unrelated typing-presence spec). See
+  `decisions.md` (2026-07-22).
+
+- **2026-07-22** — Peer presence indicator (typing + voice recording)
+  brainstormed with Jay and spec'd. Not a scheduled phase — the Phase 5
+  backlog "peer is typing" item, pulled forward as a small self-contained
+  feature. Designed as an *encrypted* presence signal: a new client-only
+  `presence` envelope carrying a `secretbox`-sealed `{state}` (the relay
+  forwards it opaquely, no server change), an Instagram-style three-dot bubble
+  reskinned per theme (periwinkle glass beads + the currently-unused
+  `glowPulse` keyframe on Iris/Pulse, flat grey on Apple), gated behind an
+  expanded Ghost Mode ("don't broadcast my activity"). Heartbeat-send +
+  receiver auto-expiry, with the timing logic destined for a tested
+  `protocol/presenceState.ts` (matching `messageStatus.ts`/`readAckDecision.ts`).
+  Spec: `docs/superpowers/specs/2026-07-22-typing-presence-design.md`;
+  rationale + delegated calls in `decisions.md` (2026-07-22); `roadmap.md`
+  backlog note corrected (client-only, not a protocol change). Then implemented
+  on branch `feat/typing-presence-indicator` off `main`: the `presence` envelope
+  (`relayClient.ts`), a pure `protocol/presenceState.ts` (heartbeat-send decision
+  + defensive state parse, 9 unit tests), a themed `PresenceIndicator` component
+  (reuses the existing `typingDot`/`glowPulse` keyframes; SVG mic for the
+  recording variant; light fade-out for the hand-off to the arriving message),
+  and wiring through `Composer`/`VoiceRecorder`/`ChatScreen`/`App`.
+  `encryptMessage`/`decryptMessage` reused for the sealed `{state}` payload — no
+  new crypto primitive, no server change. Verified: `npm run typecheck` clean, 92
+  vitest tests pass (9 new for `presenceState`), `npm run build` green. Visual
+  eyeball (dev `?screen=chat` renders the indicator) + a live two-browser
+  round-trip still want a manual look — no browser-automation tool in this
+  environment, as in prior phases.
+
+- **2026-07-22** — Seal-slider spark effect (unscheduled, user-requested
+  polish, not a roadmap phase) — **merged to `main`**. The safety-number
+  screen's "drag to seal" slider now throws rainbow embers off the knob as you
+  drag right — intensifying with drag speed and progress — and bursts a radial
+  shower on seal. Built as a canvas overlay (`components/SealSparks.tsx` +
+  `.css`) mounted over `.confirm-key__seal`, with the pure emission-count +
+  trail-color sampling in a tested `screens/sparkModel.ts` (11 new unit tests);
+  `SafetyNumberScreen` gained pointer-velocity tracking on drag, a keyboard puff
+  impulse, and a reduced-motion static knob glow. Rainbow-ember hue is sampled
+  from the same trail gradient the track paints, so sparks look flung off the
+  rail. No new dependency, no crypto/relay/server change. Verified on the merged
+  tree: `npm run typecheck` clean, 95 vitest tests pass (11 new), `npm run build`
+  green (102 modules). The live ember motion + seal burst still want a manual
+  eyeball on the deployed site (or `npm run dev` → `?screen=safety`) — no
+  browser-automation tool in this environment, as in every prior visual phase.
+  Design: `docs/superpowers/specs/2026-07-22-seal-slider-sparks-design.md`;
+  rationale + implementation calls in `decisions.md` (2026-07-22).
+
+- **2026-07-22** — Contacts privacy settings (extension to Phase 5.1)
+  brainstormed with Jay and spec'd. Design-ahead, same as the presence
+  indicator — build stays gated under Phase 5.1 (and Phase 5's 4.6/4.7
+  prerequisites); nothing built yet. Jay wanted a contact feature "similar to
+  crypto" (a public-key/address-book model, which 5.1's identity-key contacts
+  list already is) with more privacy controls, and chose three to design on top
+  of 5.1: per-contact **pseudonyms** (cosmetic — one identity key; choose the
+  name/none each contact sees + local-only labels), **contacts-only mode + block
+  list** (opt-in), and **at-rest encryption** of the identity/contacts store
+  (PIN + idle re-lock, `crypto_pwhash` + the existing `crypto_secretbox`, no new
+  primitive). Recognition simplified to key-based only (5.1's name-based
+  key-changed warning dropped; the `identity` envelope name is now optional). No
+  server change. Spec:
+  `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`; headline
+  directions + delegated implementation calls in `decisions.md` (2026-07-22);
+  `roadmap.md` gains a 5.1a note.
+
+- **2026-07-22** — Local Profiles (Layer A) built — replaces the retired
+  persistent-identity direction (see `decisions.md`). After the
+  persistent-identity + PIN/contacts work was rolled back off `main` (`1ee0e35`),
+  built device-local, PIN-gated profiles on `feat/profiles`: pure
+  `profiles/pin.ts` (4-digit validate + salted hash) and
+  `profiles/profileModel.ts` (Anonymous default + active-profile resolution), an
+  IndexedDB `profileStore.ts` (+ `fake-indexeddb` for tests), the bundled default
+  avatar (the taiyaki-hat cat) + a downscale util, a `ProfileButton` on the home
+  screen, a Settings-style `ProfileModal` (create / select-with-PIN / delete with
+  a soft-red cube confirm), and opt-in *encrypted* name/photo sharing (a new
+  relay-forwarded `profile` envelope, a Settings toggle default off, peer card in
+  the chat header). Session crypto unchanged; no server change. Added a
+  `?screen=profiles` dev override. Verified: `npm run typecheck` clean, 108
+  vitest tests pass (13 new), `npm run build` green (default-avatar bundled). Per-
+  profile conversation history is Layer B (a separate plan). Manual eyeball
+  (`?screen=profiles`) + a live two-browser sharing round-trip still pending — no
+  browser-automation tool in this environment, as in every prior visual phase.
+  Spec: `docs/superpowers/specs/2026-07-22-local-profiles-design.md`; plan:
+  `docs/superpowers/plans/2026-07-22-local-profiles.md`.
+
+- **2026-07-22** — Profile avatars on messages + click-to-open profile card
+  (extends Local Profiles; user-requested). Hybrid Discord style — kept the
+  themed bubbles, added a small avatar beside each message (peer's on incoming,
+  yours on outgoing), shown on the last message of a consecutive run (tested
+  `components/messageGrouping.ts`). Clicking an avatar opens a `ProfileCard`
+  popover (name + larger picture + "on computer/phone"). Device is a best-effort
+  heuristic (`profiles/device.ts`, tested) added to the existing *encrypted*
+  `profile` card payload — relay-blind, opt-in via the same sharing toggle. Not
+  shared → the message avatars/card fall back to the default cat + "Anonymous".
+  Refactored the message row to `[avatar][stack]` (`MessageBubble` /
+  `VoiceMessageBubble`), all themes. Verified: typecheck clean, 114 vitest tests
+  (6 new), build green. Manual eyeball (`?screen=chat`, and a live two-browser
+  round-trip with sharing on) still pending — no browser-automation tool here.
+  Built on `feat/profiles`.
+
+- **2026-07-22** — Error screen shipped to `main`/production (unscheduled — it
+  had already been built, but was stranded). A themed `ErrorScreen` with six
+  scenarios (friend left, handshake failed, relay unreachable, bad room code,
+  room full, generic), a `?screen=error&scenario=…` dev preview, and the
+  `App.tsx` wiring that replaces the old bare `<h1>Something went wrong</h1>`
+  placeholder on every error path — plus the `ui/Trojan Troy - Error Screen.html`
+  design file. It had been implemented earlier (commit `cf92d00`) on branch
+  `feat/error-screen`, which was stacked on top of the persistent-identity/PIN
+  work — the direction retired in favor of Local Profiles and rolled back off
+  `main` (`1ee0e35`, see `decisions.md`). So it was never merged, and merging
+  that branch as-is would have re-shipped the rolled-back PIN work. Since the
+  screen has no real dependency on the identity code, it was extracted:
+  cherry-picked just `cf92d00` onto a clean branch off `main` (applied with zero
+  conflicts — `screenOverride.ts` was byte-identical to its base and `App.tsx`
+  still had every context line the patch expected, because the identity wiring
+  lived elsewhere in the file), verified (`npm run typecheck` clean, 104 client
+  vitest tests pass, `npm run build` green), and fast-forward merged to `main`
+  (`275d834`) + pushed for the Vercel redeploy. The Local Profiles work later
+  landed on top (`42aadcb`) with the error screen still wired and intact. The six
+  error states' visuals still want a manual eyeball on the deploy (or
+  `npm run dev` → `?screen=error&scenario=…`) — no browser-automation tool in
+  this environment, as in every prior visual phase. See `decisions.md`
+  (2026-07-22).
+
+- **2026-07-22** — Phase 5.2 (forward-secrecy ratchet) build STARTED on branch
+  `feat/forward-secrecy-ratchet` off `main` (`8d8f1a2`); paused mid-plan with the
+  crypto foundation done and green. This is the "turn up the backend security"
+  work Jay green-lit: a Signal-style **Double Ratchet** (a fresh key per message →
+  forward secrecy + post-compromise self-healing) riding on the existing ephemeral
+  `crypto_kx` handshake (no persistent identity), plus sealed framing
+  (channel/`messageId`/`mimeType` moved inside the ciphertext) and size-bucket
+  padding, collapsing the content/signal envelopes into one opaque `msg`. Invisible
+  to the user — bytes on the wire only. Built with libsodium only (no new
+  dependency, no `-sumo`). Spec:
+  `docs/superpowers/specs/2026-07-22-phase5.2-forward-secrecy-ratchet-design.md`;
+  plan: `docs/superpowers/plans/2026-07-22-phase5.2-forward-secrecy-ratchet.md`
+  (its **BUILD STATUS banner** at the top is the authoritative done/todo ledger);
+  rationale in `decisions.md` (2026-07-22, top entry).
+
+  **Done, committed, green (full client suite 150/150):**
+  - Task 0 — roadmap/decisions reordering logged (`ad01fc7`).
+  - Task 1 — `crypto/aead.ts`: XChaCha20-Poly1305 AEAD wrapper with associated
+    data, `nonce||ct` base64 (5 tests) (`41d1a4d`).
+  - Task 2 — `crypto/kdf.ts`: `deriveRootKey` (RK0 from the sorted crypto_kx
+    session keys), `kdfRoot`, `kdfChain`, `deriveChannelSubkey` — all keyed
+    BLAKE2b (6 tests) (`1cfb964`).
+  - Task 3 — `crypto/framing.ts`: frame/unframe + one unified pad schedule
+    `[64,256,1024,4096,16384]` then 16 KiB steps (a refinement over the spec's
+    two-schedule idea — avoids a profile-avatar overflow) (7 tests) (`adb94ed`).
+  - Task 4 — `crypto/ratchet.ts`: the Double Ratchet core (init{Alice,Bob},
+    ratchetEncrypt/Decrypt, DH ratchet, skipped-key handling — MAX_SKIP=100,
+    global cap 1000). `ratchetDecrypt` is **transactional** (clones state, commits
+    only on successful decrypt) so a tampered/replayed packet can't corrupt the
+    session. 9 tests: in-order, out-of-order within a chain and across a DH step,
+    replay-drop, skip cap, header tamper, reflection (`128a87e`).
+
+  **Resume at Task 5** (`net/relayClient.ts` Envelope collapse into the unified
+  `msg` + new `protocol/ratchetSession.ts`), then Task 6 (`App.tsx` wiring: seed
+  the ratchet in `exchangeKeys`, send/receive via `ratchetSession`, static
+  per-channel subkeys for presence/ack/profile, the H2 re-key guard, zeroize on
+  leave), Task 7 (docs + honest security copy), and the independent Track B (relay
+  DoS/lifecycle hardening on its own branch `fix/relay-dos-limits`).
+
+  **Scouted gotcha for Task 5:** `client/src/net/relayClient.test.ts` hard-codes the
+  OLD envelope shapes in three cases ("includes messageId when sending a ciphertext
+  envelope", "passes through delivered and read acks", "passes a profile card
+  envelope through") — they must be rewritten to the unified `msg` envelope in the
+  same task or the suite breaks. `crypto/messages.ts`/`media.ts`/`secretbox.ts` stay
+  (tests still pass; unused by the live path after Task 6, kept for Layer-B). And
+  `npm run typecheck` will be RED between Task 5 and the end of Task 6 (App.tsx still
+  references the removed envelope types until rewired) — normal mid-phase; vitest
+  still runs per-file. No live two-browser round-trip yet (that's Task 6's manual
+  acceptance) — no browser-automation tool in this environment, as in every prior
+  phase.
+
+- **2026-07-23** — Phase 5.2 **Task 5 done** (`63a4b08`, pushed): the wire format +
+  session binding. `net/relayClient.ts`'s `Envelope` union now collapses the
+  post-handshake `ciphertext`/`voice`/`presence`/`profile`/`delivered`/`read` types
+  into one opaque `{ type:"msg", c, header?, payload }` (`c`: 0=content, 1=presence,
+  2=ack, 3=profile), adds `v` to `pubkey` + exports `PROTOCOL_VERSION = 2`, and
+  re-exports `RatchetHeader`. New `protocol/ratchetSession.ts` binds the ratchet +
+  static directional subkeys to a session: `initSession` (initiator → `initAlice`
+  against the peer's handshake key; responder → `initBob` reusing his own handshake
+  keypair), `sealContent` (ratcheted, `c:0`), `sealStatic` (presence/ack/profile,
+  sealed under a per-channel subkey with the channel name as AAD), `openMsg` (decrypt
+  + `unframe`; throws so the caller drops — the ratchet's transactional decrypt keeps
+  the live session intact on a bad packet). 6 new `ratchetSession` tests (content /
+  voice / each static channel round-trips; content-relabeled-as-static dropped;
+  presence-relabeled-as-ack dropped; corrupt payload dropped with the session still
+  usable) + the 3 stale `relayClient` tests rewritten to `msg`. Full suite **156/156**;
+  `npm run typecheck` intentionally RED on **`App.tsx` only** (still on the old
+  envelope types) until Task 6 — vitest green. **Resume at Task 6** (`App.tsx` wiring:
+  seed the session in `exchangeKeys`, route send/receive through `ratchetSession`,
+  static subkeys for presence/ack/profile, the H2 re-key guard, zeroize on leave).
+  **Flag for Task 6:** by the Double Ratchet's design the responder has *no sending
+  chain until he receives the initiator's first content message* — so a joiner who
+  sends the very first text before receiving anything hits "no sending chain yet."
+  Confirm the two-browser acceptance sends initiator-first, or handle the
+  send-before-receive case explicitly.
+
+- **2026-07-23** — Phase 5.2 **Task 6 done** (`4c8e37e`): the ratchet is live in the
+  app. `App.tsx` now seeds a `SessionCrypto` (`initSession`) in `exchangeKeys` right
+  after `deriveSessionKeys` (safety number path unchanged), sends/receives all content
+  through `sealContent`/`openMsg` (fresh key per message), and routes presence / ack /
+  profile through `sealStatic` static subkeys. The six per-type receive branches
+  collapse into one `msg` handler that decrypts, then switches on the sealed channel.
+  Receipts are now sealed on the "ack" channel (unforgeable; no longer a
+  decrypt-success oracle — closes M6); `pubkey` carries `PROTOCOL_VERSION` and a
+  mismatch → error screen; a second `pubkey` → error screen (H2 guard — never
+  re-seeds a live session); ratchet secrets + channel subkeys are `sodium.memzero`'d
+  on leave (L3/B13). **Host-primer** (the send-before-receive fix): the initiator sends
+  a hidden `primer` content message right after keys are established, so the responder
+  gains a sending chain and *either* side can type first (a new `"primer"` channel in
+  `framing.ts`, decrypted then dropped by the UI). Belt-and-suspenders: the responder
+  also buffers outgoing content in an `outboxRef` until a content receive establishes
+  its chain, then flushes automatically — covers a slow/cold-start relay. Verified:
+  `npm run typecheck` clean, 156/156 vitest, `npm run build` green, and a throwaway
+  real-module protocol test (written, run, deleted) confirmed the primer lets the guest
+  send first, replays drop with no duplicate, cross-class relabels + forged acks drop,
+  and voice bytes + mimeType survive a JSON wire round-trip. **Still pending:** the
+  manual two-browser acceptance (no browser-automation tool here, as every prior phase)
+  and Task 7 (honest about/security copy). `crypto/messages.ts` / `media.ts` /
+  `secretbox.ts` are now unused by the live path (kept for possible Layer-B history).
+
+- **2026-07-23** — Phase 5.2 ratchet track **shipped to `main`** (`683d3a3`,
+  fast-forward) + **Task 7** (honest security copy). After a two-browser smoke test
+  confirmed messages flow normally and — the key primer case — the joiner can send the
+  first message, the branch fast-forward-merged to `main` (Jay's call: merge now, copy
+  as an immediate follow-up). Task 7 updated the Settings → About blurb to state forward
+  secrecy honestly ("every message gets its own key, discarded right after… a stolen key
+  can't unlock past messages, and the connection re-secures itself after a compromise")
+  while keeping the residual honest ("the relay can still tell that you're chatting and
+  roughly how much, but never what's said") — no overselling. roadmap 5.2 checked. What
+  shipped: per-message forward secrecy + post-compromise self-healing, sealed framing
+  (channel/id/mimeType inside the ciphertext), size-bucket padding, one opaque `msg`
+  envelope, sealed unforgeable receipts, an H2 re-key guard, `PROTOCOL_VERSION`
+  negotiation, and zeroize-on-leave — closing review findings H4, M2, M6, L4, H2 and
+  partially B12, all with no server change. **Remaining for the 5.2 cluster:** Track B
+  (relay DoS/lifecycle hardening — H3/M1/M5/L5 — on its own branch `fix/relay-dos-limits`,
+  no crypto), and a fuller manual eyeball of voice + receipts + presence + profile
+  sharing (text + joiner-first were confirmed; no browser-automation tool here).
+
+- **2026-07-23** — Phase 5.2 **Track B (relay DoS/lifecycle hardening) built** on
+  `fix/relay-dos-limits` off `main` — server-only, no crypto, no wire change,
+  closing review H3/M1/M5/L5 and finishing the 5.2 cluster. Three commits:
+  **B1** (`bd97d6f`) `maxPayload` (2 MiB) + a per-connection token-bucket
+  message-rate throttle (closes the socket on breach) + per-IP (30) and global
+  (1000) connection caps + a global active-room cap (5000, via a new
+  `RoomManager.atRoomCapacity()` pre-check); **B2** (`42e1388`) an `isAlive`
+  ping/pong heartbeat sweep (30s; terminates a socket that misses a pong) + an
+  env-configurable origin allowlist (`ALLOWED_ORIGINS`) via `verifyClient` that
+  *fails open* when unset (localhost always allowed, one-time startup warning) so
+  it can't accidentally lock out prod; **B3** (`a2efcf9`) one-room-per-peer (a
+  second `create`/`join` calls the existing `disconnect(peer)` first — clears the
+  stale TTL timer, notifies a real partner), self-join rejection, `create`/`join`
+  shape validation with a room-code format check (`isValidRoomCode`) replying
+  `error` — while the unknown-type pass-through (`pubkey`, the opaque `msg`) stays
+  forwarded verbatim — and a tighter dedicated join-attempt bucket (10 / 1-per-sec)
+  against blind enumeration. All limits are code constants overridable via a new
+  `startRelay` options arg (tests inject tiny values). Verified: `server` **30/30**
+  vitest (oversized→1009, flood→1008, per-IP/global cap→1013, dead-socket reaping,
+  origin reject/allow/localhost, double-create drops the orphan, self-join
+  rejected, malformed join→error while the opaque `msg` still forwards), `npm run
+  build` (tsc) clean, and a manual boot of both dev servers + a throwaway
+  two-client protocol probe (deleted) that forwarded a 1.78 MiB voice-sized
+  envelope and saw a 3 MiB frame rejected with close 1009 — confirming 2 MiB isn't
+  too tight for a 60s voice message. A real browser text+voice eyeball through the
+  hardened relay still wants a human (no browser-automation tool here, as every
+  prior phase). Refuted finding §C.2 left alone (no try/catch around `peer.send()`).
+  **Not yet merged** — a fast-forward merge redeploys the relay to Render
+  (production), so it waits on Jay's go-ahead. See `decisions.md` (2026-07-23).
+
+- **2026-07-23** — Post-quantum hardening ①+② built on `feat/pq-hybrid-handshake`
+  (first of the four-spec backend-only security round — see `decisions.md` 2026-07-23
+  and the specs/plan dated 2026-07-23). The session-key agreement is now **hybrid
+  post-quantum**: alongside the existing ephemeral `crypto_kx` (X25519), the responder
+  publishes an **ML-KEM-768** public key (`@noble/post-quantum` — the first crypto
+  dependency beyond libsodium), the initiator encapsulates and returns a `kemct`, and
+  both shared secrets are folded into the Double Ratchet's initial root key `RK₀` via a
+  two-step keyed-BLAKE2b combiner (`deriveRootKey`, domain `v3`) — so a session is safe
+  unless BOTH X25519 and ML-KEM break (defeats "harvest now, decrypt later"). The
+  handshake became role-asymmetric (responder = KEM holder/decapsulator, initiator =
+  encapsulator), **fails closed** if the KEM material is stripped (no classical
+  fallback), bumps `PROTOCOL_VERSION` 2→3, buffers inbound `msg` until `RK₀` exists (the
+  primer/profile card can race the responder's seed), and extends the H2 guard to the
+  KEM leg. ② the **safety number now binds `RK₀`** (a one-way commitment) + domain tags,
+  so a key swap or a PQ downgrade changes the digits (closes review L2); zeroize covers
+  the root key. No server change — the KEM fields ride the relay's opaque pass-through.
+  Honest about/security copy updated (hybrid PQ protects the key agreement / recorded
+  traffic; deliberately **not** claimed "fully post-quantum" — the ongoing ratchet DH
+  stays classical, a documented residual in the spec). Verified: `npm run typecheck`
+  clean, **163** client tests (7 new: pqkem ×4, kdf pq-binding, session root-key
+  agreement, safety-number binding), `npm run build` green, and a throwaway real-module
+  handshake test (run then deleted) confirmed both sides reach an identical `RK₀` +
+  safety number, the primer lets the joiner send first, and a corrupted `kemct` makes
+  the primer fail to open. Manual two-browser eyeball still pending (no browser-automation
+  tool here, as every prior phase). Remaining in the round: ④ at-rest Argon2id, then ③
+  traffic-analysis, plus the optional ultracode adversarial crypto-review pass. Specs:
+  `docs/superpowers/specs/2026-07-23-pq-hybrid-handshake-design.md` +
+  `…-safety-number-binding-design.md`; plan:
+  `docs/superpowers/plans/2026-07-23-pq-hybrid-handshake.md`.

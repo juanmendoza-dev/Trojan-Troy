@@ -8,6 +8,10 @@
 # Guardrails (so an auto-committer stays safe):
 #   - never commits on the default branch (main/master) — AGENTS.md: branch first
 #   - never commits during a merge/rebase/cherry-pick (avoids a half-done state)
+#   - debounced: only fires once uncommitted work has been sitting a while
+#     (TT_AUTOCOMMIT_MIN_GAP_SECS, default 15 min) — it's a safety net, not a
+#     per-turn committer, so it won't pile "work in progress" commits mid-build.
+#     The agent's own per-task commits carry Hackatime activity between fires.
 #   - respects .gitignore (uses `git add -A`, which skips ignored files)
 #   - never disables signing; if the commit fails to sign/commit, it does NOT
 #     push — it reports the failure instead (AGENTS.md rule 2)
@@ -44,6 +48,20 @@ gitdir="$(git rev-parse --git-dir 2>/dev/null)"
 if [ -e "$gitdir/MERGE_HEAD" ] || [ -e "$gitdir/CHERRY_PICK_HEAD" ] \
    || [ -d "$gitdir/rebase-merge" ] || [ -d "$gitdir/rebase-apply" ]; then
   emit "Auto-commit skipped: a merge/rebase is in progress on '$branch'."
+fi
+
+# 3b. Debounce. Don't commit on top of a recent commit — the agent's own
+#     per-task commits are what feed Hackatime; this hook only needs to catch
+#     work that's been left uncommitted for a while. Skip if the last commit on
+#     this branch is newer than TT_AUTOCOMMIT_MIN_GAP_SECS (default 15 min;
+#     set 0 to disable the debounce). Uses last-commit age as a proxy for how
+#     long the current changes have been accumulating.
+min_gap="${TT_AUTOCOMMIT_MIN_GAP_SECS:-900}"
+last_commit="$(git log -1 --format=%ct 2>/dev/null || echo 0)"
+now="$(date +%s)"
+if [ "$min_gap" -gt 0 ] && [ "$last_commit" -gt 0 ] \
+   && [ "$((now - last_commit))" -lt "$min_gap" ]; then
+  emit "Auto-commit debounced: last commit $(( (now - last_commit) / 60 ))m ago (< $((min_gap / 60))m). Work is saved locally; it'll auto-commit if it keeps sitting."
 fi
 
 # 4. Build a short, plain, human-ish message from the change set.
