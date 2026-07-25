@@ -255,7 +255,6 @@ Keep the existing `isValidPin` describe block. Replace the `hashPin / verifyPin`
 import sodium from "libsodium-wrappers";
 import { describe, expect, it, beforeAll } from "vitest";
 import { isValidPin, newSalt, deriveVaultKey, defaultKdfParams } from "./pin";
-import * as pinModule from "./pin";
 
 beforeAll(async () => {
   await sodium.ready;
@@ -294,15 +293,10 @@ describe("KDF cost sanity", () => {
     expect(p.ops).toBeGreaterThanOrEqual(sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE);
     expect(p.mem).toBeGreaterThanOrEqual(sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE);
   });
-
-  it("exposes no fast-hash helpers", () => {
-    expect("hashPin" in pinModule).toBe(false);
-    expect("verifyPin" in pinModule).toBe(false);
-  });
 });
 ```
 
-Note: the "exposes no fast-hash helpers" test will FAIL until Task 4 removes `hashPin`/`verifyPin`. Mark that single `it` with `it.skip` in this task and un-skip it in Task 4 Step (pin cleanup). All other tests in this task must pass now.
+Note: the "no fast-hash export remains" guard is added in Task 4 (where `hashPin`/`verifyPin` are actually deleted), not here — `hashPin` still exists in this task, so that assertion cannot pass yet.
 
 - [ ] **Step 2: Run to verify the new derive tests fail**
 
@@ -608,12 +602,19 @@ export function setShareProfile(on: boolean): void {
 Run: `cd client && npx vitest run src/profiles/profileStore.test.ts`
 Expected: PASS (4 tests, including the legacy-drop migration).
 
-- [ ] **Step 7: Remove the fast hash from `pin.ts` and un-skip its guard test**
+- [ ] **Step 7: Remove the fast hash from `pin.ts` and add its guard test**
 
-In `pin.ts` delete `hashPin` and `verifyPin` (and the `TODO(Task 4)` comment). In `pin.test.ts` change the `it.skip("exposes no fast-hash helpers", ...)` back to `it(...)`.
+In `pin.ts` delete `hashPin` and `verifyPin` (and the `TODO(Task 4)` comment). In `pin.test.ts` add the guard test to the `KDF cost sanity` describe block (import the module namespace at the top: `import * as pinModule from "./pin";`):
+
+```ts
+it("exposes no fast-hash helpers (no fast-hash export remains)", () => {
+  expect("hashPin" in pinModule).toBe(false);
+  expect("verifyPin" in pinModule).toBe(false);
+});
+```
 
 Run: `cd client && npx vitest run src/profiles/pin.test.ts`
-Expected: PASS — including "exposes no fast-hash helpers".
+Expected: PASS — including the new "no fast-hash export remains" guard.
 
 - [ ] **Step 8: Wire `ProfileModal.tsx`** — derive/seal on create, derive/open on unlock
 
