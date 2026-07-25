@@ -44,6 +44,9 @@
   animation: statusPulse 2.4s ease-out infinite;
 }
 .waiting-screen__cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: none;
   background: transparent;
   padding: 6px 4px;
@@ -157,6 +160,11 @@
   background: rgba(126, 217, 183, 0.12);
   border-color: rgba(126, 217, 183, 0.4);
   color: #7ed9b7;
+}
+.waiting-screen__copied {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ── QR card ─────────────────────────────────────────────── */

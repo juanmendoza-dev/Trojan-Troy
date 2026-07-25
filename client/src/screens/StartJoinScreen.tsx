@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AmbientOrbs } from "../components/AmbientOrbs";
+import { RainbowText } from "../components/RainbowText";
+import { ScrambleText } from "../components/ScrambleText";
 import { ConnectingBar, type ConnectStatus } from "./ConnectingBar";
 import { SECURITY_TICKER_TEXT } from "./securityTicker";
+import { ProfileButton } from "../components/ProfileButton";
+import type { ActiveProfile } from "../profiles/profileModel";
 import "./StartJoinScreen.css";
 
 interface StartJoinScreenProps {
@@ -9,9 +13,18 @@ interface StartJoinScreenProps {
   onJoin: (code: string) => void;
   connectStatus: ConnectStatus;
   initialCode?: string;
+  activeProfile: ActiveProfile;
+  onOpenProfiles: () => void;
 }
 
-export function StartJoinScreen({ onStart, onJoin, connectStatus, initialCode }: StartJoinScreenProps) {
+export function StartJoinScreen({
+  onStart,
+  onJoin,
+  connectStatus,
+  initialCode,
+  activeProfile,
+  onOpenProfiles,
+}: StartJoinScreenProps) {
   const [code, setCode] = useState(initialCode ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
   const busy = connectStatus !== "idle";
@@ -45,8 +58,14 @@ export function StartJoinScreen({ onStart, onJoin, connectStatus, initialCode }:
 
       <div className="start-join-screen__badge">
         <span className="start-join-screen__badge-dot" />
-        Secure channel ready
+        Clear to talk ~{" "}
+        <span className="start-join-screen__cipher-group">
+          <RainbowText text="SHA-256" className="start-join-screen__cipher" />
+          <ScrambleText text="encryption method" className="start-join-screen__cipher-sub" />
+        </span>
       </div>
+
+      <ProfileButton active={activeProfile} onClick={onOpenProfiles} />
 
       <div className="start-join-screen__hero">
         <h1 className="start-join-screen__wordmark">
@@ -54,7 +73,7 @@ export function StartJoinScreen({ onStart, onJoin, connectStatus, initialCode }:
           <br />
           Troy<span className="start-join-screen__period">.</span>
         </h1>
-        <p className="start-join-screen__tagline">End-to-end encrypted. No accounts. No trace.</p>
+        <p className="start-join-screen__tagline">Nobody sees this but the two of you.</p>
 
         <div className="start-join-screen__card">
           <div className="start-join-screen__form" data-busy={busy}>

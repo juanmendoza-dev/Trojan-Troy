@@ -1,0 +1,109 @@
+/* Incoming-message "decrypt" reveal — see DecryptReveal.tsx.
+
+   The text arrives blurred + dim and a glowing edge sweeps left-to-right,
+   bringing it into focus. Every glyph is the real one throughout (no scramble),
+   so nothing wobbles and the layout never reflows: a blurred copy in normal flow
+   reserves the wrapped box, and the sharp copy is masked in on top. The whole
+   thing is one fixed-duration timeline tied to the bubble's width, so a two-
+   letter message sweeps exactly like a long one. */
+
+.decrypt-reveal {
+  --decrypt-ms: 560ms;
+  --decrypt-ease: cubic-bezier(0.2, 0.9, 0.3, 1);
+  position: relative;
+  display: inline-block;
+  vertical-align: top;
+}
+
+/* Blurred, dimmed copy — the "still encrypted" state ahead of the sweep. It
+   stays in normal flow so it reserves the real (wrapped) size for the overlay. */
+.decrypt-reveal__base {
+  display: inline-block;
+  filter: blur(6px);
+  opacity: 0.5;
+  animation: decryptBaseSettle var(--decrypt-ms) var(--decrypt-ease) both;
+}
+
+/* Sharp copy, overlaid exactly on the blurred one and masked in from the left as
+   the sweep passes. The mask is wider than the element and slid across, which is
+   animatable (mask-position) where animating gradient stops is not. */
+.decrypt-reveal__sharp {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-image: linear-gradient(100deg, #000 0 50%, transparent 56% 100%);
+  mask-image: linear-gradient(100deg, #000 0 50%, transparent 56% 100%);
+  -webkit-mask-size: 260% 100%;
+  mask-size: 260% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: decryptWipe var(--decrypt-ms) var(--decrypt-ease) both;
+}
+
+/* Glowing scan edge that rides the reveal boundary. Themed via --accent, so it's
+   periwinkle on Iris and violet on Pulse. */
+.decrypt-reveal__edge {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px 1px var(--accent), 0 0 18px 4px var(--accent);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: decryptEdge var(--decrypt-ms) var(--decrypt-ease) both;
+}
+
+/* Screen-reader-only real text, since the two visual layers are aria-hidden. */
+.decrypt-reveal__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes decryptWipe {
+  from {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+  to {
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
+  }
+}
+
+/* The region ahead of the edge lifts from dim to gone as the sharp copy takes
+   over, so no faint ghost is left trailing behind the resolved text. */
+@keyframes decryptBaseSettle {
+  0%,
+  65% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes decryptEdge {
+  0% {
+    left: -4%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  85% {
+    opacity: 0.9;
+  }
+  100% {
+    left: 104%;
+    opacity: 0;
+  }
+}

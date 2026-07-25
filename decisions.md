@@ -8,6 +8,375 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-23 — Backend-only "post-quantum hardening" security round (4 specs) to
+  deepen the crypto for the hackathon submission; building ①+② first. New crypto
+  dependency accepted.** With the app ship-ready, Jay chose to make the encryption
+  "more complex to impress reviewers," under a hard filter: **backend/data-handling
+  only — do not change the user experience** (extends the `phase-5-security-direction`
+  steer). Brainstormed to four UX-invisible features, all specced
+  (`docs/superpowers/specs/2026-07-23-*-design.md`, drafts):
+  (①) **hybrid post-quantum handshake** — X25519 **+ ML-KEM-768**, both shared secrets
+  folded into the ratchet root key `RK₀`, defeating "harvest now, decrypt later"; (②)
+  **safety-number binding** — hash `RK₀` into the safety number so a PQ downgrade / key
+  swap changes the digits (review L2); (③) **traffic-analysis resistance** — cover
+  traffic + cadence jitter (review B12); (④) **at-rest Argon2id** profile encryption
+  (review S1). Build order ①+② → ④ → ③; ①+② ship together on `feat/pq-hybrid-handshake`.
+  Key calls:
+  (1) **New dependency accepted — `@noble/post-quantum` (ML-KEM-768, FIPS 203,
+  Cure53-audited).** libsodium has no PQC, so this is the **first crypto dep beyond
+  libsodium** — a deliberate reversal of the prior "libsodium-only, zero new deps"
+  point of pride. It's still an audited library, so the hard constraint holds; the
+  hybrid combiner itself is keyed BLAKE2b (existing `crypto_generichash`), not a new
+  primitive. (④ likewise swaps `libsodium-wrappers` → `-sumo` for Argon2id — same
+  vendor, bigger build.)
+  (2) **`PROTOCOL_VERSION` 2 → 3.** The handshake adds a KEM public key on `pubkey`
+  and a new `kemct` envelope. A v3 client **fails closed** if the PQ material is
+  stripped (no classical fallback path); a version mismatch errors, as today. No
+  server change — both ride the relay's opaque unknown-type pass-through.
+  (3) **The ongoing ratchet stays classical (honest residual).** ① makes the *initial*
+  key agreement post-quantum; the Double Ratchet's per-step DH is still X25519, so the
+  copy says "protects the key agreement," never "fully post-quantum." A PQ ratchet
+  (Signal's SPQR direction) is a separate stretch.
+  (4) **H1 *enforcement* deliberately excluded from ②.** Binding the safety number to
+  `RK₀` is backend-only; forcing an explicit "these match" affirmation + a persistent
+  unverified banner (review H1) changes the flow, so it's out under the UX filter —
+  flagged as the biggest remaining real-world residual for a future UX-relaxed pass.
+  (5) **Recommended run mode: stay on `max`, not ultracode, for the build.** ①+② is a
+  tight dependency chain (`pqkem → kdf → ratchetSession → relayClient → App`), the
+  wrong shape for parallel fan-out; ultracode's value here is a dedicated adversarial
+  crypto-review pass on the finished code. (Decided by: Jay (direction: more complex
+  crypto, keep UX identical, infinite compute) + Claude (feature set + all crypto/
+  design/implementation calls))
+
+- **2026-07-23 — Track B relay hardening (`fix/relay-dos-limits`): DoS + lifecycle
+  limits on the relay; several implementation calls, all server-only (no crypto,
+  no wire change).** Closes review H3/M1/M5/L5 — the last piece of the Phase 5.2
+  cluster, built as direct-patch `superpowers:receiving-code-review` work per the
+  review's routing (three commits B1-B3 + this log). Calls:
+  (1) **`maxPayload` = 2 MiB**, the review's recommended size. Confirmed against a
+  realistic worst-case voice send *at the protocol level* rather than a real
+  browser recording (no browser-automation tool here, as in every prior phase): a
+  throwaway two-client probe against the running hardened relay forwarded a
+  1.78 MiB opaque `msg` envelope (well above a real ~1.35 MB 60s Opus envelope) and
+  a 3 MiB frame was rejected with close 1009. The recorder sets no
+  `audioBitsPerSecond`, so the browser picks a conservative Opus voice bitrate —
+  2 MiB has comfortable headroom. It's one constant; bump it if a real 60s clip is
+  ever seen near the cap.
+  (2) **Origin allowlist fails OPEN, by design.** The relay is live on Render and
+  the exact production Vercel origin isn't known here; a strict default could lock
+  out prod. So `verifyClient` allows any origin when the `ALLOWED_ORIGINS` (comma-
+  separated) env var is unset — logging a one-time startup warning — and *always*
+  allows localhost so `npm run dev` works. **Action for Jay:** set the real Vercel
+  origin(s) in Render's env to actually restrict it, or leave it permissive. (L5.)
+  (3) **Abuse limits are code constants, overridable via a new `startRelay` options
+  arg** (tests inject tiny values); only the origin allowlist reads env, since it's
+  the one that needs per-deploy config. Values: 2 MiB payload; 1000 global / 30
+  per-IP connections; 5000 active rooms; a 60-token / 30-per-sec message bucket
+  (generous — a real 2-person chat peaks at a few msgs/sec) that closes the socket
+  on breach; a tighter **dedicated join bucket** (10 / 1-per-sec) so blind
+  room-code enumeration is throttled without affecting a legit one-time join; a 30s
+  ping/pong heartbeat reaping half-open sockets.
+  (4) **Connection caps are enforced in the `connection` handler (post-upgrade,
+  close 1013), not `verifyClient`** — simpler correct increment/decrement paired
+  with the socket's `close` event, at the cost of completing the WS handshake
+  before rejecting an over-cap socket (negligible; the rate limiter + per-IP cap
+  are the real flood defenses).
+  (5) **Global active-room cap is a pre-check (`RoomManager.atRoomCapacity()`)
+  rather than changing `createRoom`'s return type** — keeps its `string` signature
+  and every existing call site/test intact. Marginal edge case accepted (a peer
+  alone in a room re-creating at exactly the cap is rejected even though create
+  would free their old room first — noise at a 5000-room cap).
+  (6) **One-room-per-peer + self-join live in `RoomManager` (`createRoom`/
+  `joinRoom`)**, calling the existing `disconnect(peer)` first on a second
+  create/join (clears the stale TTL timer, notifies a real partner) — closing the
+  M5 orphan/timer leak; self-join is rejected *before* that teardown so it isn't
+  erased. **Create/join SHAPE validation lives at the wire layer (`server.ts`)**
+  and gates ONLY those two structural branches — the unknown-type pass-through
+  (`pubkey`, the unified opaque `msg`) is forwarded verbatim and untouched, since
+  all post-handshake E2EE traffic depends on the relay never inspecting it.
+  Refuted finding §C.2 left alone: no try/catch was added around `peer.send()` —
+  `ws.send()` on a closing/closed socket doesn't throw synchronously. Verified:
+  `server` 30/30 vitest, `npm run build` (tsc) clean, both dev servers boot, probe
+  as above. Not merged yet — a fast-forward merge redeploys the relay to Render
+  (production), so it waits on Jay. (Decided by: Jay (direction: harden the
+  backend, keep the UX identical) + Claude (implementation calls))
+
+- **2026-07-22 — Building Phase 5.2 (forward-secrecy ratchet) now, ahead of any
+  remaining 5.1 work, and dropping 5.2's old dependence on persistent-identity
+  keys.** With the UI/features ship-ready, Jay chose to "turn up the complexity"
+  on the backend and strengthen the encryption for the submission (see the
+  `phase-5-security-direction` steer: keep the user-facing flow identical, focus
+  on data handling under the hood). The headline is a **Double Ratchet** — the
+  Signal-style per-message key rotation giving forward secrecy (a stolen key
+  can't read past messages) + post-compromise "self-healing" (a transient
+  compromise heals on the next DH step). Key call: **it does NOT need persistent
+  identity.** `roadmap.md` had 5.2 "built on top of 5.1's identity/ephemeral key
+  split," but persistent identity was retired for Local Profiles, which
+  deliberately left session crypto untouched — so the ratchet is seeded from the
+  existing ephemeral `crypto_kx` handshake instead, making 5.2 independent of 5.1
+  and buildable on today's `main`. This reorders the roadmap (5.2 before the rest
+  of 5.1); Jay green-lit it. Built entirely from primitives already in the shipped
+  `libsodium-wrappers` build (`crypto_scalarmult`, `crypto_aead_xchacha20poly1305`,
+  keyed `crypto_generichash`) — **no new dependency, no `-sumo`** (the Phase 4.7
+  review's note that `crypto_kdf` needs `-sumo` was checked and is wrong for this
+  build; that caveat only applies to `crypto_pwhash`/Argon2, a different feature).
+  The same refactor seals framing (channel/`messageId`/`mimeType` move inside the
+  ciphertext) and pads payloads to size buckets, collapsing the content/signal
+  envelopes into one opaque `msg` type (the relay still forwards it blindly — no
+  server change). This closes review findings H4, M2, M6, L4, H2 and partially
+  B12; the safety number and `crypto_kx` rx/tx separation are preserved unchanged.
+  A separate branch (`fix/relay-dos-limits`) hardens the relay itself
+  (H3/M1/M5/L5) — independent, no crypto. Full design:
+  `docs/superpowers/specs/2026-07-22-phase5.2-forward-secrecy-ratchet-design.md`;
+  plan: `docs/superpowers/plans/2026-07-22-phase5.2-forward-secrecy-ratchet.md`.
+  Deliberately NOT changing: first-contact MITM is still gated by the safety
+  number (the identity/TOFU option that would change the UX was set aside per the
+  steer). Branch: `feat/forward-secrecy-ratchet`. (Decided by: Jay (direction +
+  go-ahead) + Claude (crypto/design/implementation calls))
+
+- **2026-07-22 — Error screen extracted from the retired identity branch and
+  shipped to `main` on its own, rather than merging the stranded branch or
+  hand-redoing the wiring.** The error screen was already built (commit
+  `cf92d00`: a themed `ErrorScreen` + `errorScenario.ts` with six scenarios, a
+  `?screen=error` dev preview, the `App.tsx` wiring replacing the bare
+  `<h1>Something went wrong</h1>` placeholder, and the design HTML), but it sat
+  on `feat/error-screen`, which was stacked on top of the persistent-identity/PIN
+  work — the direction retired in favor of Local Profiles and rolled back off
+  `main` (`1ee0e35`, see the "Retired persistent identity" entry below). So the
+  screen had never reached production, and merging that branch as-is would have
+  re-shipped the rolled-back PIN work. Since it has no actual dependency on the
+  identity code (verified: `ErrorScreen`/`errorScenario` reference nothing about
+  identity/vault/PIN, and its `App.tsx` diff only touches error-handling paths
+  that also exist on `main`), the clean fix was to cherry-pick just `cf92d00`
+  onto a fresh branch off `main` — which applied with zero conflicts
+  (`screenOverride.ts` byte-identical to its base; main's `App.tsx` still had
+  every context line the patch expected, the identity wiring being elsewhere in
+  the file) — verify (typecheck / 104 tests / build all green), and fast-forward
+  merge to `main` (`275d834`) + push, chosen over merging the whole stranded
+  branch or re-implementing the wiring by hand. Committed directly on `main`,
+  like the other deploy/rollback commits. Note: the earlier PIN rollback
+  (`1ee0e35`) was never logged as a decision in its own right — it's captured
+  indirectly by the "Retired persistent identity" entry below. Residual: the six
+  error states are unverified pixel-wise (no browser automation here; preview via
+  `?screen=error&scenario=…`). (Decided by: Jay (asked to get it into
+  production) + Claude (extraction approach))
+
+- **2026-07-22 — Profile avatars on messages + a click-to-open profile card
+  (extends Local Profiles).** Design calls with Jay: **hybrid, not full
+  Discord** — keep the themed left/right bubbles and just add a small clickable
+  avatar beside each message (peer's on incoming, yours on outgoing), rather than
+  rebuilding the message area as Discord-style rows (which would retire the
+  bubble animation / read-receipt work). Avatar shows on the **last message of a
+  consecutive run** (`endsGroup` + `align-items: flex-end`) — the iMessage-tail
+  position that fits bubbles, vs Discord's top-of-run. The card shows name +
+  picture + **device** ("computer"/"phone"): device is a best-effort UA
+  heuristic (`profiles/device.ts`) carried inside the existing *encrypted*
+  `profile` card (no new envelope; relay stays blind), gated by the same opt-in
+  sharing toggle — accepted that it's a small extra metadata disclosure to the
+  peer and can be wrong/spoofed. Peer hasn't shared → avatars/card fall back to
+  the default cat + "Anonymous". `ProfileCard` is a lightweight popover anchored
+  above the clicked avatar (no positioning lib). (Decided by: Jay (direction) +
+  Claude (implementation calls))
+
+- **2026-07-22 — Retired persistent identity (5.1) + contacts privacy (5.1a) in
+  favor of "Local Profiles"; built Layer A.** After the persistent-identity +
+  PIN/contacts build was rolled back (`main` @ `1ee0e35` "Redeploy the
+  pre-identity client"), Jay chose a lighter, UI-first direction and said he
+  likes it a lot better. Local Profiles = device-local, PIN-gated profiles
+  (name + picture) with an always-present **Anonymous** default, plus opt-in
+  name/photo sharing with the peer. Key calls (Jay unless noted): **light/local
+  only** — no long-term identity keypair, session crypto unchanged, no server
+  change; **PIN is a 4-digit local access gate**, salted-hashed, explicitly NOT
+  encryption (the UI says so); **Anonymous** shares nothing and keeps no history;
+  **avatar** is an uploaded photo or a single bundled default picture (the
+  taiyaki-hat cat Jay supplied) — no emoji set, one fewer dependency; **sharing
+  is opt-in, default off**, and the name/photo go to the peer as an *encrypted*
+  `profile` envelope (relay-blind, same pattern as `presence`). Claude calls:
+  archive-only history + at-rest encryption under the PIN for the deferred Layer
+  B; the profile card is sent right after the key exchange. Layer A (profiles +
+  PIN + modal + sharing) is built on `feat/profiles`; per-profile conversation
+  history is Layer B (a separate plan). The 5.1/5.1a specs are shelved, not
+  deleted. Spec: `docs/superpowers/specs/2026-07-22-local-profiles-design.md`;
+  plan: `docs/superpowers/plans/2026-07-22-local-profiles.md`. (Decided by: Jay
+  (direction) + Claude (implementation calls))
+
+- **2026-07-22 — Building Phase 5.1 (persistent identity) + 5.1a (contacts
+  privacy settings) now, together, ahead of the 4.6/4.7 ordering.** Jay asked to
+  build the contacts-privacy spec; since it's an extension that sits entirely on
+  the still-unbuilt 5.1 foundation (identity keypair, contacts store, `identity`
+  envelope, combined key derivation), "following the spec" requires building 5.1
+  first. Jay chose to build them **together** on one feature branch rather than
+  5.1-then-extension, because they modify the same surfaces and a split would
+  mean building-then-reworking (5.1's three-branch safety screen collapses to
+  two; the plaintext contacts store becomes encrypted). This overrides the
+  2026-07-20 decision that put Phase 4.6 (SafetyNumberScreen styling) and 4.7
+  (Fable code review) before any Phase 5 work — Jay explicitly accepted that
+  trade. Built on branch `feat/persistent-identity-contacts`. Specs:
+  `docs/superpowers/specs/2026-07-19-persistent-identity-design.md` +
+  `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`. (Decided by:
+  Jay)
+
+- **2026-07-22 — Contacts privacy settings brainstormed and spec'd as an
+  extension to Phase 5.1; three settings, headline directions chosen by Jay,
+  finer calls delegated to Claude.** Full design in
+  `docs/superpowers/specs/2026-07-22-contacts-privacy-design.md`. Jay wanted a
+  contact feature "similar to crypto" (a public-key / address-book model — which
+  5.1's identity-key contacts list already is) with more privacy settings, chose
+  to build on 5.1, and picked three: (a) **per-contact pseudonyms**,
+  **cosmetic** (one shared identity key; choose the name/none each contact sees
+  + local-only labels) over true per-contact unlinkability (a separate key per
+  relationship — much larger, breaks the single recovery code / one safety
+  number; deferred); (b) **contacts-only mode + block list**, opt-in / off by
+  default; (c) **at-rest encryption** of the identity/contacts store, unlocked
+  with a PIN + **idle re-lock (session timeout)** over app-lock-every-launch or
+  lazy. Delegated implementation calls (Claude):
+  (1) **Recognition becomes key-based only** — 5.1's name-based "key-changed"
+  warning branch is dropped (self-asserted names are now cosmetic/optional, so
+  correlating a new key to an old contact by name is unreliable and noisy; the
+  safety number was always the real protection, and 5.1 framed the warning as
+  routing into it, not replacing it). 5.1's three `SafetyNumberScreen` branches
+  collapse to two (recognized / new); the `identity` envelope's `displayName`
+  becomes optional (anonymous presentation). This overrides part of the Approved
+  5.1 spec — confirmed with Jay before writing it down.
+  (2) **"Join as" picker** on the start/join screen (default name / saved alias
+  / anonymous), scoped to the room and chosen before the handshake — sidesteps
+  the fact that both peers send their `identity` envelope simultaneously on
+  `peer-connected`, so you can't pick a per-contact name after learning who the
+  peer is without a two-phase handshake.
+  (3) **Access gate keys on the identity key, never the presented name** (pure
+  `net/accessControl.ts`), so anonymous-but-known peers are allowed and
+  unknown-but-named peers refused; `refuse-blocked` is silent (looks like a
+  failed connection — no block signal, no retaliation bait).
+  (4) **At-rest uses libsodium only** — `crypto_pwhash` (Argon2id) derives the
+  vault key and the existing `crypto_secretbox` wraps the identity secret key +
+  contacts store (no new primitive). Idle re-lock gates the contacts/identity
+  store but does **not** kill an active in-memory chat (its session keys are
+  already derived, independent of the identity secret). Forgot-PIN restores via
+  5.1's recovery code; the recovery-code export gains **optional passphrase
+  protection** (nudged when a PIN is set) so it isn't the weak link.
+  Pure logic (`atRest`, `lockState`, `accessControl`, extended `recoveryCode`)
+  gets Vitest coverage; screens are manually verified, per the standing
+  convention. No server change. Documented residual limits: pseudonyms hide
+  names not the shared key (colluding contacts can still correlate — true
+  unlinkability deferred); blocking is per-key not per-person; at-rest
+  encryption protects a locked/stolen device, not malware-while-unlocked or a
+  known PIN; no PIN brute-force lockout this pass (relies on Argon2id cost).
+  Design-ahead — build stays gated under Phase 5.1 (and Phase 5's 4.6 / 4.7
+  prerequisites), same as the presence indicator. (Decided by: Jay (headline
+  directions) + Claude (implementation calls))
+
+- **2026-07-22 — Seal-slider spark effect on the safety-number screen: a
+  canvas particle layer; three design directions + several implementation
+  calls.** Brainstormed with Jay from scratch (make the "drag to seal" slider
+  throw sparks as it moves right, as rich and smooth as possible); full design
+  in `docs/superpowers/specs/2026-07-22-seal-slider-sparks-design.md`. Jay chose
+  the three headline directions: **canvas particle system** (over lightweight
+  CSS/DOM sparks or a particle-library dependency), **rainbow embers** whose hue
+  is sampled from the existing trail gradient at each spark's birth point (over
+  a hot-friction or electric/plasma palette), and **full cinematic** intensity
+  (embers escape up off the rail while dragging + a radial burst on seal). The
+  finer implementation calls (Claude):
+  (1) The spark canvas is a **persistent child of `.confirm-key__seal`, rendered
+  outside the `phase === "verify"` conditional.** On seal that block (track +
+  knob) unmounts, so a canvas nested inside it would vanish before the burst
+  could draw; as an outside sibling it survives to shower over the "Channel
+  sealed" box during the existing `OPENING_HOLD_MS` hold.
+  (2) **The loop runs for the component's lifetime rather than the spec's
+  "self-park + restart" model.** Self-parking would need an imperative handle or
+  the parent re-kicking the loop; since `SafetyNumberScreen` is short-lived and
+  an idle frame is just one cheap `clearRect` on a small canvas, always-running-
+  while-mounted is simpler and stays fully ref-driven — the `holdingRef` the
+  spec earmarked for parking wasn't needed and was dropped from the component's
+  props.
+  (3) **The one-shot seal "sheen" sweep moved from the fill to the
+  `.confirm-key__sealed-box`.** The spec put it on the fill, but the fill lives
+  in the verify block that unmounts on seal, so it can't sweep post-seal; the
+  green sealed box carries it instead (same reused global `sheen` keyframe).
+  (4) **Physics are dt-normalized to 60fps units** (motion speed is refresh-rate
+  independent) while emission stays per-frame — a 120Hz display simply throws
+  denser sparks, bounded by the `MAX_PARTICLES` cap, which is fine.
+  (5) **Keyboard parity via a synthetic velocity impulse:** `ArrowRight` briefly
+  sets `velocityRef` so the same velocity-driven emission path puffs for that
+  step; Enter / arrow-to-100% seal and trigger the burst like a drag does.
+  The pure emission-count + trail-color-sampling math is extracted to a tested
+  `screens/sparkModel.ts` (matching `barPhases.ts` / `readAckDecision.ts`); the
+  canvas drawing itself is visual-only with no unit test, per the project's
+  standing convention. Reduced motion renders no canvas but keeps a
+  progress-scaled static knob glow. No new dependency, no crypto/relay/server
+  change. (Decided by: Jay (design directions) + Claude (implementation calls))
+
+- **2026-07-22 — Peer presence indicator designed as an *encrypted*
+  typing+recording signal; several design/implementation calls.** Brainstormed
+  with Jay from the Phase 5 backlog "peer is typing" item; full design in
+  `docs/superpowers/specs/2026-07-22-typing-presence-design.md`. Jay set the
+  direction (classic Instagram-style dots with a Trojan Troy touch; encrypt +
+  respect Ghost Mode; cover text *and* voice recording), then delegated the
+  finer calls ("do whatever you think is best").
+  (1) **Transport is client-only, not a "protocol change."** The Phase 4 note
+  (`decisions.md`, 2026-07-19) that a typing indicator needs a relay/protocol
+  change is corrected: the relay forwards unknown envelope types opaquely
+  (same as `ciphertext`/`voice`/`delivered`/`read`), so a new `presence`
+  envelope is one line in the client `Envelope` union with zero server work.
+  `roadmap.md`'s backlog note updated to match.
+  (2) **The presence state is encrypted**, unlike the cleartext
+  `delivered`/`read` acks — the payload is a tiny JSON `{state}` sealed
+  through the existing `encryptMessage`/`secretbox` path (no new primitive),
+  so the relay can't tell typing from recording from stop. The `type:
+  "presence"` field stays cleartext (structural routing, same category as the
+  already-cleartext `messageId`). Accepted residual leak: the relay can still
+  see presence-packet *cadence* (traffic analysis) even without contents —
+  same threat-model line as `messageId`, hardening deferred to Phase 5.
+  (3) **Ghost Mode is broadened** from "suppress read receipts" to "don't
+  broadcast my activity" — it now also suppresses outgoing presence, reusing
+  the same `trojan-troy-ghost-mode` toggle/`ghostModeRef` gate (no new
+  setting). It governs only what you send; you still see the peer's presence.
+  Settings "Privacy" copy to be updated.
+  (4) **Send model is a throttled heartbeat** (~2.5s while active) + immediate
+  stop, with the receiver auto-expiring the indicator (~5s) as a dropped-stop
+  safety net; the pure timing logic goes in `protocol/presenceState.ts` with a
+  unit test, matching `messageStatus.ts`/`readAckDecision.ts`.
+  (5) Delegated calls: **continuity** is a light overlapping fade of the dots
+  bubble into the arriving message (not a full shared-element morph — brittle
+  across variable heights, and there's no layout-animation lib; the message's
+  existing `DecryptReveal` reveal still carries the payoff);
+  **recording variant** = mic glyph + dots labelled "recording audio…";
+  **Apple theme** gets a flat grey iMessage-style bubble (not skipped),
+  Iris/Pulse get periwinkle glass beads + the currently-unused `glowPulse`
+  keyframe + the signature easing.
+  (Decided by: Jay (feature direction) + Claude (implementation calls))
+
+- **2026-07-22 — Reworked the incoming-message "decrypt" reveal from a
+  per-character scramble to a width-driven focus sweep (`CipherText` →
+  `DecryptReveal`).** The old scramble read as a bug rather than a feature for
+  four reasons: (1) the scramble layer used the bubble's proportional font, so
+  random-width glyphs made the text wobble horizontally frame to frame; (2) the
+  reveal outlasted the bubble's entrance animation, so the text kept flickering
+  after the bubble had visibly settled; (3) the scramble alphabet was lowercase
+  alphanumeric only, so real text (capitals/punctuation) resolved out of a
+  character set that never matched it, reading as corruption; and (4) it was a
+  per-character lock front, which needs length to read as a "sweep" — a two-char
+  message like "hi" got ~744ms of two glyphs strobing with nothing sweeping (Jay's
+  main complaint). The new effect renders the real text throughout (no scramble):
+  a blurred+dim copy in normal flow reserves the wrapped box, a sharp copy is
+  masked in on top, and a glowing `--accent`-colored edge sweeps left→right. It's
+  one fixed-duration (560ms) CSS timeline tied to the bubble's width via an
+  animated `mask-position`, so a two-letter message sweeps exactly like a
+  paragraph — fixing the short-message case by construction, along with the wobble
+  (real glyphs at fixed positions), the trailing flicker (the sweep now ends
+  within the entrance envelope), and the alphabet mismatch (there's no scramble at
+  all). Bonus: it's simpler and more accessible than the scramble — no rAF loop,
+  and the sharp text is real from the first frame. Implementation calls: renamed
+  the component (nothing "cipher" remains) and retired `cipherReveal.ts` + its
+  Vitest test — the effect is now pure CSS with no per-character timing logic left
+  to test, so this branch adds no new unit tests (consistent with the repo rule
+  that only pure-logic modules get coverage; the animation itself is verified by
+  eye). The surrounding gate is unchanged: still incoming-only, Iris/Pulse-only,
+  once per message id, Apple stays instant, `prefers-reduced-motion` shows text
+  immediately. The per-bubble `bubbleDecryptGlow` box-shadow bloom was removed —
+  the sweep's glowing edge replaces it. Chosen from four brainstormed directions
+  (focus sweep / cipher scan / redacted-block / minimal fix). (Decided by: Jay
+  (picked the focus-sweep direction) + Claude (implementation calls))
+
 - **2026-07-21 — Home-screen (`StartJoinScreen`) redesign + connecting-bar
   wiring, built from the Fable home handoff; several implementation calls.**
   The Fable home handoff (`ui/Trojan Troy Home Screen/Trojan Troy Home.dc.html`)
