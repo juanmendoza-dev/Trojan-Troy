@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { RelayClient, type Envelope, PROTOCOL_VERSION } from "./net/relayClient";
 import { parseInviteCode } from "./net/inviteLink";
 import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";

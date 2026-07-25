@@ -1,4 +1,4 @@
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { toBase64 } from "../crypto/encoding";
 
 // A profile PIN is a local access gate, not real encryption — a 4-digit PIN is
@@ -17,7 +17,7 @@ export async function newSalt(): Promise<string> {
 export async function hashPin(pin: string, salt: string): Promise<string> {
   await sodium.ready;
   const input = sodium.from_string(`${salt}:${pin}`);
-  return toBase64(sodium.crypto_generichash(32, input));
+  return toBase64(sodium.crypto_generichash(32, input, null));
 }
 
 export async function verifyPin(pin: string, salt: string, hash: string): Promise<boolean> {

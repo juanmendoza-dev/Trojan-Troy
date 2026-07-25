@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { deriveRootKey, kdfRoot, kdfChain, deriveChannelSubkey } from "./kdf";
 
 const rand = (n = 32) => sodium.randombytes_buf(n);

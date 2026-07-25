@@ -1,4 +1,4 @@
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 
 // Key-derivation for the Double Ratchet, built from keyed BLAKE2b
 // (`crypto_generichash`) — the same primitive the safety number uses. Each

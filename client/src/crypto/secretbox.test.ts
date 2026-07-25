@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { encryptBytes, decryptBytes } from "./secretbox";
 
 describe("secretbox", () => {

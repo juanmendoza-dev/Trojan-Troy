@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "libsodium-wrappers": path.resolve(__dirname, "node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js"),
+      "libsodium-wrappers-sumo": path.resolve(__dirname, "node_modules/libsodium-wrappers-sumo/dist/modules-sumo/libsodium-wrappers.js"),
     },
   },
 });
