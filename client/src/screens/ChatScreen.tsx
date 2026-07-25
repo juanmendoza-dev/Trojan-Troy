@@ -7,6 +7,7 @@ import { Composer } from "../components/Composer";
 import { Settings } from "../components/Settings";
 import type { MessageStatus } from "../protocol/messageStatus";
 import { staggerDelayMs } from "../components/messageStagger";
+import { formatClipDuration } from "../audio/clipDuration";
 import { endsGroup } from "../components/messageGrouping";
 import { MessageAvatar } from "../components/MessageAvatar";
 import { ProfileCard } from "../components/ProfileCard";
@@ -17,7 +18,7 @@ import "./ChatScreen.css";
 
 export type ChatMessage =
   | { id: string; timestamp: number; from: "me" | "peer"; kind: "text"; text: string; status?: MessageStatus }
-  | { id: string; timestamp: number; from: "me" | "peer"; kind: "voice"; audioUrl: string; status?: MessageStatus }
+  | { id: string; timestamp: number; from: "me" | "peer"; kind: "voice"; audioUrl: string; durationMs: number; status?: MessageStatus }
   | { id: string; timestamp: number; kind: "decryption-error" };
 
 interface ChatScreenProps {
@@ -59,7 +60,7 @@ function renderMessage(
       <VoiceMessageBubble
         from={message.from}
         audioUrl={message.audioUrl}
-        durationLabel="0:23"
+        durationLabel={formatClipDuration(message.durationMs)}
         status={status}
         delayMs={delayMs}
         avatar={avatar}

@@ -6,6 +6,7 @@ import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } fr
 import { generateKemKeypair, kemEncapsulate, kemDecapsulate } from "./crypto/pqkem";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
+import { measureClipDurationMs } from "./audio/clipDuration";
 import { frame, type Frame } from "./crypto/framing";
 import {
   initSession,
@@ -381,10 +382,11 @@ export default function App() {
         case "voice": {
           const blob = new Blob([new Uint8Array(received.body)], { type: received.mimeType ?? "audio/webm" });
           const audioUrl = URL.createObjectURL(blob);
+          const durationMs = await measureClipDurationMs(blob).catch(() => 0);
           showPeerPresence("idle");
           setMessages((prev) => [
             ...prev,
-            { id: received.id, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
+            { id: received.id, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl, durationMs },
           ]);
           void sendAck(client, sc, "delivered", received.id);
           pendingReadIdRef.current = received.id;
@@ -634,9 +636,10 @@ export default function App() {
     const body = new Uint8Array(await blob.arrayBuffer());
     await sendContent(frame({ channel: "voice", id, mimeType, body }));
     const audioUrl = URL.createObjectURL(blob);
+    const durationMs = await measureClipDurationMs(blob).catch(() => 0);
     setMessages((prev) => [
       ...prev,
-      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, status: "sent" },
+      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, durationMs, status: "sent" },
     ]);
   }
 
