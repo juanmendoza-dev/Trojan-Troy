@@ -1,14 +1,31 @@
+import type { RatchetHeader } from "../crypto/ratchet";
+
+// Bumped whenever the handshake / post-handshake wire format changes. Sent on
+// `pubkey` and checked by the peer, so a stale client hits an error screen
+// instead of deriving keys against a format it can't speak. v3 adds the hybrid
+// post-quantum handshake (KEM public key on `pubkey` + the `kemct` envelope).
+export const PROTOCOL_VERSION = 3;
+
+export type { RatchetHeader };
+
+// After the handshake, every content/signal envelope collapses into one opaque
+// `msg` so the relay can't tell text from voice from a receipt. `c` selects the
+// key class: 0 = ratcheted content (carries a RatchetHeader), 1 = presence,
+// 2 = ack, 3 = profile (each sealed under a static per-channel subkey). The
+// channel, id, mimeType, ack kind, and exact size all live sealed in `payload`.
 export type Envelope =
   | { type: "create" }
   | { type: "created"; roomCode: string }
   | { type: "join"; roomCode: string }
   | { type: "peer-connected" }
   | { type: "peer-disconnected" }
-  | { type: "pubkey"; payload: string }
-  | { type: "ciphertext"; payload: string; messageId: string }
-  | { type: "voice"; payload: string; mimeType: string; messageId: string }
-  | { type: "delivered"; messageId: string }
-  | { type: "read"; messageId: string }
+  // `payload` = base64 X25519 handshake public key. `kem` (responder only) =
+  // base64 ML-KEM-768 public key for the hybrid post-quantum leg.
+  | { type: "pubkey"; payload: string; v: number; kem?: string }
+  // ML-KEM ciphertext (base64), sent by the initiator after encapsulating to the
+  // responder's `kem` key. Forwarded opaquely by the relay, like `pubkey`/`msg`.
+  | { type: "kemct"; payload: string }
+  | { type: "msg"; c: 0 | 1 | 2 | 3; header?: RatchetHeader; payload: string }
   | { type: "error"; message: string };
 
 export interface MinimalWebSocket {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { AmbientOrbs } from "../components/AmbientOrbs";
+import { Icon } from "../components/Icon";
 import { buildInviteLink } from "../net/inviteLink";
 import { SECURITY_TICKER_TEXT } from "./securityTicker";
 import "./WaitingScreen.css";
@@ -44,10 +45,11 @@ export function WaitingScreen({ roomCode, onCancel }: WaitingScreenProps) {
         <div className="waiting-screen__top-row">
           <div className="waiting-screen__status">
             <span className="waiting-screen__status-dot" />
-            BROADCASTING INVITE
+            WAITING FOR THEM
           </div>
           <button type="button" className="waiting-screen__cancel" onClick={onCancel}>
-            ✕ Cancel
+            <Icon name="x" size={13} strokeWidth={2.25} />
+            Cancel
           </button>
         </div>
 
@@ -61,7 +63,7 @@ export function WaitingScreen({ roomCode, onCancel }: WaitingScreenProps) {
 
           <div className="waiting-screen__subwait">
             <span className="waiting-screen__subwait-dot" />
-            waiting for your friend to join…
+            hang tight — they haven't joined yet
           </div>
 
           <div className="waiting-screen__actions">
@@ -72,7 +74,13 @@ export function WaitingScreen({ roomCode, onCancel }: WaitingScreenProps) {
               }`}
               onClick={() => handleCopy(roomCode, "code")}
             >
-              {copied === "code" ? "Copied ✓" : "Copy code"}
+              {copied === "code" ? (
+                <span className="waiting-screen__copied">
+                  <Icon name="check" size={14} strokeWidth={2.5} /> Copied
+                </span>
+              ) : (
+                "Copy code"
+              )}
             </button>
             <button
               type="button"
@@ -81,7 +89,13 @@ export function WaitingScreen({ roomCode, onCancel }: WaitingScreenProps) {
               }`}
               onClick={() => handleCopy(inviteLink, "link")}
             >
-              {copied === "link" ? "Copied ✓" : "Copy link"}
+              {copied === "link" ? (
+                <span className="waiting-screen__copied">
+                  <Icon name="check" size={14} strokeWidth={2.5} /> Copied
+                </span>
+              ) : (
+                "Copy link"
+              )}
             </button>
           </div>
 

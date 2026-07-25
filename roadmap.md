@@ -129,13 +129,39 @@ sub-projects, each with its own spec in `docs/superpowers/specs/` and its
 own plan/implementation cycle. Build in this order — later items depend on
 earlier ones:
 
-- [ ] 5.1 — Persistent identity keys. Long-term keypair per user (replacing
-      the ephemeral-only model), display names, a local contacts list that
-      recognizes returning peers and warns on key changes, identity
-      export/import via a recovery code. Spec:
-      `docs/superpowers/specs/2026-07-19-persistent-identity-design.md`.
-- [ ] 5.2 — Forward-secrecy ratchet (Double Ratchet-style per-message key
-      rotation), built on top of 5.1's identity/ephemeral key split.
+- [ ] **Security hardening round (2026-07-23, backend-only, UX-invisible)** — four
+      specs Jay green-lit to deepen the crypto for the submission, all under
+      `docs/superpowers/specs/2026-07-23-*`: post-quantum hybrid handshake
+      (X25519 + ML-KEM-768) + safety-number binding (in build on
+      `feat/pq-hybrid-handshake`), traffic-analysis resistance (cover traffic), and
+      at-rest Argon2id profile encryption. Orthogonal to the 5.x feature order below;
+      keeps the UX identical. See `decisions.md` (2026-07-23).
+- [ ] 5.1 — **Local Profiles** (REPLACES the retired persistent-identity
+      approach — Jay's call, 2026-07-22, see `decisions.md`). Device-local,
+      PIN-gated profiles (name + picture) with an always-present Anonymous
+      default, plus opt-in *encrypted* name/photo sharing with the peer.
+      Deliberately light: no long-term identity keypair, session crypto
+      unchanged. Layer A (profiles + PIN + modal + sharing) built on
+      `feat/profiles`; Layer B (per-profile saved conversation history,
+      IndexedDB, archive-only, encrypted at rest) is a follow-up. Spec:
+      `docs/superpowers/specs/2026-07-22-local-profiles-design.md`; plan:
+      `docs/superpowers/plans/2026-07-22-local-profiles.md`.
+      The earlier persistent-identity (5.1) + contacts-privacy (5.1a) build was
+      rolled back (`main` @ `1ee0e35`); those specs are shelved, not deleted.
+      NOTE: 5.2 (ratchet) has been re-specced independent of persistent identity
+      (it rides on the existing ephemeral crypto_kx handshake; spec + plan dated
+      2026-07-22) and is now in build on `feat/forward-secrecy-ratchet`. 5.3
+      (offline delivery) was specced on top of persistent identity keys — with
+      identity retired, revisit its design before building (not started).
+- [x] 5.2 — Forward-secrecy ratchet (Double Ratchet: per-message key rotation →
+      forward secrecy + post-compromise self-healing), seeded from the existing
+      ephemeral crypto_kx handshake — independent of Local Profiles / retired
+      persistent identity, not built on top of it. Also seals framing
+      (channel/messageId/mimeType inside the ciphertext) and pads to size
+      buckets; collapses content/signal envelopes into one opaque `msg` (no
+      server change). Spec:
+      docs/superpowers/specs/2026-07-22-phase5.2-forward-secrecy-ratchet-design.md;
+      plan: docs/superpowers/plans/2026-07-22-phase5.2-forward-secrecy-ratchet.md.
 - [ ] 5.3 — Encrypted offline delivery: server holds ciphertext for a peer
       who isn't currently connected, addressed via 5.1's persistent
       identity, instead of dropping it.
@@ -155,10 +181,15 @@ earlier ones:
   `decisions.md`, 2026-07-20). Revisit embedding it inside the encrypted
   payload instead once back in a security-hardening phase — see the chat
   UI polish spec's design for the exact current mechanism.
-- Add a "peer is typing" indicator. Explicitly cut from Phase 4's UI-only
-  scope because it needs a new relay event/protocol change (see
-  `decisions.md`, 2026-07-19) — Jay requested it be picked back up,
-  2026-07-20.
+- Add a "peer is typing" indicator. Cut from Phase 4's UI-only scope (see
+  `decisions.md`, 2026-07-19); Jay requested it back on 2026-07-20. Now
+  designed as an **encrypted presence indicator** (typing *and* voice
+  recording) — spec at
+  `docs/superpowers/specs/2026-07-22-typing-presence-design.md`. The Phase 4
+  note that this needs a "relay event/protocol change" is corrected there:
+  the relay forwards unknown envelope types opaquely (as it already does for
+  `ciphertext`/`voice`/`delivered`/`read`), so it's a client-only change with
+  no server work. Spec'd, not yet built.
 
 ## Phase 6 — Polish
 - [ ] Harden and polish whatever Phase 5 sub-projects actually get built —

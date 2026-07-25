@@ -1,0 +1,56 @@
+/* Soft-white rounded-cube launcher for the profile picker. Sits top-right on
+   the home screen, mirroring the top-left "secure channel ready" badge; the
+   pale fill reads against the dark Iris backdrop while still popping. */
+
+.profile-button {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px 7px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  background: rgba(245, 246, 250, 0.92);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  font-family: 'Schibsted Grotesk', sans-serif;
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+    box-shadow 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.profile-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+}
+.profile-button:active {
+  transform: translateY(0);
+}
+
+.profile-button__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  object-fit: cover;
+  display: block;
+  background: #d8dbe6;
+}
+.profile-button__name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  color: #12141f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-button {
+    transition: none;
+  }
+}

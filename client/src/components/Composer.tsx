@@ -1,15 +1,18 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { VoiceRecorder } from "../screens/VoiceRecorder";
+import { Icon } from "./Icon";
 import "./Composer.css";
 
 interface ComposerProps {
   onSend: (text: string) => void;
   onSendVoice: (blob: Blob, mimeType: string) => void;
+  onTypingChange?: (isTyping: boolean) => void;
+  onRecordingChange?: (isRecording: boolean) => void;
 }
 
 const SENT_ANIMATION_MS = 300;
 
-export function Composer({ onSend, onSendVoice }: ComposerProps) {
+export function Composer({ onSend, onSendVoice, onTypingChange, onRecordingChange }: ComposerProps) {
   const [value, setValue] = useState("");
   const [justSent, setJustSent] = useState(false);
 
@@ -26,6 +29,12 @@ export function Composer({ onSend, onSendVoice }: ComposerProps) {
     onSend(text);
     setValue("");
     setJustSent(true);
+    onTypingChange?.(false);
+  }
+
+  function handleChange(next: string) {
+    setValue(next);
+    onTypingChange?.(next.trim().length > 0);
   }
 
   return (
@@ -34,15 +43,15 @@ export function Composer({ onSend, onSendVoice }: ComposerProps) {
         <input
           className="composer__input"
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => handleChange(event.target.value)}
+          onBlur={() => onTypingChange?.(false)}
           placeholder="Message — encrypted end-to-end"
           autoComplete="off"
         />
-        <span className="composer__caret" />
       </div>
-      <VoiceRecorder onSend={onSendVoice} />
+      <VoiceRecorder onSend={onSendVoice} onRecordingChange={onRecordingChange} />
       <button className="composer__send-button" type="submit" aria-label="Send">
-        ↑
+        <Icon name="arrow-up" size={18} strokeWidth={2.25} />
       </button>
     </form>
   );
