@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AmbientOrbs } from "../components/AmbientOrbs";
 import { RainbowText } from "../components/RainbowText";
+import { RotatingTagline } from "../components/RotatingTagline";
 import { ScrambleText } from "../components/ScrambleText";
 import { ConnectingBar, type ConnectStatus } from "./ConnectingBar";
 import { SECURITY_TICKER_TEXT } from "./securityTicker";
@@ -73,7 +74,7 @@ export function StartJoinScreen({
           <br />
           Troy<span className="start-join-screen__period">.</span>
         </h1>
-        <p className="start-join-screen__tagline">Nobody sees this but the two of you.</p>
+        <RotatingTagline className="start-join-screen__tagline" />
 
         <div className="start-join-screen__card">
           <div className="start-join-screen__form" data-busy={busy}>
