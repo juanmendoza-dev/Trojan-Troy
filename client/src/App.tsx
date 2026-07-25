@@ -6,6 +6,7 @@ import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } fr
 import { generateKemKeypair, kemEncapsulate, kemDecapsulate } from "./crypto/pqkem";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
+import { measureClipDurationMs } from "./audio/clipDuration";
 import { frame, type Frame } from "./crypto/framing";
 import {
   initSession,
@@ -69,21 +70,22 @@ async function sendAck(
 async function maybeSendReadAck(
   client: RelayClient,
   sc: SessionCrypto,
-  pendingReadIdRef: { current: string | null },
+  pendingReadIdsRef: { current: Set<string> },
   ghostModeRef: { current: boolean }
 ) {
-  const messageId = pendingReadIdRef.current;
-  if (!messageId) return;
+  if (pendingReadIdsRef.current.size === 0) return;
   const send = shouldSendReadAck({
     isFocused: document.hasFocus(),
     isVisible: document.visibilityState === "visible",
     ghostMode: ghostModeRef.current,
     alreadyAcked: false,
   });
-  if (send) {
+  if (!send) return;
+  // Flush every message received while blurred, not just the most recent one.
+  for (const messageId of pendingReadIdsRef.current) {
     await sendAck(client, sc, "read", messageId);
-    pendingReadIdRef.current = null;
   }
+  pendingReadIdsRef.current.clear();
 }
 
 // Content that fails to open is shown as a "couldn't decrypt" bubble — but a
@@ -141,6 +143,7 @@ export default function App() {
   // moment a content receive establishes the chain.
   const outboxRef = useRef<Uint8Array[]>([]);
   const clientRef = useRef<RelayClient | null>(null);
+  const listenerCleanupsRef = useRef<Array<() => void>>([]);
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
   const { setTheme } = useTheme();
@@ -185,7 +188,7 @@ export default function App() {
     if (activeProfileId === id) selectProfile(ANONYMOUS_ID);
   }
 
-  const pendingReadIdRef = useRef<string | null>(null);
+  const pendingReadIdsRef = useRef<Set<string>>(new Set());
   const [ghostMode, setGhostMode] = useState<boolean>(
     () => localStorage.getItem(GHOST_MODE_STORAGE_KEY) === "true"
   );
@@ -245,7 +248,7 @@ export default function App() {
     function handleFocusChange() {
       const client = clientRef.current;
       const sc = sessionCryptoRef.current;
-      if (client && sc) void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
+      if (client && sc) void maybeSendReadAck(client, sc, pendingReadIdsRef, ghostModeRef);
     }
     document.addEventListener("visibilitychange", handleFocusChange);
     window.addEventListener("focus", handleFocusChange);
@@ -374,21 +377,22 @@ export default function App() {
             { id: received.id, timestamp: Date.now(), from: "peer", kind: "text", text },
           ]);
           void sendAck(client, sc, "delivered", received.id);
-          pendingReadIdRef.current = received.id;
-          void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
+          pendingReadIdsRef.current.add(received.id);
+          void maybeSendReadAck(client, sc, pendingReadIdsRef, ghostModeRef);
           break;
         }
         case "voice": {
           const blob = new Blob([new Uint8Array(received.body)], { type: received.mimeType ?? "audio/webm" });
           const audioUrl = URL.createObjectURL(blob);
+          const durationMs = await measureClipDurationMs(blob).catch(() => 0);
           showPeerPresence("idle");
           setMessages((prev) => [
             ...prev,
-            { id: received.id, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl },
+            { id: received.id, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl, durationMs },
           ]);
           void sendAck(client, sc, "delivered", received.id);
-          pendingReadIdRef.current = received.id;
-          void maybeSendReadAck(client, sc, pendingReadIdRef, ghostModeRef);
+          pendingReadIdsRef.current.add(received.id);
+          void maybeSendReadAck(client, sc, pendingReadIdsRef, ghostModeRef);
           break;
         }
         case "presence": {
@@ -431,7 +435,7 @@ export default function App() {
       }
     }
 
-    client.onMessage(async (envelope: Envelope) => {
+    listenerCleanupsRef.current.push(client.onMessage(async (envelope: Envelope) => {
       if (envelope.type === "peer-disconnected") {
         disconnected = true;
         setScreen({ name: "error", scenario: "friend_left" });
@@ -499,7 +503,7 @@ export default function App() {
         await handleMsg(envelope);
         return;
       }
-    });
+    }));
 
     const payload = await toBase64(own.publicKey);
     if (kemKeypair) {
@@ -522,12 +526,14 @@ export default function App() {
     try {
       await client.waitForOpen();
     } catch {
+      client.close();
+      clientRef.current = null;
       setConnectStatus("idle");
       setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "start" } });
       return;
     }
     let currentRoomCode = "";
-    client.onMessage((envelope) => {
+    listenerCleanupsRef.current.push(client.onMessage((envelope) => {
       if (envelope.type === "created") {
         currentRoomCode = envelope.roomCode;
         const code = envelope.roomCode;
@@ -550,7 +556,7 @@ export default function App() {
           retry: { kind: "start" },
         });
       }
-    });
+    }));
     client.send({ type: "create" });
   }
 
@@ -562,11 +568,13 @@ export default function App() {
     try {
       await client.waitForOpen();
     } catch {
+      client.close();
+      clientRef.current = null;
       setConnectStatus("idle");
       setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "join", roomCode } });
       return;
     }
-    client.onMessage((envelope) => {
+    listenerCleanupsRef.current.push(client.onMessage((envelope) => {
       if (envelope.type === "error") {
         setConnectStatus("idle");
         setScreen({
@@ -586,7 +594,7 @@ export default function App() {
           setScreen((prev) => (prev.name === "start" ? { name: "handshake", roomCode } : prev));
         }, CONNECT_COMPLETE_HOLD_MS);
       }
-    });
+    }));
     client.send({ type: "join", roomCode });
   }
 
@@ -634,19 +642,22 @@ export default function App() {
     const body = new Uint8Array(await blob.arrayBuffer());
     await sendContent(frame({ channel: "voice", id, mimeType, body }));
     const audioUrl = URL.createObjectURL(blob);
+    const durationMs = await measureClipDurationMs(blob).catch(() => 0);
     setMessages((prev) => [
       ...prev,
-      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, status: "sent" },
+      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, durationMs, status: "sent" },
     ]);
   }
 
   function handleLeave() {
+    for (const dispose of listenerCleanupsRef.current) dispose();
+    listenerCleanupsRef.current = [];
     clientRef.current?.close();
     clientRef.current = null;
     zeroizeSession(sessionCryptoRef.current);
     sessionCryptoRef.current = null;
     outboxRef.current = [];
-    pendingReadIdRef.current = null;
+    pendingReadIdsRef.current.clear();
     if (presenceExpiryRef.current !== null) {
       clearTimeout(presenceExpiryRef.current);
       presenceExpiryRef.current = null;
@@ -725,6 +736,7 @@ export default function App() {
           roomCode="K7F-2QX"
           safetyNumber="21934 07741 66012 88304 55120 09937 41028 77650 30291 66104 82255 19073"
           onVerified={() => {}}
+          onMismatch={() => {}}
         />
       </HandshakeJourney>
     );
@@ -818,6 +830,15 @@ export default function App() {
           onVerified={() =>
             setScreen({ name: "chat", roomCode: screen.roomCode, safetyNumber: screen.safetyNumber })
           }
+          onMismatch={() => {
+            for (const dispose of listenerCleanupsRef.current) dispose();
+            listenerCleanupsRef.current = [];
+            clientRef.current?.close();
+            clientRef.current = null;
+            zeroizeSession(sessionCryptoRef.current);
+            sessionCryptoRef.current = null;
+            setScreen({ name: "error", scenario: "handshake_failed" });
+          }}
         />
       );
     } else {
