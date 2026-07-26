@@ -5,7 +5,7 @@
    flows straight into the waiting/loading screens it precedes. */
 
 .start-join-screen {
-  position: fixed;
+  position: absolute;
   inset: 0;
   overflow: hidden;
   display: flex;

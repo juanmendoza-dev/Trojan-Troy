@@ -3,7 +3,7 @@
    theme tokens) so the waiting room flows straight into the handshake. */
 
 .waiting-screen {
-  position: fixed;
+  position: absolute;
   inset: 0;
   overflow: hidden;
   background: linear-gradient(160deg, #0d0f18 0%, #101223 100%);
