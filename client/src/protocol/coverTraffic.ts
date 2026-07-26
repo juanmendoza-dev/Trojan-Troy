@@ -31,13 +31,14 @@ export function jitteredInterval(base: number, jitterFrac: number, rand: () => n
   return Math.max(COVER_INTERVAL_FLOOR_MS, Math.round(base * (1 + delta)));
 }
 
-// Pick a cover-body byte length so the padded frame lands in a common, varied
-// bucket (mostly the 64/256 text sizes, occasionally 1024 to mimic a larger
-// message). Ranges are overhead-aware for the "cover" channel's ~33B frame
-// header so bucketFor lands where intended.
+// Pick a cover-body byte length so the padded frame lands in a bucket real
+// content actually uses. Real c:0 text is ALWAYS >= 256: its id is a 36-char
+// UUID, so meta alone (~63B) overflows the 64 bucket. Only the once-per-session
+// primer lands in 64 — so cover must NEVER use 64, or a size-aware relay flags
+// the steady 64-bucket stream as decoy on sight. Modal 256 (like a typical
+// short text), occasional 1024 (a longer one). Ranges are overhead-aware for
+// the "cover" channel's ~34B frame header so bucketFor lands where intended.
 export function coverBodyLen(rand: () => number): number {
-  const r = rand();
-  if (r < 0.7) return Math.floor(rand() * 25); // -> 64 bucket
-  if (r < 0.95) return 40 + Math.floor(rand() * 170); // -> 256 bucket
-  return 230 + Math.floor(rand() * 750); // -> 1024 bucket
+  if (rand() < 0.8) return 31 + Math.floor(rand() * 192); // 31..222 -> 256 bucket
+  return 223 + Math.floor(rand() * 768); // 223..990 -> 1024 bucket
 }

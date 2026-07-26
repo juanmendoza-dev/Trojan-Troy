@@ -38,13 +38,15 @@ describe("jitteredInterval", () => {
 });
 
 describe("coverBodyLen", () => {
-  it("produces frames that land in common, varied buckets", () => {
+  it("lands only in buckets real content uses (>=256, never the 64 primer bucket)", () => {
     const seen = new Set<number>();
     for (let i = 0; i < 2000; i++) {
       const len = frame({ channel: "cover", id: "", body: new Uint8Array(coverBodyLen(Math.random)) }).length;
-      expect([64, 256, 1024]).toContain(len);
+      // Real c:0 text is always >=256 (its 36-char UUID id overflows the 64
+      // bucket), so cover must never land in 64 or it's size-classified as decoy.
+      expect([256, 1024]).toContain(len);
       seen.add(len);
     }
-    expect(seen.size).toBeGreaterThanOrEqual(2); // not pinned to one size
+    expect(seen.size).toBeGreaterThanOrEqual(2); // varied, not pinned to one size
   });
 });

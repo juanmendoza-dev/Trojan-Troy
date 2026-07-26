@@ -105,8 +105,9 @@ export function Settings({
             with a hybrid post-quantum exchange (X25519 + ML-KEM-768), so traffic recorded today
             stays sealed even against a future quantum computer. Every message then gets its own key,
             discarded right after (a Double Ratchet), so a stolen key can't unlock past messages, and
-            the connection re-secures itself after a compromise. The relay can still tell that you're
-            chatting and roughly how much, but never what's said. The safety number above is tied to
+            the connection re-secures itself after a compromise. The app also blends in a steady stream
+            of decoy traffic, so the relay can tell a chat is happening but not its rhythm — when you're
+            typing, pausing, or sitting idle — and never what's said. The safety number above is tied to
             this exact session; if it ever changes unexpectedly, don't trust the connection.
           </p>
         </div>
