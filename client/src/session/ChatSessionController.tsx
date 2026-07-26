@@ -189,9 +189,17 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [screen.name, unreadPreview]);
 
-    // Selecting this chat clears its unread marker.
+    // Selecting this chat clears its unread marker. Becoming active can also
+    // satisfy the read-ack gate (isActive && windowFocused) on its own, with
+    // no window focus/visibility event to trigger the check — e.g. switching
+    // chat-list rows while the browser window itself never lost focus. So
+    // this must re-check any acks left pending from while it was backgrounded.
     useEffect(() => {
-      if (isActive) setUnreadPreview(null);
+      if (!isActive) return;
+      setUnreadPreview(null);
+      const client = clientRef.current;
+      const sc = sessionCryptoRef.current;
+      if (client && sc) void maybeSendReadAck(client, sc);
     }, [isActive]);
 
     useEffect(() => {
