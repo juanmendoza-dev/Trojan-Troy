@@ -1,49 +1,24 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import sodium from "libsodium-wrappers";
-import { RelayClient, type Envelope, PROTOCOL_VERSION } from "./net/relayClient";
+// client/src/App.tsx
+import { useCallback, useEffect, useRef, useState } from "react";
 import { parseInviteCode } from "./net/inviteLink";
-import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
-import { generateKemKeypair, kemEncapsulate, kemDecapsulate } from "./crypto/pqkem";
-import { computeSafetyNumber } from "./crypto/safetyNumber";
-import { toBase64, fromBase64 } from "./crypto/encoding";
-import { measureClipDurationMs } from "./audio/clipDuration";
-import { frame, type Frame } from "./crypto/framing";
 import {
-  initSession,
-  sealContent,
-  sealStatic,
-  openMsg,
-  type SessionCrypto,
-} from "./protocol/ratchetSession";
-import { advanceStatus } from "./protocol/messageStatus";
-import { shouldSendReadAck } from "./protocol/readAckDecision";
-import {
-  shouldSendPresence,
-  parsePresenceState,
-  PRESENCE_EXPIRY_MS,
-  type PresenceState,
-  jitteredHeartbeatMs,
-} from "./protocol/presenceState";
-import {
-  nextAction,
-  jitteredInterval,
-  coverBodyLen,
-  COVER_INTERVAL_MS,
-  COVER_JITTER_FRAC,
-} from "./protocol/coverTraffic";
+  ChatSessionController,
+  type ChatSessionHandle,
+  type ChatSessionSummary,
+  type InitialAction,
+} from "./session/ChatSessionController";
+import { canAddSession, nextSessionLabel } from "./protocol/chatSessions";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
-import { type ConnectStatus } from "./screens/ConnectingBar";
-import { CONNECT_COMPLETE_HOLD_MS } from "./screens/barPhases";
 import { WaitingScreen } from "./screens/WaitingScreen";
 import { SafetyNumberScreen } from "./screens/SafetyNumberScreen";
-import { ChatScreen, type ChatMessage } from "./screens/ChatScreen";
-import { useTheme } from "./theme/ThemeContext";
+import { ChatScreen } from "./screens/ChatScreen";
 import { LoadingScreen } from "./screens/loading/LoadingScreen";
 import { HandshakeJourney } from "./screens/HandshakeJourney";
 import { ErrorScreen } from "./screens/ErrorScreen";
-import { scenarioFromServerMessage, type ErrorScenario } from "./screens/errorScenario";
+import { ChatList, type ChatListRow } from "./components/ChatList";
+import { NewChatModal } from "./components/NewChatModal";
 import { ProfileModal } from "./components/ProfileModal";
-import { resolveActiveProfile, ANONYMOUS_ID, type Profile, type PeerProfile } from "./profiles/profileModel";
+import { resolveActiveProfile, ANONYMOUS_ID, type Profile } from "./profiles/profileModel";
 import {
   listProfiles,
   putProfile,
@@ -53,138 +28,39 @@ import {
   setActiveProfileId as persistActiveProfileId,
   setShareProfile as persistShareProfile,
 } from "./profiles/profileStore";
-import { detectDevice } from "./profiles/device";
+import { useTheme } from "./theme/ThemeContext";
 import { parseScreenOverride } from "./dev/screenOverride";
+import "./AppShell.css";
 
-const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
 const GHOST_MODE_STORAGE_KEY = "trojan-troy-ghost-mode";
 
-const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
-const EMPTY_BODY = new Uint8Array(0);
-
-// Seal + send a receipt for a specific message id. Acks now ride the sealed
-// "ack" channel (unforgeable, wire-indistinguishable from any other msg)
-// instead of the old cleartext delivered/read envelopes.
-async function sendAck(
-  client: RelayClient,
-  sc: SessionCrypto,
-  kind: "delivered" | "read",
-  id: string
-) {
-  client.send(await sealStatic(sc, "ack", frame({ channel: "ack", id, kind, body: EMPTY_BODY })));
+interface SessionEntry {
+  id: string;
+  initialAction: InitialAction;
+  label: string;
 }
-
-async function maybeSendReadAck(
-  client: RelayClient,
-  sc: SessionCrypto,
-  pendingReadIdsRef: { current: Set<string> },
-  ghostModeRef: { current: boolean }
-) {
-  if (pendingReadIdsRef.current.size === 0) return;
-  const send = shouldSendReadAck({
-    isFocused: document.hasFocus(),
-    isVisible: document.visibilityState === "visible",
-    ghostMode: ghostModeRef.current,
-    alreadyAcked: false,
-  });
-  if (!send) return;
-  // Flush every message received while blurred, not just the most recent one.
-  for (const messageId of pendingReadIdsRef.current) {
-    await sendAck(client, sc, "read", messageId);
-  }
-  pendingReadIdsRef.current.clear();
-}
-
-// Content that fails to open is shown as a "couldn't decrypt" bubble — but a
-// replayed / stale / over-skipped packet (which a malicious relay could spam)
-// is dropped silently, matching the ratchet's own drop semantics.
-function isSilentContentDrop(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : "";
-  return (
-    msg.includes("replayed") ||
-    msg.includes("stale") ||
-    msg.includes("too many skipped") ||
-    msg.includes("no receiving chain")
-  );
-}
-
-// Best-effort wipe of the ratchet secrets + channel subkeys on leave (review
-// L3/B13). JS can't guarantee no copies linger, but this clears the live
-// buffers we hold.
-function zeroizeSession(sc: SessionCrypto | null) {
-  if (!sc) return;
-  const r = sc.ratchet;
-  sodium.memzero(r.RK);
-  if (r.CKs) sodium.memzero(r.CKs);
-  if (r.CKr) sodium.memzero(r.CKr);
-  sodium.memzero(r.DHs.privateKey);
-  for (const mk of r.MKSKIPPED.values()) sodium.memzero(mk);
-  r.MKSKIPPED.clear();
-  for (const key of Object.values(sc.txSub)) sodium.memzero(key);
-  for (const key of Object.values(sc.rxSub)) sodium.memzero(key);
-  sodium.memzero(sc.rootKey);
-}
-
-type Screen =
-  | { name: "start" }
-  | { name: "waiting"; roomCode: string }
-  | { name: "handshake"; roomCode: string }
-  | { name: "safety-number"; roomCode: string; safetyNumber: string }
-  | { name: "chat"; roomCode: string; safetyNumber: string }
-  | {
-      name: "error";
-      scenario: ErrorScenario;
-      /** How to replay the failed action, if it can be retried in place. */
-      retry?: { kind: "start" } | { kind: "join"; roomCode: string };
-    };
 
 export default function App() {
   const devOverride = import.meta.env.DEV ? parseScreenOverride(window.location.search) : null;
-  const [screen, setScreen] = useState<Screen>({ name: "start" });
-  const [initialJoinCode] = useState<string | null>(() => parseInviteCode(window.location.hash));
-  const [connectStatus, setConnectStatus] = useState<ConnectStatus>("idle");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const sessionCryptoRef = useRef<SessionCrypto | null>(null);
-  // Outgoing content the responder tried to send before it had a sending chain
-  // (i.e. before receiving the initiator's primer/first message) — flushed the
-  // moment a content receive establishes the chain.
-  const outboxRef = useRef<Uint8Array[]>([]);
-  // Last time a real-or-cover c:0 content frame went to the wire — the cover
-  // scheduler backs off whenever this is recent (see protocol/coverTraffic.ts).
-  const lastContentSentRef = useRef(0);
-  const coverTimerRef = useRef<number | null>(null);
-  const clientRef = useRef<RelayClient | null>(null);
-  const listenerCleanupsRef = useRef<Array<() => void>>([]);
-  const messagesRef = useRef<ChatMessage[]>(messages);
-  messagesRef.current = messages;
   const { setTheme } = useTheme();
+  useEffect(() => {
+    if (devOverride?.theme) setTheme(devOverride.theme);
+  }, []);
+
+  const [initialJoinCode] = useState<string | null>(() => parseInviteCode(window.location.hash));
+  useEffect(() => {
+    if (initialJoinCode && window.location.hash) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  }, []);
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string>(() => getActiveProfileId());
   const [profilesOpen, setProfilesOpen] = useState(false);
   const activeProfile = resolveActiveProfile(profiles, activeProfileId);
-  const [ownDevice] = useState(detectDevice);
-  const selfCard: PeerProfile = {
-    name: activeProfile.kind === "named" ? activeProfile.profile.name : "Anonymous",
-    avatar: activeProfile.kind === "named" ? activeProfile.profile.avatar : null,
-    device: ownDevice,
-  };
-  const activeProfileRef = useRef(activeProfile);
-  activeProfileRef.current = activeProfile;
-  const [shareProfile, setShareProfile] = useState<boolean>(() => getShareProfile());
-  const shareProfileRef = useRef(shareProfile);
-  shareProfileRef.current = shareProfile;
-  function updateShareProfile(next: boolean) {
-    persistShareProfile(next);
-    setShareProfile(next);
-  }
-  const [peerProfile, setPeerProfile] = useState<PeerProfile | null>(null);
-
   useEffect(() => {
     void listProfiles().then(setProfiles);
   }, []);
-
   function selectProfile(id: string) {
     persistActiveProfileId(id);
     setActiveProfileId(id);
@@ -200,544 +76,69 @@ export default function App() {
     if (activeProfileId === id) selectProfile(ANONYMOUS_ID);
   }
 
-  const pendingReadIdsRef = useRef<Set<string>>(new Set());
+  const [shareProfile, setShareProfile] = useState<boolean>(() => getShareProfile());
+  function updateShareProfile(next: boolean) {
+    persistShareProfile(next);
+    setShareProfile(next);
+  }
   const [ghostMode, setGhostMode] = useState<boolean>(
     () => localStorage.getItem(GHOST_MODE_STORAGE_KEY) === "true"
   );
-  const ghostModeRef = useRef(ghostMode);
-  ghostModeRef.current = ghostMode;
-
-  const [peerPresence, setPeerPresence] = useState<PresenceState>("idle");
-  const presenceExpiryRef = useRef<number | null>(null);
-  const presenceSentRef = useRef<{ state: PresenceState; at: number }>({ state: "idle", at: 0 });
-
   function updateGhostMode(next: boolean) {
     localStorage.setItem(GHOST_MODE_STORAGE_KEY, String(next));
     setGhostMode(next);
   }
 
-  // Show the peer's live presence, auto-clearing after PRESENCE_EXPIRY_MS as a
-  // safety net for a dropped "idle"/stop event.
-  function showPeerPresence(next: PresenceState) {
-    if (presenceExpiryRef.current !== null) {
-      clearTimeout(presenceExpiryRef.current);
-      presenceExpiryRef.current = null;
-    }
-    setPeerPresence(next);
-    if (next !== "idle") {
-      presenceExpiryRef.current = window.setTimeout(() => {
-        setPeerPresence("idle");
-        presenceExpiryRef.current = null;
-      }, PRESENCE_EXPIRY_MS);
-    }
-  }
+  const [sessions, setSessions] = useState<SessionEntry[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [summaries, setSummaries] = useState<Record<string, ChatSessionSummary>>({});
+  const [newChatOpen, setNewChatOpen] = useState(false);
+  const nextOrdinalRef = useRef(1);
+  const handlesRef = useRef<Map<string, ChatSessionHandle>>(new Map());
 
-  // Broadcast our own composition activity — encrypted, throttled to a heartbeat,
-  // and suppressed by Ghost Mode (see protocol/presenceState.ts).
-  async function sendPresence(next: PresenceState) {
-    const client = clientRef.current;
-    const sc = sessionCryptoRef.current;
-    if (!client || !sc) return;
-    const now = performance.now();
-    const last = presenceSentRef.current;
-    if (
-      !shouldSendPresence({
-        nextState: next,
-        lastSentState: last.state,
-        lastSentAt: last.at,
-        now,
-        ghostMode: ghostModeRef.current,
-        heartbeatMs: jitteredHeartbeatMs(Math.random),
-      })
-    ) {
-      return;
-    }
-    presenceSentRef.current = { state: next, at: now };
-    const body = textEncoder.encode(JSON.stringify({ state: next }));
-    client.send(await sealStatic(sc, "presence", frame({ channel: "presence", id: "", body })));
-  }
-
-  useEffect(() => {
-    function handleFocusChange() {
-      const client = clientRef.current;
-      const sc = sessionCryptoRef.current;
-      if (client && sc) void maybeSendReadAck(client, sc, pendingReadIdsRef, ghostModeRef);
-    }
-    document.addEventListener("visibilitychange", handleFocusChange);
-    window.addEventListener("focus", handleFocusChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleFocusChange);
-      window.removeEventListener("focus", handleFocusChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      for (const message of messagesRef.current) {
-        if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (presenceExpiryRef.current !== null) clearTimeout(presenceExpiryRef.current);
-    };
-  }, []);
-
-  // Cover traffic: while in chat with an established sending chain, keep the
-  // outbound c:0 frame rate at/above a jittered baseline so the relay can't see
-  // idle gaps or typing pauses. Real sends reset lastContentSentRef, so cover
-  // only fills genuine silence — real messages incur zero added latency.
-  useEffect(() => {
-    if (screen.name !== "chat") return;
-    let cancelled = false;
-    function scheduleCover() {
-      if (cancelled) return;
-      const interval = jitteredInterval(COVER_INTERVAL_MS, COVER_JITTER_FRAC, Math.random);
-      coverTimerRef.current = window.setTimeout(async () => {
-        const sc = sessionCryptoRef.current;
-        const client = clientRef.current;
-        if (sc && client && sc.ratchet.CKs) {
-          const action = nextAction({
-            now: performance.now(),
-            lastContentSentAt: lastContentSentRef.current,
-            hasQueuedReal: false,
-            interval,
-          });
-          if (action === "cover") {
-            const body = sodium.randombytes_buf(coverBodyLen(Math.random));
-            await sendContentFrame(sc, client, frame({ channel: "cover", id: "", body }));
-          }
-        }
-        scheduleCover();
-      }, interval);
-    }
-    scheduleCover();
-    return () => {
-      cancelled = true;
-      if (coverTimerRef.current !== null) {
-        clearTimeout(coverTimerRef.current);
-        coverTimerRef.current = null;
-      }
-    };
-  }, [screen.name]);
-
-  useEffect(() => {
-    if (devOverride?.theme) setTheme(devOverride.theme);
-  }, []);
-
-  // An invite link (…/#CODE) prefills the join form on load; drop the hash
-  // afterward so a refresh doesn't re-trigger it.
-  useEffect(() => {
-    if (initialJoinCode && window.location.hash) {
-      history.replaceState(null, "", window.location.pathname + window.location.search);
-    }
-  }, []);
-
-  const HANDSHAKE_MIN_MS = 2600;
-
-  async function exchangeKeys(
-    client: RelayClient,
-    own: Keypair,
-    role: "initiator" | "responder",
-    roomCode: string
-  ) {
-    const handshakeStart = performance.now();
-    let disconnected = false;
-    // Hybrid post-quantum handshake state. The responder holds the ML-KEM
-    // keypair (published on its `pubkey`); the initiator encapsulates to it and
-    // returns the ciphertext (`kemct`). Each side stashes its classical
-    // crypto_kx result until the PQ secret is known and the root key derivable.
-    const kemKeypair = role === "responder" ? generateKemKeypair() : null;
-    let classicalKeys: SessionKeys | null = null;
-    let peerPub: Uint8Array | null = null;
-    // The initiator's primer/profile card can reach the responder before it has
-    // derived RK₀ (the async listener runs handlers concurrently). Buffer any
-    // `msg` until seeded, then drain in order.
-    const inbound: Extract<Envelope, { type: "msg" }>[] = [];
-
-    // Everything once BOTH the classical and PQ secrets are in hand: seed the
-    // ratchet, optionally share the profile, prime the responder's chain, show
-    // the session-bound safety number, and replay any buffered msgs.
-    async function finishHandshake(
-      sessionKeys: SessionKeys,
-      peerPublicKey: Uint8Array,
-      pqSecret: Uint8Array
-    ) {
-      const sc = await initSession(sessionKeys, role, own, peerPublicKey, pqSecret);
-      sessionCryptoRef.current = sc;
-      if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
-        const self = activeProfileRef.current.profile;
-        const card = JSON.stringify({ name: self.name, avatar: self.avatar, device: ownDevice });
-        client.send(
-          await sealStatic(sc, "profile", frame({ channel: "profile", id: "", body: textEncoder.encode(card) }))
-        );
-      }
-      // Host-primer: the responder has no sending chain until it receives the
-      // initiator's first content message, so the initiator sends a hidden one
-      // now. The responder decrypts it (gaining a sending chain) and drops it —
-      // invisible, but it lets either side type first.
-      if (role === "initiator") {
-        await sendContentFrame(sc, client, frame({ channel: "primer", id: "", body: EMPTY_BODY }));
-      }
-      // The safety number now binds the derived hybrid root key (not just the
-      // relayed pubkeys), so a key swap or a PQ downgrade changes the digits.
-      const safetyNumber = await computeSafetyNumber(own.publicKey, peerPublicKey, sc.rootKey);
-      const elapsed = performance.now() - handshakeStart;
-      if (elapsed < HANDSHAKE_MIN_MS) {
-        await new Promise((resolve) => setTimeout(resolve, HANDSHAKE_MIN_MS - elapsed));
-      }
-      if (disconnected) return;
-      setScreen({ name: "safety-number", roomCode, safetyNumber });
-      const queued = inbound.splice(0);
-      for (const env of queued) await handleMsg(env);
-    }
-
-    async function handleMsg(envelope: Extract<Envelope, { type: "msg" }>) {
-      const sc = sessionCryptoRef.current;
-      const client = clientRef.current;
-      if (!sc || !client) return;
-      let received: Frame;
-      try {
-        received = await openMsg(sc, envelope);
-      } catch (err) {
-        // A content packet that genuinely won't decrypt gets a bubble; a bad
-        // static signal (or a replay) is dropped silently, as before.
-        if (envelope.c === 0 && !isSilentContentDrop(err)) {
-          setMessages((prev) => [
-            ...prev,
-            { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
-          ]);
-        }
-        return;
-      }
-      // A content receive advances the receiving ratchet and may have just
-      // established our sending chain (responder) — flush anything queued.
-      if (envelope.c === 0) void flushOutbox();
-
-      switch (received.channel) {
-        case "primer":
-          // Hidden bootstrap message: its only job was to advance the ratchet.
-          break;
-        case "cover":
-          // Decoy traffic: its only job was to advance the ratchet. Drop it.
-          break;
-        case "text": {
-          const text = textDecoder.decode(received.body);
-          showPeerPresence("idle");
-          setMessages((prev) => [
-            ...prev,
-            { id: received.id, timestamp: Date.now(), from: "peer", kind: "text", text },
-          ]);
-          void sendAck(client, sc, "delivered", received.id);
-          pendingReadIdsRef.current.add(received.id);
-          void maybeSendReadAck(client, sc, pendingReadIdsRef, ghostModeRef);
-          break;
-        }
-        case "voice": {
-          const blob = new Blob([new Uint8Array(received.body)], { type: received.mimeType ?? "audio/webm" });
-          const audioUrl = URL.createObjectURL(blob);
-          const durationMs = await measureClipDurationMs(blob).catch(() => 0);
-          showPeerPresence("idle");
-          setMessages((prev) => [
-            ...prev,
-            { id: received.id, timestamp: Date.now(), from: "peer", kind: "voice", audioUrl, durationMs },
-          ]);
-          void sendAck(client, sc, "delivered", received.id);
-          pendingReadIdsRef.current.add(received.id);
-          void maybeSendReadAck(client, sc, pendingReadIdsRef, ghostModeRef);
-          break;
-        }
-        case "presence": {
-          try {
-            const state = parsePresenceState(JSON.parse(textDecoder.decode(received.body))?.state);
-            if (state) showPeerPresence(state);
-          } catch {
-            // Ignore a malformed presence body — the next heartbeat recovers.
-          }
-          break;
-        }
-        case "ack": {
-          if (received.kind) {
-            const kind = received.kind;
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.kind !== "decryption-error" && message.id === received.id
-                  ? { ...message, status: advanceStatus(message.status ?? "sent", kind) }
-                  : message
-              )
-            );
-          }
-          break;
-        }
-        case "profile": {
-          try {
-            const card = JSON.parse(textDecoder.decode(received.body));
-            if (card && typeof card.name === "string") {
-              setPeerProfile({
-                name: card.name,
-                avatar: typeof card.avatar === "string" ? card.avatar : null,
-                device: card.device === "phone" || card.device === "computer" ? card.device : null,
-              });
-            }
-          } catch {
-            // Ignore a malformed profile card.
-          }
-          break;
-        }
-      }
-    }
-
-    listenerCleanupsRef.current.push(client.onMessage(async (envelope: Envelope) => {
-      if (envelope.type === "peer-disconnected") {
-        disconnected = true;
-        setScreen({ name: "error", scenario: "friend_left" });
-        return;
-      }
-      if (envelope.type === "pubkey") {
-        // H2 (extended to the pre-seed window): the handshake is single-shot. A
-        // second pubkey — before or after seeding — is a protocol violation,
-        // never a silent re-key.
-        if (sessionCryptoRef.current || peerPub) {
-          setScreen({ name: "error", scenario: "handshake_failed" });
-          return;
-        }
-        // Refuse to derive keys against a wire format we don't speak.
-        if (envelope.v !== PROTOCOL_VERSION) {
-          setScreen({ name: "error", scenario: "handshake_failed" });
-          return;
-        }
-        try {
-          peerPub = await fromBase64(envelope.payload);
-          classicalKeys = await deriveSessionKeys(own, peerPub, role);
-          if (role === "initiator") {
-            // Fail closed: a v3 responder MUST supply a KEM key. A missing one
-            // is a downgrade attempt — never fall back to classical-only.
-            if (!envelope.kem) {
-              setScreen({ name: "error", scenario: "handshake_failed" });
-              return;
-            }
-            const { cipherText, sharedSecret } = kemEncapsulate(await fromBase64(envelope.kem));
-            client.send({ type: "kemct", payload: await toBase64(cipherText) });
-            await finishHandshake(classicalKeys, peerPub, sharedSecret);
-          }
-          // Responder: wait for the kemct before seeding.
-        } catch {
-          setScreen({ name: "error", scenario: "handshake_failed" });
-        }
-        return;
-      }
-      if (envelope.type === "kemct") {
-        // Only the responder decapsulates, only after its pubkey step, only once.
-        if (
-          role !== "responder" ||
-          !classicalKeys ||
-          !peerPub ||
-          !kemKeypair ||
-          sessionCryptoRef.current
-        ) {
-          setScreen({ name: "error", scenario: "handshake_failed" });
-          return;
-        }
-        try {
-          const sharedSecret = kemDecapsulate(await fromBase64(envelope.payload), kemKeypair.secretKey);
-          await finishHandshake(classicalKeys, peerPub, sharedSecret);
-        } catch {
-          setScreen({ name: "error", scenario: "handshake_failed" });
-        }
-        return;
-      }
-      if (envelope.type === "msg") {
-        // Buffer until RK₀ exists (responder, pre-kemct), then handle in order.
-        if (!sessionCryptoRef.current) {
-          inbound.push(envelope);
-          return;
-        }
-        await handleMsg(envelope);
-        return;
-      }
-    }));
-
-    const payload = await toBase64(own.publicKey);
-    if (kemKeypair) {
-      client.send({
-        type: "pubkey",
-        payload,
-        v: PROTOCOL_VERSION,
-        kem: await toBase64(kemKeypair.publicKey),
-      });
-    } else {
-      client.send({ type: "pubkey", payload, v: PROTOCOL_VERSION });
-    }
-  }
-
-  async function handleStart() {
-    setConnectStatus("connecting");
-    const own = await generateKeypair();
-    const client = new RelayClient(RELAY_URL);
-    clientRef.current = client;
-    try {
-      await client.waitForOpen();
-    } catch {
-      client.close();
-      clientRef.current = null;
-      setConnectStatus("idle");
-      setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "start" } });
-      return;
-    }
-    let currentRoomCode = "";
-    listenerCleanupsRef.current.push(client.onMessage((envelope) => {
-      if (envelope.type === "created") {
-        currentRoomCode = envelope.roomCode;
-        const code = envelope.roomCode;
-        // Snap the connecting bar to 100%, then hold a beat before advancing.
-        setConnectStatus("connected");
-        window.setTimeout(() => {
-          setConnectStatus("idle");
-          setScreen((prev) => (prev.name === "start" ? { name: "waiting", roomCode: code } : prev));
-        }, CONNECT_COMPLETE_HOLD_MS);
-      }
-      if (envelope.type === "peer-connected") {
-        setScreen({ name: "handshake", roomCode: currentRoomCode });
-        void exchangeKeys(client, own, "initiator", currentRoomCode);
-      }
-      if (envelope.type === "error") {
-        setConnectStatus("idle");
-        setScreen({
-          name: "error",
-          scenario: scenarioFromServerMessage(envelope.message),
-          retry: { kind: "start" },
-        });
-      }
-    }));
-    client.send({ type: "create" });
-  }
-
-  async function handleJoin(roomCode: string) {
-    setConnectStatus("connecting");
-    const own = await generateKeypair();
-    const client = new RelayClient(RELAY_URL);
-    clientRef.current = client;
-    try {
-      await client.waitForOpen();
-    } catch {
-      client.close();
-      clientRef.current = null;
-      setConnectStatus("idle");
-      setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "join", roomCode } });
-      return;
-    }
-    listenerCleanupsRef.current.push(client.onMessage((envelope) => {
-      if (envelope.type === "error") {
-        setConnectStatus("idle");
-        setScreen({
-          name: "error",
-          scenario: scenarioFromServerMessage(envelope.message),
-          retry: { kind: "join", roomCode },
-        });
-      }
-      if (envelope.type === "peer-connected") {
-        // Start the key exchange right away (listeners stack — delaying it would
-        // drop the peer's pubkey), but hold the finished bar a beat on the home
-        // screen before swapping in the handshake/loading screen.
-        setConnectStatus("connected");
-        void exchangeKeys(client, own, "responder", roomCode);
-        window.setTimeout(() => {
-          setConnectStatus("idle");
-          setScreen((prev) => (prev.name === "start" ? { name: "handshake", roomCode } : prev));
-        }, CONNECT_COMPLETE_HOLD_MS);
-      }
-    }));
-    client.send({ type: "join", roomCode });
-  }
-
-  // One choke point for every real ratcheted content send, so the cover timer
-  // sees real traffic and backs off. Static signals (presence/ack/profile) do
-  // NOT go through here — only c:0 content counts toward the cover baseline.
-  async function sendContentFrame(sc: SessionCrypto, client: RelayClient, frameBytes: Uint8Array) {
-    lastContentSentRef.current = performance.now();
-    client.send(await sealContent(sc, frameBytes));
-  }
-
-  // Send ratcheted content, or — if we're the responder and haven't received
-  // the initiator's primer yet — queue it until our sending chain exists.
-  async function sendContent(frameBytes: Uint8Array) {
-    const sc = sessionCryptoRef.current;
-    const client = clientRef.current;
-    if (!sc || !client) return;
-    if (!sc.ratchet.CKs) {
-      outboxRef.current.push(frameBytes);
-      return;
-    }
-    await sendContentFrame(sc, client, frameBytes);
-  }
-
-  async function flushOutbox() {
-    const sc = sessionCryptoRef.current;
-    const client = clientRef.current;
-    if (!sc || !client || !sc.ratchet.CKs || outboxRef.current.length === 0) return;
-    const pending = outboxRef.current;
-    outboxRef.current = [];
-    for (const frameBytes of pending) {
-      await sendContentFrame(sc, client, frameBytes);
-    }
-  }
-
-  async function handleSend(text: string) {
-    const sc = sessionCryptoRef.current;
-    const client = clientRef.current;
-    if (!sc || !client) return;
+  function addSession(initialAction: InitialAction) {
+    if (!canAddSession(sessions.length)) return;
     const id = crypto.randomUUID();
-    await sendContent(frame({ channel: "text", id, body: textEncoder.encode(text) }));
-    setMessages((prev) => [
-      ...prev,
-      { id, timestamp: Date.now(), from: "me", kind: "text", text, status: "sent" },
-    ]);
+    const label = nextSessionLabel(nextOrdinalRef.current++);
+    setSessions((prev) => [...prev, { id, initialAction, label }]);
+    setActiveId(id);
+    setNewChatOpen(false);
   }
 
-  async function handleSendVoice(blob: Blob, mimeType: string) {
-    const sc = sessionCryptoRef.current;
-    const client = clientRef.current;
-    if (!sc || !client) return;
-    const id = crypto.randomUUID();
-    const body = new Uint8Array(await blob.arrayBuffer());
-    await sendContent(frame({ channel: "voice", id, mimeType, body }));
-    const audioUrl = URL.createObjectURL(blob);
-    const durationMs = await measureClipDurationMs(blob).catch(() => 0);
-    setMessages((prev) => [
-      ...prev,
-      { id, timestamp: Date.now(), from: "me", kind: "voice", audioUrl, durationMs, status: "sent" },
-    ]);
-  }
+  const handleSummaryChange = useCallback((id: string, summary: ChatSessionSummary) => {
+    setSummaries((prev) => {
+      const existing = prev[id];
+      if (existing && existing.status === summary.status && existing.unreadPreview === summary.unreadPreview) {
+        return prev;
+      }
+      return { ...prev, [id]: summary };
+    });
+  }, []);
 
-  function handleLeave() {
-    for (const dispose of listenerCleanupsRef.current) dispose();
-    listenerCleanupsRef.current = [];
-    clientRef.current?.close();
-    clientRef.current = null;
-    zeroizeSession(sessionCryptoRef.current);
-    sessionCryptoRef.current = null;
-    outboxRef.current = [];
-    pendingReadIdsRef.current.clear();
-    if (presenceExpiryRef.current !== null) {
-      clearTimeout(presenceExpiryRef.current);
-      presenceExpiryRef.current = null;
+  const handleSessionClosed = useCallback((id: string) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+    setSummaries((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    handlesRef.current.delete(id);
+  }, []);
+
+  // If the active chat just closed, fall back to whichever chat remains.
+  useEffect(() => {
+    if (activeId && !sessions.some((s) => s.id === activeId)) {
+      setActiveId(sessions.length > 0 ? sessions[sessions.length - 1].id : null);
     }
-    if (coverTimerRef.current !== null) {
-      clearTimeout(coverTimerRef.current);
-      coverTimerRef.current = null;
-    }
-    presenceSentRef.current = { state: "idle", at: 0 };
-    setPeerPresence("idle");
-    setPeerProfile(null);
-    setConnectStatus("idle");
-    for (const message of messagesRef.current) {
-      if (message.kind === "voice") URL.revokeObjectURL(message.audioUrl);
-    }
-    setMessages([]);
-    setScreen({ name: "start" });
-  }
+  }, [sessions, activeId]);
+
+  const handleCloseRow = useCallback((id: string) => {
+    handlesRef.current.get(id)?.close();
+  }, []);
+
+  const handleRename = useCallback((id: string, label: string) => {
+    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, label } : s)));
+  }, []);
 
   if (devOverride?.screen === "loading") {
     return (
@@ -753,13 +154,7 @@ export default function App() {
           roomCode="K7F-2QX"
           safetyNumber="21934 07741 66012"
           messages={[
-            {
-              id: "1",
-              timestamp: Date.now() - 3000,
-              from: "peer",
-              kind: "text",
-              text: "did you check the safety number?",
-            },
+            { id: "1", timestamp: Date.now() - 3000, from: "peer", kind: "text", text: "did you check the safety number?" },
             {
               id: "2",
               timestamp: Date.now() - 2000,
@@ -778,7 +173,7 @@ export default function App() {
             },
           ]}
           ghostMode={ghostMode}
-          onGhostModeChange={updateGhostMode}
+          onGhostModeChange={() => {}}
           shareProfile={false}
           onShareProfileChange={() => {}}
           selfCard={{ name: "You", avatar: null, device: "computer" }}
@@ -808,8 +203,6 @@ export default function App() {
     );
   }
   if (devOverride?.screen === "connecting") {
-    // Holds the connecting bar in its "alive" cold-start state so the sheen +
-    // breathing glow can be eyeballed without a live relay.
     return (
       <StartJoinScreen
         onStart={() => {}}
@@ -848,21 +241,17 @@ export default function App() {
   }
   if (devOverride?.screen === "error") {
     const scenario = devOverride.scenario ?? "friend_left";
-    // Show "Try again" for the connection-time scenarios (mirrors the real
-    // wiring, where only those carry a retry); peer-left / handshake show one.
-    const retryable =
-      scenario === "server_unreachable" || scenario === "bad_code" || scenario === "room_full";
-    return (
-      <ErrorScreen scenario={scenario} onNewChat={() => {}} onRetry={retryable ? () => {} : undefined} />
-    );
+    const retryable = scenario === "server_unreachable" || scenario === "bad_code" || scenario === "room_full";
+    return <ErrorScreen scenario={scenario} onNewChat={() => {}} onRetry={retryable ? () => {} : undefined} />;
   }
-  if (screen.name === "start") {
+
+  if (sessions.length === 0) {
     return (
       <>
         <StartJoinScreen
-          onStart={handleStart}
-          onJoin={handleJoin}
-          connectStatus={connectStatus}
+          onStart={() => addSession({ kind: "start" })}
+          onJoin={(code) => addSession({ kind: "join", roomCode: code })}
+          connectStatus="idle"
           initialCode={initialJoinCode ?? undefined}
           activeProfile={activeProfile}
           onOpenProfiles={() => setProfilesOpen(true)}
@@ -881,70 +270,66 @@ export default function App() {
       </>
     );
   }
-  if (screen.name === "waiting") {
-    return <WaitingScreen roomCode={screen.roomCode} onCancel={handleLeave} />;
-  }
-  if (screen.name === "handshake" || screen.name === "safety-number" || screen.name === "chat") {
-    let content: ReactNode;
-    if (screen.name === "handshake") {
-      content = <LoadingScreen roomCode={screen.roomCode} />;
-    } else if (screen.name === "safety-number") {
-      content = (
-        <SafetyNumberScreen
-          roomCode={screen.roomCode}
-          safetyNumber={screen.safetyNumber}
-          onVerified={() =>
-            setScreen({ name: "chat", roomCode: screen.roomCode, safetyNumber: screen.safetyNumber })
-          }
-          onMismatch={() => {
-            for (const dispose of listenerCleanupsRef.current) dispose();
-            listenerCleanupsRef.current = [];
-            clientRef.current?.close();
-            clientRef.current = null;
-            zeroizeSession(sessionCryptoRef.current);
-            sessionCryptoRef.current = null;
-            setScreen({ name: "error", scenario: "handshake_failed" });
-          }}
-        />
-      );
-    } else {
-      content = (
-        <ChatScreen
-          roomCode={screen.roomCode}
-          safetyNumber={screen.safetyNumber}
-          messages={messages}
-          selfCard={selfCard}
-          peerProfile={peerProfile}
-          ghostMode={ghostMode}
-          onGhostModeChange={updateGhostMode}
-          shareProfile={shareProfile}
-          onShareProfileChange={updateShareProfile}
-          peerPresence={peerPresence}
-          onPresence={sendPresence}
-          onSend={handleSend}
-          onSendVoice={handleSendVoice}
-          onLeave={handleLeave}
-        />
-      );
-    }
-    return <HandshakeJourney activeKey={screen.name}>{content}</HandshakeJourney>;
-  }
-  // Only the "error" variant remains.
-  const retry = screen.retry;
+
+  const rows: ChatListRow[] = sessions.map((s) => ({
+    id: s.id,
+    label: s.label,
+    status: summaries[s.id]?.status ?? "connecting",
+    unreadPreview: summaries[s.id]?.unreadPreview ?? null,
+  }));
+
   return (
-    <ErrorScreen
-      scenario={screen.scenario}
-      onNewChat={handleLeave}
-      onRetry={
-        retry
-          ? () => {
-              // Tear down the failed attempt's client/state, then replay it.
-              handleLeave();
-              if (retry.kind === "start") void handleStart();
-              else void handleJoin(retry.roomCode);
-            }
-          : undefined
-      }
-    />
+    <div className="app-shell">
+      <ChatList
+        rows={rows}
+        activeId={activeId}
+        canAddNew={canAddSession(sessions.length)}
+        onSelect={setActiveId}
+        onClose={handleCloseRow}
+        onRename={handleRename}
+        onNewChat={() => setNewChatOpen(true)}
+      />
+      <div className="app-shell__content">
+        {sessions.map((s) => (
+          <div key={s.id} style={{ display: s.id === activeId ? "contents" : "none" }}>
+            <ChatSessionController
+              ref={(handle) => {
+                if (handle) handlesRef.current.set(s.id, handle);
+                else handlesRef.current.delete(s.id);
+              }}
+              initialAction={s.initialAction}
+              isActive={s.id === activeId}
+              activeProfile={activeProfile}
+              shareProfile={shareProfile}
+              onShareProfileChange={updateShareProfile}
+              ghostMode={ghostMode}
+              onGhostModeChange={updateGhostMode}
+              onSummaryChange={(summary) => handleSummaryChange(s.id, summary)}
+              onClosed={() => handleSessionClosed(s.id)}
+            />
+          </div>
+        ))}
+      </div>
+      {newChatOpen && (
+        <NewChatModal
+          onStart={() => addSession({ kind: "start" })}
+          onJoin={(code) => addSession({ kind: "join", roomCode: code })}
+          activeProfile={activeProfile}
+          onOpenProfiles={() => setProfilesOpen(true)}
+          onClose={() => setNewChatOpen(false)}
+        />
+      )}
+      {profilesOpen && (
+        <ProfileModal
+          profiles={profiles}
+          activeId={activeProfileId}
+          onSelectAnonymous={() => selectProfile(ANONYMOUS_ID)}
+          onSelectNamed={(profile) => selectProfile(profile.id)}
+          onCreate={handleCreateProfile}
+          onDelete={handleDeleteProfile}
+          onClose={() => setProfilesOpen(false)}
+        />
+      )}
+    </div>
   );
 }

@@ -1,0 +1,18 @@
+/* client/src/components/NewChatModal.css */
+.new-chat-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 20, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.new-chat-modal__panel {
+  position: relative;
+  width: min(480px, 92vw);
+  height: min(720px, 88vh);
+  overflow: hidden;
+  border-radius: var(--radius-card, 16px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
