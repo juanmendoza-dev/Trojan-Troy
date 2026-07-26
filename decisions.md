@@ -46,8 +46,26 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
   `libsodium-wrappers-sumo`", but the live repo actually imports `"libsodium-wrappers"`
   everywhere (App.tsx + all `crypto/*`). Cover body bytes reuse App.tsx's existing
   `sodium.randombytes_buf` import unchanged — no new sodium import added, so the
-  sumo-vs-not question never arises. (Decided by: implementing agent under Jay's
-  standing constraints; cadence/jitter defaults from spec ③.)
+  sumo-vs-not question never arises.
+  (7) **Corrected `coverBodyLen` buckets to 256-modal / 1024-tail, never 64 —
+  deviation from the plan/spec, forced by the byte-indistinguishability hard
+  constraint (final-review finding).** The plan and spec both assumed 64 was a
+  "common text bucket" and put ~70% of cover there. Empirically wrong: a real `c:0`
+  text frame's `id` is a 36-char UUID, so its meta alone (~63B) overflows the 64
+  bucket — **all** real text lands in ≥256 (verified: empty-body text = 256; only
+  the once-per-session primer is 64). A steady stream of 64-bucket cover would
+  therefore be trivially size-classified as decoy by the relay, defeating the
+  feature. Fixed `coverBodyLen` to draw bodies of 31–222B (→256, ~80%) and 223–990B
+  (→1024, ~20%), matching real text's actual bucket distribution; updated its unit
+  test to assert cover **never** lands in 64 (only {256, 1024}). Re-verified with a
+  two-browser eyeball: a real "hi" send and idle cover frames both land at the 256
+  bucket (identical 396-byte wire payload), cover tail at 1024 — size-indistinguishable.
+  This overrides the plan's literal `coverBodyLen` code because the plan's own
+  hard constraint ("byte-indistinguishable from content on the wire") takes
+  precedence over its mistaken bucket assumption. (Decided by: implementing agent
+  under Jay's standing constraints — conservative choice satisfying the hard
+  constraint while Jay was away; cadence/jitter defaults from spec ③. Flag for Jay:
+  this is a deliberate, verified deviation from the approved plan text.)
 
 - **2026-07-23 — Backend-only "post-quantum hardening" security round (4 specs) to
   deepen the crypto for the hackathon submission; building ①+② first. New crypto

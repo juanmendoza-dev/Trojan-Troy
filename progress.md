@@ -699,12 +699,20 @@ and `decisions.md` for why things were done a certain way.
   Verified: `npm run typecheck` clean, **189** client tests (11 new: framing cover
   round-trip, coverTraffic ×7, presence jitter/override ×3), `npm run build` green.
   **Two-browser Playwright eyeball (run then deleted): 10/10** — idle emits a steady
-  ~1/1.3s cover stream (12 frames/16s) each carrying a ratchet header with varied sizes
-  (64/256 buckets observed), **no** stray bubbles on either side, a real message goes
-  out within 1s (zero added latency) and shows exactly one bubble per side, and the
-  stream stops on leave. (Note: Playwright browser automation **is** available in this
-  env — drive with `page.wait_for_timeout`, not Python `time.sleep`, which blocks
-  Playwright event delivery and reads stale zeros.) Spec:
+  ~1/1.3s cover stream, each frame carrying a ratchet header, **no** stray bubbles on
+  either side, a real message goes out within 1s (zero added latency) and shows exactly
+  one bubble per side, and the stream stops on leave.
+  **Final whole-branch review (opus) found one Important efficacy defect, now fixed:**
+  the original `coverBodyLen` put ~70% of cover in the 64-byte bucket, but real `c:0`
+  text always lands in ≥256 (its 36-char UUID `id` overflows 64), so a size-aware relay
+  could classify the 64-bucket stream as decoy on sight — breaking the
+  byte-indistinguishability constraint. Fixed `coverBodyLen` to 256-modal (~80%) /
+  1024-tail (~20%), never 64, and updated its test; re-verified live that a real "hi"
+  send and idle cover both land at the 256 bucket (identical 396-byte wire payload).
+  See `decisions.md` point (7) — a deliberate, verified deviation from the plan text.
+  (Note: Playwright browser automation **is** available in this env — drive with
+  `page.wait_for_timeout`, not Python `time.sleep`, which blocks event delivery and
+  reads stale zeros.) Spec:
   `docs/superpowers/specs/2026-07-23-traffic-analysis-resistance-design.md`; plan:
   `docs/superpowers/plans/2026-07-25-traffic-analysis-cover.md`. Not yet merged (PR
   against `main`).
