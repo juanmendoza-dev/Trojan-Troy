@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { TitleBar } from "../components/TitleBar";
-import { Sidebar } from "../components/Sidebar";
+import { MonitorPanel } from "../components/MonitorPanel";
 import { MessageBubble } from "../components/MessageBubble";
 import { VoiceMessageBubble } from "../components/VoiceMessageBubble";
 import { Composer } from "../components/Composer";
@@ -97,6 +97,7 @@ export function ChatScreen({
 }: ChatScreenProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [roomHidden, setRoomHidden] = useState(false);
+  const [monitorOpen, setMonitorOpen] = useState(false);
   const [openCard, setOpenCard] = useState<{ data: PeerProfile; anchor: DOMRect } | null>(null);
   const peerCard: PeerProfile = peerProfile ?? { name: "Anonymous", avatar: null, device: null };
 
@@ -105,7 +106,7 @@ export function ChatScreen({
     -1
   );
 
-  // Text the user has sent, newest last — feeds the sidebar's live "data" visualizer.
+  // Text the user has sent, newest last — feeds the monitor panel's live "data" visualizer.
   const sentTexts = messages.flatMap((m) => (m.kind === "text" && m.from === "me" ? [m.text] : []));
 
   return (
@@ -114,16 +115,13 @@ export function ChatScreen({
         roomCode={roomCode}
         peerProfile={peerProfile}
         roomHidden={roomHidden}
+        onToggleRoomHidden={() => setRoomHidden((v) => !v)}
+        monitorOpen={monitorOpen}
+        onToggleMonitor={() => setMonitorOpen((v) => !v)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
+      {monitorOpen && <MonitorPanel sentMessages={sentTexts} />}
       <div className="chat-screen__body">
-        <Sidebar
-          roomCode={roomCode}
-          onNewChat={() => {}}
-          sentMessages={sentTexts}
-          roomHidden={roomHidden}
-          onToggleRoomHidden={() => setRoomHidden((v) => !v)}
-        />
         <div className="chat-screen__main">
           <div className="chat-screen__messages">
             <div className="chat-screen__day-divider">Today</div>

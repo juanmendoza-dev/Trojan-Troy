@@ -46,13 +46,32 @@
 }
 .title-bar__room {
   flex: 1;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font-size: 13px;
   color: var(--text-secondary);
 }
 .title-bar__room-code {
   font-family: var(--font-mono);
   color: var(--text-primary);
+}
+.title-bar__room-eye {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.title-bar__room-eye:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-alt, rgba(255, 255, 255, 0.06));
 }
 .title-bar__verified {
   display: flex;

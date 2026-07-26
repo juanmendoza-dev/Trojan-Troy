@@ -11,7 +11,8 @@ export type IconName =
   | "pause"
   | "chevron-left"
   | "eye"
-  | "eye-off";
+  | "eye-off"
+  | "activity";
 
 interface IconProps {
   name: IconName;
@@ -91,6 +92,8 @@ function glyph(name: IconName): ReactNode {
           <path d="M1 1 23 23" />
         </>
       );
+    case "activity":
+      return <path d="M22 12h-4l-3 9L9 3l-3 9H2" />;
     case "play":
       return <path d="M8 5v14l11-7z" />;
     case "pause":
