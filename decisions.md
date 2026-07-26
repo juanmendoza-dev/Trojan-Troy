@@ -8,6 +8,46 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-25 — At-rest profile vault (review S1, spec ④): the PIN now derives a
+  real Argon2id key that seals the avatar with `crypto_secretbox`; the fast-hash
+  access check is gone with no fallback.** Built on `feat/at-rest-profile-vault`.
+  Key calls:
+  (1) **`libsodium-wrappers` → `libsodium-wrappers-sumo` via a direct import-site
+  swap, not the config alias the spec/plan first proposed.** The alias approach
+  (Vite/Vitest `resolve.alias` + a tsconfig `paths` entry) could not typecheck:
+  the sumo `.d.ts` is authored as a self-referential base-module augmentation that
+  `paths` can't redirect, so `crypto_pwhash` stayed invisible to `tsc`. Took the
+  plan's documented escape hatch — changed all ~10 `import sodium from
+  "libsodium-wrappers"` sites to `"libsodium-wrappers-sumo"` directly; sumo bundles
+  its own types, so `crypto_pwhash` resolves with zero gymnastics. Same audited
+  vendor, bigger build. **Bundle delta: negligible** — prod bundle 1,606 kB → 1,608 kB
+  (gzip ~499 kB), because the classical libsodium wasm was already loaded; sumo just
+  exposes more of the same binary's API surface. Any future file importing sodium
+  must use the `-sumo` specifier.
+  (2) **Argon2id at `INTERACTIVE` (OPSLIMIT/MEMLIMIT_INTERACTIVE, ALG_ARGON2ID13),
+  not MODERATE/SENSITIVE.** ~64 MiB / ~0.1 s keeps profile-unlock imperceptible (the
+  spec's "no UX change" rule) while still being memory-hard — a categorical upgrade
+  over the fast hash. SENSITIVE (~1 GiB) can OOM a browser tab. The KDF params are
+  stored per-profile (`kdf` field) so the cost can be raised later without locking
+  out existing profiles.
+  (3) **Profile `name` stays clear (listing metadata); only the avatar (+ future
+  history) is encrypted.** `ProfileModal` lists profiles by name before the PIN is
+  entered; encrypting the name would turn the list into "locked profile"
+  placeholders — a visible flow change. Documented residual: a thief who copies
+  IndexedDB sees self-chosen display names but no avatars/history.
+  (4) **Migration = delete legacy (option a), NOT the spec's soft-preferred re-seal
+  (option b).** A record lacking `cipher`/`kdf` is deleted on `listProfiles()` load
+  (purging its cleartext avatar). Re-seal would require verifying the typed PIN
+  against the legacy `pinHash` — i.e. keeping the fast-hash path that S1 forbids.
+  The hard constraint (no fast-hash survives) outranks the soft preference. No real
+  users exist, so deletion is safe.
+  (5) **Reload → Anonymous (R2).** The decrypted avatar and active named identity
+  live in memory only; `activeProfile` is React state defaulting to
+  `{ kind: "anonymous" }` and is never persisted, so a page reload always reverts to
+  Anonymous and re-presents nothing named without the PIN re-entered that session.
+  The profile still appears in the list (name + default thumbnail) until unlocked.
+  (Decided by: Jay's R2 call; other calls per the spec, executed by Claude.)
+
 - **2026-07-23 — Backend-only "post-quantum hardening" security round (4 specs) to
   deepen the crypto for the hackathon submission; building ①+② first. New crypto
   dependency accepted.** With the app ship-ready, Jay chose to make the encryption

@@ -663,4 +663,47 @@ and `decisions.md` for why things were done a certain way.
   `…-safety-number-binding-design.md`; plan:
   `docs/superpowers/plans/2026-07-23-pq-hybrid-handshake.md`.
 
-- **2026-07-25** — At-rest profile encryption (review S1) — **IN PROGRESS / not finished**. Branch `feat/at-rest-profile-vault` (off `main`, pushed). Makes the profile PIN derive a real Argon2id key that seals the avatar at rest with `crypto_secretbox`, replacing the fast-hash access check. Spec: `docs/superpowers/specs/2026-07-23-at-rest-encryption-design.md`; plan: `docs/superpowers/plans/2026-07-25-at-rest-profile-vault.md`. **Done:** Task 1 — `libsodium-wrappers`→`-sumo` via direct import-site swap of all sodium imports (the config-alias approach failed to typecheck on the sumo `.d.ts`); `crypto_pwhash` now available (a084697, reviewed clean). Task 2 — new `client/src/profiles/vault.ts` seal/open with `TTr-vault-v1` magic, null on wrong key/tamper (fa94c19, reviewed clean). Task 3 — `deriveVaultKey` + `defaultKdfParams` (Argon2id INTERACTIVE/ARGON2ID13) in `pin.ts`, fast hash kept temporarily (df803d7; committed but its task-review was interrupted). **Remaining:** Task 4 — `StoredProfile` (clear `id`/`name`/`createdAt`/`pinSalt`/`kdf` + encrypted `cipher`) vs runtime `Profile` split, store migration (delete legacy records lacking `cipher`/`kdf`), wire `App.tsx`/`ProfileModal.tsx` with reload reverting to Anonymous (Jay's R2 call), remove `hashPin`/`verifyPin`. Task 5 — manual reload/unlock eyeball, `decisions.md` log, this file, open PR (no merge). Full task-by-task continuation state + gotchas for resuming agents: `.superpowers/sdd/2026-07-25-at-rest-profile-vault/progress.md`. Suite 184 tests green, typecheck + build green.
+- **2026-07-25** — At-rest profile encryption (review S1, spec ④) — **built,
+  PR-ready, not merged**. Branch `feat/at-rest-profile-vault` (off `main`, pushed).
+  The profile PIN now derives a real Argon2id key (`crypto_pwhash`) that seals the
+  avatar at rest with `crypto_secretbox`; the old fast-hash access check
+  (`crypto_generichash`) is removed with no fallback. Spec:
+  `docs/superpowers/specs/2026-07-23-at-rest-encryption-design.md`; plan:
+  `docs/superpowers/plans/2026-07-25-at-rest-profile-vault.md`; rationale in
+  `decisions.md` (2026-07-25). **All 5 tasks done:**
+  - Task 1 (`a084697`) — `libsodium-wrappers` → `-sumo` via a direct import-site swap
+    of all ~10 sodium imports (the config-alias approach couldn't typecheck against
+    the self-referential sumo `.d.ts`); `crypto_pwhash` now available. Bundle
+    negligibly larger (1,606 → 1,608 kB, gzip ~499 kB). Reviewed clean.
+  - Task 2 (`fa94c19`) — new `profiles/vault.ts` `sealProfileSecrets`/
+    `openProfileSecrets` (`crypto_secretbox` + `TTr-vault-v1` magic sentinel); returns
+    `null` on wrong key / tamper / bad-base64 / wrong-magic. 5 tests. Reviewed clean.
+  - Task 3 (`df803d7`) — `deriveVaultKey` + `defaultKdfParams` (Argon2id
+    INTERACTIVE / ARGON2ID13) added to `pin.ts`; `newSalt` sizes to
+    `crypto_pwhash_SALTBYTES`. (Its dedicated task-review was interrupted; folded into
+    the whole-branch review instead.)
+  - Task 4 (`98cfc1f`) — storage-format split + migration + UI wiring, fast hash
+    removed. `StoredProfile` (clear `id`/`name`/`createdAt`/`pinSalt`/`kdf` + opaque
+    `cipher`) vs runtime in-memory `Profile` (decrypted `avatar`); new
+    `ActiveProfile` union. `profileStore` retyped, migration deletes any legacy record
+    lacking `cipher`/`kdf` on load (purging cleartext avatars). `hashPin`/`verifyPin`
+    deleted + a guard test asserts no fast-hash export survives. `App.tsx` holds
+    `activeProfile` as in-memory state defaulting to Anonymous — **reload reverts to
+    Anonymous (Jay's R2 call)**, nothing named without the PIN re-entered.
+    `ProfileModal` derives+seals on create, derives+opens on unlock, shows the default
+    thumbnail until unlock. `resolveActiveProfile`/`get/setActiveProfileId` removed;
+    obsolete `profileModel.test.ts` deleted.
+  - Task 5 — this log + `decisions.md`; PR opened against `main` (not merged).
+  **Verification:** `npm run typecheck` clean, **183** vitest tests green (net −3
+  deleted model tests +2 new: store legacy-drop, pin no-fast-hash guard), `npm run
+  build` green. A throwaway real-module integration test (written, run, deleted)
+  confirmed the full flow: create seals the avatar → the stored record holds
+  `cipher`/`kdf`/`pinSalt` and **no** cleartext avatar → the correct PIN recovers it →
+  a wrong PIN returns `null` → a legacy cleartext record is purged on load. Dev-server
+  smoke test: home, `?screen=profiles`, and all touched modules serve 200 with no
+  errors. **Still pending (needs a human — no browser-automation tool in this
+  environment, as every prior visual phase):** the manual eyeball via `npm run dev`
+  `?screen=profiles` — reload→Anonymous visually, DevTools → IndexedDB showing
+  `cipher`/`kdf`/`pinSalt` and no cleartext `avatar`, and a live two-browser sharing
+  round-trip with an unlocked profile. Full task-by-task ledger:
+  `.superpowers/sdd/2026-07-25-at-rest-profile-vault/progress.md`.
