@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldSendPresence, parsePresenceState, PRESENCE_HEARTBEAT_MS } from "./presenceState";
+import { shouldSendPresence, parsePresenceState, PRESENCE_HEARTBEAT_MS, jitteredHeartbeatMs, PRESENCE_HEARTBEAT_JITTER_FRAC, PRESENCE_EXPIRY_MS } from "./presenceState";
 
 describe("shouldSendPresence", () => {
   const base = { lastSentState: "idle" as const, lastSentAt: 0, now: 0, ghostMode: false };
@@ -75,5 +75,26 @@ describe("parsePresenceState", () => {
     expect(parsePresenceState(null)).toBeNull();
     expect(parsePresenceState(42)).toBeNull();
     expect(parsePresenceState({ state: "typing" })).toBeNull();
+  });
+});
+
+describe("jitteredHeartbeatMs", () => {
+  it("stays within +/- the jitter fraction of the base", () => {
+    for (const r of [0, 0.25, 0.5, 0.75, 0.999]) {
+      const v = jitteredHeartbeatMs(() => r);
+      expect(v).toBeGreaterThanOrEqual(PRESENCE_HEARTBEAT_MS * (1 - PRESENCE_HEARTBEAT_JITTER_FRAC) - 1);
+      expect(v).toBeLessThanOrEqual(PRESENCE_HEARTBEAT_MS * (1 + PRESENCE_HEARTBEAT_JITTER_FRAC) + 1);
+    }
+  });
+  it("never reaches PRESENCE_EXPIRY_MS (indicator must not flicker off)", () => {
+    expect(jitteredHeartbeatMs(() => 1)).toBeLessThan(PRESENCE_EXPIRY_MS);
+  });
+});
+
+describe("shouldSendPresence heartbeat override", () => {
+  it("honors a passed heartbeatMs for an unchanged active state", () => {
+    const base = { nextState: "typing" as const, lastSentState: "typing" as const, lastSentAt: 0, ghostMode: false };
+    expect(shouldSendPresence({ ...base, now: 1200, heartbeatMs: 1000 })).toBe(true);
+    expect(shouldSendPresence({ ...base, now: 1200, heartbeatMs: 3000 })).toBe(false);
   });
 });

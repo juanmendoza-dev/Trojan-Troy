@@ -22,6 +22,7 @@ import {
   parsePresenceState,
   PRESENCE_EXPIRY_MS,
   type PresenceState,
+  jitteredHeartbeatMs,
 } from "./protocol/presenceState";
 import {
   nextAction,
@@ -246,6 +247,7 @@ export default function App() {
         lastSentAt: last.at,
         now,
         ghostMode: ghostModeRef.current,
+        heartbeatMs: jitteredHeartbeatMs(Math.random),
       })
     ) {
       return;
