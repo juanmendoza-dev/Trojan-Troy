@@ -4,6 +4,7 @@ import { RelayClient, type Envelope, PROTOCOL_VERSION } from "./net/relayClient"
 import { parseInviteCode } from "./net/inviteLink";
 import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
 import { generateKemKeypair, kemEncapsulate, kemDecapsulate } from "./crypto/pqkem";
+import { computeHandshakeCommit, computeTranscriptHash } from "./crypto/transcript";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
 import { measureClipDurationMs } from "./audio/clipDuration";
@@ -301,6 +302,9 @@ export default function App() {
     const kemKeypair = role === "responder" ? generateKemKeypair() : null;
     let classicalKeys: SessionKeys | null = null;
     let peerPub: Uint8Array | null = null;
+    // The peer's hash commitment, received before its `pubkey` reveal; the
+    // reveal is verified against it (commit-then-reveal, v4).
+    let peerCommit: Uint8Array | null = null;
     // The initiator's primer/profile card can reach the responder before it has
     // derived RK₀ (the async listener runs handlers concurrently). Buffer any
     // `msg` until seeded, then drain in order.
@@ -312,9 +316,10 @@ export default function App() {
     async function finishHandshake(
       sessionKeys: SessionKeys,
       peerPublicKey: Uint8Array,
-      pqSecret: Uint8Array
+      pqSecret: Uint8Array,
+      transcriptHash: Uint8Array
     ) {
-      const sc = await initSession(sessionKeys, role, own, peerPublicKey, pqSecret);
+      const sc = await initSession(sessionKeys, role, own, peerPublicKey, pqSecret, transcriptHash);
       sessionCryptoRef.current = sc;
       if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
         const self = activeProfileRef.current.profile;
@@ -441,11 +446,49 @@ export default function App() {
         setScreen({ name: "error", scenario: "friend_left" });
         return;
       }
+      if (envelope.type === "commit") {
+        // Commit-then-reveal (v4): the peer commits to its ephemeral key(s)
+        // before either side reveals, so keys can't be chosen adaptively. A
+        // second commit, a commit after we've revealed/seeded, or a version
+        // mismatch is a protocol violation — single-shot (extends H2).
+        if (sessionCryptoRef.current || peerPub || peerCommit) {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        if (envelope.v !== PROTOCOL_VERSION) {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        try {
+          peerCommit = await fromBase64(envelope.commit);
+        } catch {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        // Holding the peer's commitment, reveal our own public key(s) now.
+        const revealPayload = await toBase64(own.publicKey);
+        if (kemKeypair) {
+          client.send({
+            type: "pubkey",
+            payload: revealPayload,
+            v: PROTOCOL_VERSION,
+            kem: await toBase64(kemKeypair.publicKey),
+          });
+        } else {
+          client.send({ type: "pubkey", payload: revealPayload, v: PROTOCOL_VERSION });
+        }
+        return;
+      }
       if (envelope.type === "pubkey") {
-        // H2 (extended to the pre-seed window): the handshake is single-shot. A
-        // second pubkey — before or after seeding — is a protocol violation,
-        // never a silent re-key.
+        // Single-shot: a second reveal — before or after seeding — is a protocol
+        // violation, never a silent re-key (H2, extended to the pre-seed window).
         if (sessionCryptoRef.current || peerPub) {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        // A reveal must follow the peer's commit; its absence means a stripped
+        // commit round (a forced downgrade / an injected reveal).
+        if (!peerCommit) {
           setScreen({ name: "error", scenario: "handshake_failed" });
           return;
         }
@@ -455,18 +498,34 @@ export default function App() {
           return;
         }
         try {
-          peerPub = await fromBase64(envelope.payload);
+          const revealedPub = await fromBase64(envelope.payload);
+          const revealedKem = envelope.kem ? await fromBase64(envelope.kem) : null;
+          // Verify the reveal against the earlier commitment: a relay that swaps
+          // a key (or strips the responder's KEM) after the commit is caught here.
+          const expected = await computeHandshakeCommit(revealedPub, revealedKem);
+          if (sodium.to_hex(expected) !== sodium.to_hex(peerCommit)) {
+            setScreen({ name: "error", scenario: "handshake_failed" });
+            return;
+          }
+          peerPub = revealedPub;
           classicalKeys = await deriveSessionKeys(own, peerPub, role);
           if (role === "initiator") {
-            // Fail closed: a v3 responder MUST supply a KEM key. A missing one
+            // Fail closed: a v4 responder MUST supply a KEM key. A missing one
             // is a downgrade attempt — never fall back to classical-only.
-            if (!envelope.kem) {
+            if (!revealedKem) {
               setScreen({ name: "error", scenario: "handshake_failed" });
               return;
             }
-            const { cipherText, sharedSecret } = kemEncapsulate(await fromBase64(envelope.kem));
+            const { cipherText, sharedSecret } = kemEncapsulate(revealedKem);
             client.send({ type: "kemct", payload: await toBase64(cipherText) });
-            await finishHandshake(classicalKeys, peerPub, sharedSecret);
+            const transcriptHash = await computeTranscriptHash(
+              own.publicKey,
+              peerPub,
+              revealedKem,
+              cipherText,
+              PROTOCOL_VERSION
+            );
+            await finishHandshake(classicalKeys, peerPub, sharedSecret, transcriptHash);
           }
           // Responder: wait for the kemct before seeding.
         } catch {
@@ -475,7 +534,7 @@ export default function App() {
         return;
       }
       if (envelope.type === "kemct") {
-        // Only the responder decapsulates, only after its pubkey step, only once.
+        // Only the responder decapsulates, only after its reveal step, only once.
         if (
           role !== "responder" ||
           !classicalKeys ||
@@ -487,8 +546,16 @@ export default function App() {
           return;
         }
         try {
-          const sharedSecret = kemDecapsulate(await fromBase64(envelope.payload), kemKeypair.secretKey);
-          await finishHandshake(classicalKeys, peerPub, sharedSecret);
+          const cipherText = await fromBase64(envelope.payload);
+          const sharedSecret = kemDecapsulate(cipherText, kemKeypair.secretKey);
+          const transcriptHash = await computeTranscriptHash(
+            own.publicKey,
+            peerPub,
+            kemKeypair.publicKey,
+            cipherText,
+            PROTOCOL_VERSION
+          );
+          await finishHandshake(classicalKeys, peerPub, sharedSecret, transcriptHash);
         } catch {
           setScreen({ name: "error", scenario: "handshake_failed" });
         }
@@ -505,17 +572,14 @@ export default function App() {
       }
     }));
 
-    const payload = await toBase64(own.publicKey);
-    if (kemKeypair) {
-      client.send({
-        type: "pubkey",
-        payload,
-        v: PROTOCOL_VERSION,
-        kem: await toBase64(kemKeypair.publicKey),
-      });
-    } else {
-      client.send({ type: "pubkey", payload, v: PROTOCOL_VERSION });
-    }
+    // Opening move: send our commitment. We reveal our public key only after we
+    // receive the peer's commit (handled in the listener above) — commit-then-
+    // reveal, so neither side can pick its keys as a function of the other's.
+    const ownCommit = await computeHandshakeCommit(
+      own.publicKey,
+      kemKeypair ? kemKeypair.publicKey : null
+    );
+    client.send({ type: "commit", v: PROTOCOL_VERSION, commit: await toBase64(ownCommit) });
   }
 
   async function handleStart() {

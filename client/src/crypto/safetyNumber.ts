@@ -16,10 +16,10 @@ export async function computeSafetyNumber(
   // only this domain-separated hash of it enters the number.
   const confirmTag = sodium.crypto_generichash(
     32,
-    sodium.from_string("TTr:sas-confirm:v3"),
+    sodium.from_string("TTr:sas-confirm:v4"),
     rootKey
   );
-  const domain = sodium.from_string("TTr:sas:v3");
+  const domain = sodium.from_string("TTr:sas:v4");
   const combined = new Uint8Array(domain.length + first.length + second.length + confirmTag.length);
   combined.set(domain, 0);
   combined.set(first, domain.length);

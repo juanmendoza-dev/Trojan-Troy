@@ -68,9 +68,10 @@ export async function initSession(
   role: "initiator" | "responder",
   ownKeypair: KeyPair,
   peerPublicKey: Uint8Array,
-  pqSecret: Uint8Array
+  pqSecret: Uint8Array,
+  transcriptHash: Uint8Array
 ): Promise<SessionCrypto> {
-  const rk0 = await deriveRootKey(sessionKeys.rx, sessionKeys.tx, pqSecret);
+  const rk0 = await deriveRootKey(sessionKeys.rx, sessionKeys.tx, pqSecret, transcriptHash);
   const ratchet =
     role === "initiator"
       ? await initAlice(rk0, peerPublicKey)
