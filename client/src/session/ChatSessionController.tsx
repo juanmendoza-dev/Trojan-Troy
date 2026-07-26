@@ -149,6 +149,13 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
     const coverTimerRef = useRef<number | null>(null);
     const clientRef = useRef<RelayClient | null>(null);
     const listenerCleanupsRef = useRef<Array<() => void>>([]);
+    // Bumped every time a connection attempt starts or is torn down. Each
+    // attempt captures the value it was given at birth and re-checks it after
+    // every await that could have let a newer attempt (StrictMode's remount,
+    // a real reconnect) start in the meantime. A mismatch means this attempt
+    // has been superseded: it must close whatever socket it opened and must
+    // never touch clientRef/sessionCryptoRef/setScreen/setMessages again.
+    const connectionGenerationRef = useRef(0);
     const messagesRef = useRef<ChatMessage[]>(messages);
     messagesRef.current = messages;
     const pendingReadIdsRef = useRef<Set<string>>(new Set());
@@ -309,7 +316,8 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
       client: RelayClient,
       own: Keypair,
       role: "initiator" | "responder",
-      roomCode: string
+      roomCode: string,
+      generation: number
     ) {
       const handshakeStart = performance.now();
       let disconnected = false;
@@ -320,6 +328,7 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
 
       async function finishHandshake(sessionKeys: SessionKeys, peerPublicKey: Uint8Array, pqSecret: Uint8Array) {
         const sc = await initSession(sessionKeys, role, own, peerPublicKey, pqSecret);
+        if (generation !== connectionGenerationRef.current) return;
         sessionCryptoRef.current = sc;
         if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
           const self = activeProfileRef.current.profile;
@@ -336,7 +345,7 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
         if (elapsed < HANDSHAKE_MIN_MS) {
           await new Promise((resolve) => setTimeout(resolve, HANDSHAKE_MIN_MS - elapsed));
         }
-        if (disconnected) return;
+        if (disconnected || generation !== connectionGenerationRef.current) return;
         setScreen({ name: "safety-number", roomCode, safetyNumber });
         const queued = inbound.splice(0);
         for (const env of queued) await handleMsg(env);
@@ -438,6 +447,7 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
 
       listenerCleanupsRef.current.push(
         client.onMessage(async (envelope: Envelope) => {
+          if (generation !== connectionGenerationRef.current) return;
           if (envelope.type === "peer-disconnected") {
             disconnected = true;
             setScreen({ name: "error", scenario: "friend_left" });
@@ -455,17 +465,21 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
             try {
               peerPub = await fromBase64(envelope.payload);
               classicalKeys = await deriveSessionKeys(own, peerPub, role);
+              if (generation !== connectionGenerationRef.current) return;
               if (role === "initiator") {
                 if (!envelope.kem) {
                   setScreen({ name: "error", scenario: "handshake_failed" });
                   return;
                 }
                 const { cipherText, sharedSecret } = kemEncapsulate(await fromBase64(envelope.kem));
+                if (generation !== connectionGenerationRef.current) return;
                 client.send({ type: "kemct", payload: await toBase64(cipherText) });
                 await finishHandshake(classicalKeys, peerPub, sharedSecret);
               }
             } catch {
-              setScreen({ name: "error", scenario: "handshake_failed" });
+              if (generation === connectionGenerationRef.current) {
+                setScreen({ name: "error", scenario: "handshake_failed" });
+              }
             }
             return;
           }
@@ -476,9 +490,12 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
             }
             try {
               const sharedSecret = kemDecapsulate(await fromBase64(envelope.payload), kemKeypair.secretKey);
+              if (generation !== connectionGenerationRef.current) return;
               await finishHandshake(classicalKeys, peerPub, sharedSecret);
             } catch {
-              setScreen({ name: "error", scenario: "handshake_failed" });
+              if (generation === connectionGenerationRef.current) {
+                setScreen({ name: "error", scenario: "handshake_failed" });
+              }
             }
             return;
           }
@@ -556,6 +573,10 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
     // NOT tell the parent to drop the row — used by closeSession() and by
     // retryConnect() (which immediately reconnects afterward).
     function disposeConnection() {
+      // Invalidate any connection attempt still in flight (mid-await, no
+      // client assigned yet) as well as the one currently live, so neither
+      // can resurrect clientRef/sessionCryptoRef/screen state afterward.
+      connectionGenerationRef.current++;
       for (const dispose of listenerCleanupsRef.current) dispose();
       listenerCleanupsRef.current = [];
       clientRef.current?.close();
@@ -586,28 +607,40 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
       onClosed();
     }
 
-    async function startConnection() {
+    async function startConnection(generation: number) {
       const own = await generateKeypair();
+      // Nothing has touched clientRef/setScreen yet, so a superseded attempt
+      // can simply stop here — there's no socket to close.
+      if (generation !== connectionGenerationRef.current) return;
       const client = new RelayClient(RELAY_URL);
-      clientRef.current = client;
       try {
         await client.waitForOpen();
       } catch {
         client.close();
-        clientRef.current = null;
-        setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "start" } });
+        if (generation === connectionGenerationRef.current) {
+          setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "start" } });
+        }
         return;
       }
+      if (generation !== connectionGenerationRef.current) {
+        // A newer attempt started while this one was opening its socket.
+        // This one did open a real connection — close it, and never assign
+        // it to clientRef or register its listener.
+        client.close();
+        return;
+      }
+      clientRef.current = client;
       let currentRoomCode = "";
       listenerCleanupsRef.current.push(
         client.onMessage((envelope) => {
+          if (generation !== connectionGenerationRef.current) return;
           if (envelope.type === "created") {
             currentRoomCode = envelope.roomCode;
             setScreen({ name: "waiting", roomCode: envelope.roomCode });
           }
           if (envelope.type === "peer-connected") {
             setScreen({ name: "handshake", roomCode: currentRoomCode });
-            void exchangeKeys(client, own, "initiator", currentRoomCode);
+            void exchangeKeys(client, own, "initiator", currentRoomCode, generation);
           }
           if (envelope.type === "error") {
             setScreen({
@@ -621,20 +654,27 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
       client.send({ type: "create" });
     }
 
-    async function joinConnection(roomCode: string) {
+    async function joinConnection(generation: number, roomCode: string) {
       const own = await generateKeypair();
+      if (generation !== connectionGenerationRef.current) return;
       const client = new RelayClient(RELAY_URL);
-      clientRef.current = client;
       try {
         await client.waitForOpen();
       } catch {
         client.close();
-        clientRef.current = null;
-        setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "join", roomCode } });
+        if (generation === connectionGenerationRef.current) {
+          setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "join", roomCode } });
+        }
         return;
       }
+      if (generation !== connectionGenerationRef.current) {
+        client.close();
+        return;
+      }
+      clientRef.current = client;
       listenerCleanupsRef.current.push(
         client.onMessage((envelope) => {
+          if (generation !== connectionGenerationRef.current) return;
           if (envelope.type === "error") {
             setScreen({
               name: "error",
@@ -644,7 +684,7 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
           }
           if (envelope.type === "peer-connected") {
             setScreen({ name: "handshake", roomCode });
-            void exchangeKeys(client, own, "responder", roomCode);
+            void exchangeKeys(client, own, "responder", roomCode, generation);
           }
         })
       );
@@ -652,8 +692,9 @@ export const ChatSessionController = forwardRef<ChatSessionHandle, ChatSessionCo
     }
 
     function connect() {
-      if (initialAction.kind === "start") void startConnection();
-      else void joinConnection(initialAction.roomCode);
+      const generation = ++connectionGenerationRef.current;
+      if (initialAction.kind === "start") void startConnection(generation);
+      else void joinConnection(generation, initialAction.roomCode);
     }
 
     function retryConnect() {
