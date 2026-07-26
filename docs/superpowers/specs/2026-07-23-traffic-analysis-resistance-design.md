@@ -1,7 +1,13 @@
 # Traffic-Analysis Resistance (cover traffic + cadence jitter, review B12): Design Spec
 
-Status: Draft (brainstormed with Jay 2026-07-23; awaiting approval)
-Date: 2026-07-23
+Status: Approved (brainstormed with Jay 2026-07-23; approved 2026-07-25 after a
+freshness check against current `main` — the PQ handshake ①/②, ratchet framing +
+size-bucket padding, and the at-rest vault ④ have since landed; all integration
+points below verified against the live code: `framing.ts`'s `Channel` union still
+carries `"primer"` as the drop-then-render-nothing template, `presenceState.ts`
+still exposes `PRESENCE_HEARTBEAT_MS = 2500` / `PRESENCE_EXPIRY_MS = 5000`, and
+`App.tsx`'s receive switch still has the `case "primer": break;` pattern to copy.)
+Date: 2026-07-23 (approved 2026-07-25)
 
 ## Purpose
 
@@ -43,6 +49,10 @@ channels and `ratchetSession.sealContent`/`openMsg`.
 - **Stays within Track B abuse limits.** The relay's per-connection throttle
   (60 burst / 30 msg/sec sustained) bounds cover traffic; the recommended rate
   (~1–2 frames/sec) sits far under it. The two hardening efforts are consistent.
+  (Freshness note 2026-07-25: Track B lives on `fix/relay-dos-limits`, built +
+  green but **not yet merged/deployed** pending Jay's go-ahead — so phrase this as
+  "stays under the cap once Track B ships." The ~1/sec baseline is trivially safe
+  with or without those limits live, so this is not a blocker either way.)
 
 ## Invariants preserved (must not regress)
 
