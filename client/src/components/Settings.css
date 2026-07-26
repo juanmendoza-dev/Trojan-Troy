@@ -130,3 +130,52 @@
 .settings__toggle input:checked + .settings__toggle-track::before {
   transform: translateX(18px);
 }
+
+/* ── Mobile (≤640px) ──────────────────────────────────── */
+@media (max-width: 640px) {
+  .settings__backdrop {
+    /* Keep the panel away from all edges including notch/home-indicator */
+    padding-top: var(--safe-top, 0px);
+    padding-bottom: var(--safe-bottom, 0px);
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .settings__panel {
+    /* Never wider than the screen minus 32px of breathing room */
+    width: min(360px, calc(100% - 32px));
+  }
+
+  .settings__close {
+    /* Expand hit area to ≥44×44 without changing the visual icon size */
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
+
+  .settings__row {
+    /* Toggle row: tall enough for a comfortable tap target */
+    min-height: 44px;
+    padding: 10px 0;
+  }
+
+  .settings__leave-button {
+    /* Full-width leave button is already 100%; ensure adequate tap height */
+    min-height: 44px;
+    padding: 12px 10px;
+  }
+
+  .settings__toggle {
+    /* Expand the invisible input overlay to cover at least 44×44 */
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .settings__toggle input {
+    /* The input is already inset:0 — this keeps the touch zone correct */
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

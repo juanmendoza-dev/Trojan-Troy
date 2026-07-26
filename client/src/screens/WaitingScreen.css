@@ -235,6 +235,46 @@
   background: linear-gradient(90deg, transparent, rgba(143, 166, 255, 0.45), transparent);
 }
 
+/* ── Mobile (≤640px) ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  .waiting-screen {
+    height: var(--app-height, 100dvh);
+  }
+
+  .waiting-screen__content {
+    padding: 40px 20px 64px;
+  }
+
+  /* Radar rings: switch from fixed negative-margin centering to transform-
+     based centering and clamp width to 80vw so they never overflow on a
+     360 px device. */
+  .waiting-screen__ring {
+    width: min(360px, 80vw);
+    height: min(360px, 80vw);
+    left: 50%;
+    top: 50%;
+    margin: 0;
+    transform: translate(-50%, -50%);
+  }
+
+  /* Lower the min floor of the clamp so a 9-char room code doesn't overflow
+     at 360 px viewport width. */
+  .waiting-screen__code {
+    font-size: clamp(28px, 8vw, 72px);
+  }
+
+  /* Allow pills to stack on very narrow viewports. */
+  .waiting-screen__actions {
+    flex-wrap: wrap;
+  }
+
+  /* Ensure the cancel button meets the 44 px minimum tap-target requirement. */
+  .waiting-screen__cancel {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+}
+
 /* ── Staggered rise-in entrances (signature easing) ──────── */
 .waiting-screen__top-row,
 .waiting-screen__radar,

@@ -98,3 +98,11 @@
 :root[data-theme="iris"] .message-bubble--incoming[data-decrypting]::after {
   display: none;
 }
+
+/* ── Mobile (≤640px) ─────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Cap bubble width: avatar(28px) + gap(8px) + some outgoing breathing room(12px) = 48px reserved */
+  .message-bubble {
+    max-width: calc(100% - 48px);
+  }
+}

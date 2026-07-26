@@ -50,6 +50,12 @@ export function ProfileCard({ card, anchor, onClose }: ProfileCardProps) {
       cardEl.style.opacity = "1";
       return;
     }
+    // Skip the heavy canvas FX on coarse-pointer (touch) devices to save
+    // battery; the CSS opacity fade still gives a clean reveal.
+    if (window.matchMedia("(pointer: coarse)").matches) {
+      cardEl.style.opacity = "1";
+      return;
+    }
     const maybeCtx = canvas.getContext("2d");
     if (!maybeCtx) {
       cardEl.style.opacity = "1";
@@ -132,7 +138,14 @@ export function ProfileCard({ card, anchor, onClose }: ProfileCardProps) {
 
   // Sit the card just above the clicked avatar, clamped to the viewport.
   const left = Math.min(Math.max(anchor.left - 8, 8), window.innerWidth - CARD_WIDTH - 8);
-  const bottom = window.innerHeight - anchor.top + 8;
+  const rawBottom = window.innerHeight - anchor.top + 8;
+  // Clamp so the card's top edge never goes above 8px from the top of the
+  // viewport. We use 300px as a conservative card-height estimate; the actual
+  // element may be shorter, but this prevents off-screen placement when the
+  // anchor sits near the top of the screen (common on mobile).
+  const CARD_HEIGHT_ESTIMATE = 300;
+  const maxBottom = window.innerHeight - CARD_HEIGHT_ESTIMATE - 8;
+  const bottom = Math.min(rawBottom, Math.max(maxBottom, 8));
 
   return (
     <div className="profile-card__backdrop" onClick={onClose}>

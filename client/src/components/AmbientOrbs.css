@@ -22,3 +22,10 @@
   animation: floatOrb 12s ease-in-out infinite;
   animation-delay: 1.4s;
 }
+
+/* ── Mobile (≤640px) ─────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .ambient-orbs__orb--one {
+    left: min(340px, 30vw);
+  }
+}

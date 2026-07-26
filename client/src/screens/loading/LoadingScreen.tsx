@@ -14,6 +14,17 @@ const WORDMARK_FONT_FAMILY = "'Schibsted Grotesk', sans-serif";
 
 export function LoadingScreen({ roomCode, durationMs = 2600 }: LoadingScreenProps) {
   const [percent, setPercent] = useState(0);
+  const [wordmarkSize, setWordmarkSize] = useState(() =>
+    Math.min(96, Math.max(56, Math.floor(window.innerWidth * 0.14)))
+  );
+
+  useEffect(() => {
+    function handleResize() {
+      setWordmarkSize(Math.min(96, Math.max(56, Math.floor(window.innerWidth * 0.14))));
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const start = performance.now();
@@ -41,7 +52,8 @@ export function LoadingScreen({ roomCode, durationMs = 2600 }: LoadingScreenProp
           <div className="loading-screen__wordmark-line">
             <CipherWord
               text="Trojan"
-              fontSizePx={96}
+              fontSizePx={wordmarkSize}
+              windowHeightPx={Math.round(132 * (wordmarkSize / 96))}
               startDelayS={0.2}
               staggerS={0.08}
               fontFamily={WORDMARK_FONT_FAMILY}
@@ -50,7 +62,8 @@ export function LoadingScreen({ roomCode, durationMs = 2600 }: LoadingScreenProp
           <div className="loading-screen__wordmark-line loading-screen__wordmark-line--second">
             <CipherWord
               text="Troy"
-              fontSizePx={96}
+              fontSizePx={wordmarkSize}
+              windowHeightPx={Math.round(132 * (wordmarkSize / 96))}
               startDelayS={0.68}
               staggerS={0.08}
               fontFamily={WORDMARK_FONT_FAMILY}

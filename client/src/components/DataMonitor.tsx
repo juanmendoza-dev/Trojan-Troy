@@ -18,11 +18,13 @@ const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matc
 // Each new send jumps in and visibly encrypts; between sends it cycles the
 // history (or a sample set before anything's been sent). Built with real DOM
 // nodes (textContent) so untrusted message text can never inject markup.
-function MorphViz({ messages }: { messages: string[] }) {
+function MorphViz({ messages, paused }: { messages: string[]; paused?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const msgsRef = useRef(messages);
   msgsRef.current = messages;
   const seenLenRef = useRef(messages.length);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   useEffect(() => {
     const el = ref.current;
@@ -46,6 +48,7 @@ function MorphViz({ messages }: { messages: string[] }) {
     draw();
     if (reduced()) return;
     const id = window.setInterval(() => {
+      if (pausedRef.current) return;
       // A freshly sent message jumps the display straight to encrypting it.
       if (msgsRef.current.length > seenLenRef.current) {
         seenLenRef.current = msgsRef.current.length;
@@ -63,8 +66,10 @@ function MorphViz({ messages }: { messages: string[] }) {
 }
 
 // 2 · live ciphertext hex stream (hex digits only — safe to set as innerHTML)
-function HexStreamViz() {
+function HexStreamViz({ paused }: { paused?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -74,15 +79,20 @@ function HexStreamViz() {
     };
     draw();
     if (reduced()) return;
-    const id = window.setInterval(() => { bytes.unshift(rb()); bytes.pop(); draw(); }, 110);
+    const id = window.setInterval(() => {
+      if (pausedRef.current) return;
+      bytes.unshift(rb()); bytes.pop(); draw();
+    }, 110);
     return () => window.clearInterval(id);
   }, []);
   return <span ref={ref} className="viz-hex" aria-hidden="true" />;
 }
 
 // 3 · oscilloscope signal
-function ScopeViz() {
+function ScopeViz({ paused }: { paused?: boolean }) {
   const ref = useRef<SVGPathElement>(null);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   useEffect(() => {
     const path = ref.current;
     if (!path) return;
@@ -99,7 +109,10 @@ function ScopeViz() {
     };
     draw();
     if (reduced()) return;
-    const loop = () => { phase += 0.09; draw(); raf = requestAnimationFrame(loop); };
+    const loop = () => {
+      if (!pausedRef.current) { phase += 0.09; draw(); }
+      raf = requestAnimationFrame(loop);
+    };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
@@ -111,8 +124,10 @@ function ScopeViz() {
 }
 
 // 4 · cipher rain — canvas, resizes with its row
-function RainViz() {
+function RainViz({ paused }: { paused?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   useEffect(() => {
     const cv = ref.current;
     if (!cv) return;
@@ -142,7 +157,7 @@ function RainViz() {
     const ro = new ResizeObserver(() => { setup(); if (reduced()) for (let k = 0; k < 16; k++) draw(); });
     ro.observe(cv);
     if (reduced()) { for (let k = 0; k < 16; k++) draw(); }
-    else { const loop = () => { draw(); raf = requestAnimationFrame(loop); }; raf = requestAnimationFrame(loop); }
+    else { const loop = () => { if (!pausedRef.current) draw(); raf = requestAnimationFrame(loop); }; raf = requestAnimationFrame(loop); }
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
   }, []);
   return <canvas ref={ref} className="viz-rain" aria-hidden="true" />;

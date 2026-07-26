@@ -201,3 +201,22 @@
     animation: none !important;
   }
 }
+
+/* ── Mobile (≤640px) ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  .error-screen {
+    height: var(--app-height, 100dvh);
+    /* The root already has padding: 24px; that's narrow enough at 640px, but
+       tighten side padding slightly so the card breathes on 360 px devices. */
+    padding: 24px 16px;
+  }
+
+  .error-screen__card {
+    padding: 28px 20px 24px;
+  }
+
+  /* Both primary and ghost buttons must meet the 44 px tap-target floor. */
+  .error-screen__btn {
+    min-height: 44px;
+  }
+}
