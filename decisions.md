@@ -8,6 +8,33 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-26 — Round-2 crypto hardening (A/B/D/E green-lit); shipped feature D
+  first: hardened handshake = commit-then-reveal + transcript binding.
+  `PROTOCOL_VERSION` 3 → 4.** With the app ship-ready, Jay green-lit a *second*
+  backend-only, UX-invisible crypto round (extends the `phase-5-security-direction`
+  steer): (A) post-quantum Double Ratchet, (B) ratchet header encryption, (D)
+  hardened handshake, (E) periodic rekey. (C) key-committing AEAD was offered and
+  **declined** — niche in a 2-party ratchet. Claude's sequencing: **D first**
+  (handshake-only, lowest risk, and E re-runs it) → A+B as one wire revision → E.
+  **D, built on `feat/hardened-handshake`:** (1) **Commit-then-reveal (ZRTP-style):**
+  each side sends `H(its ephemeral key(s))` as a new opaque `commit` envelope and
+  reveals its `pubkey` only after receiving the peer's commit (verifying the reveal
+  against it), so neither side — nor a MITM relay — can choose its keys as a function
+  of the other's. Closes the adaptive-key-choice gap the safety number alone left
+  open. (2) **Transcript binding:** both sides fold a canonical hash of the full
+  handshake transcript (version, both X25519 pubkeys, ML-KEM public key + ciphertext)
+  into `RK₀` via a new third `deriveRootKey` step, so any framing tamper (a version
+  downgrade, a swapped ciphertext) changes `RK₀` → the session fails closed *and* the
+  safety-number digits change. Domain tags bumped v3 → v4 (`kdf.ts` + `safetyNumber.ts`).
+  **No server change** — the `commit` envelope rides the relay's opaque pass-through
+  (only `create`/`join` are inspected; confirmed in `server.ts`). **No new dependency**
+  — commit/transcript hashes are BLAKE2b (`crypto_generichash`, already used). Costs
+  one extra relay round-trip, absorbed by the existing ≥2600 ms handshake screen — UX
+  identical. Verified: typecheck clean, **185** client tests (transcript ×5 +
+  transcript-binding cases in `kdf`/`ratchetSession`), build green; manual two-browser
+  eyeball pending (Playwright now available). Spec/plan dated 2026-07-26.
+  (Decided by: Jay; architecture by Claude)
+
 - **2026-07-23 — Backend-only "post-quantum hardening" security round (4 specs) to
   deepen the crypto for the hackathon submission; building ①+② first. New crypto
   dependency accepted.** With the app ship-ready, Jay chose to make the encryption

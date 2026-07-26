@@ -24,6 +24,7 @@ and `decisions.md` for why things were done a certain way.
 | 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
 | 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | Ratchet track (Tasks 0-7) shipped to `main` (`683d3a3`, fast-forward) — Double Ratchet + sealed `msg` framing + padding + host-primer, plus honest about/security copy. typecheck/156 tests/build green; two-browser smoke (text both ways + joiner-first) confirmed live. Track B (relay DoS/lifecycle hardening — H3/M1/M5/L5) built + green on `fix/relay-dos-limits` (server 30/30, build clean, probe-verified), **pending Jay's go-ahead to fast-forward merge** (deploys the relay to Render). Remaining after that: a fuller voice/receipts/presence eyeball. |
 | PQ hardening ①+② — hybrid post-quantum handshake (X25519 + ML-KEM-768) + safety-number binding | Built on `feat/pq-hybrid-handshake` — typecheck/163 tests/build green; full handshake choreography verified via a throwaway real-module test (root-key agreement, session-bound safety number, joiner-first via primer, corrupt-`kemct` fails). Manual two-browser eyeball pending. ③ traffic-analysis + ④ at-rest specced, not built. |
+| Round 2 — D: Hardened handshake (commit-then-reveal + transcript binding) | Built on `feat/hardened-handshake` off `main` — new opaque `commit` round (keys committed before either side reveals) + full-transcript binding into `RK₀`, `PROTOCOL_VERSION` 3→4, no server change, no new dep. typecheck / **185** tests / build green (transcript ×5 + kdf/ratchetSession binding cases). Manual two-browser eyeball pending. First of the round-2 four (A/B/D/E; see `decisions.md` 2026-07-26) — A+B and E still to build. |
 
 ## Log
 
@@ -662,3 +663,30 @@ and `decisions.md` for why things were done a certain way.
   `docs/superpowers/specs/2026-07-23-pq-hybrid-handshake-design.md` +
   `…-safety-number-binding-design.md`; plan:
   `docs/superpowers/plans/2026-07-23-pq-hybrid-handshake.md`.
+
+- **2026-07-26** — Round-2 crypto hardening kicked off (A/B/D/E green-lit by Jay —
+  backend-only, UX-invisible; see `decisions.md` 2026-07-26). **Feature D — hardened
+  handshake — built** on `feat/hardened-handshake` off `main`, first in the round
+  (handshake-only, lowest risk, and E will re-run it). Two additions, both closing gaps
+  the hybrid-PQ handshake left open: (1) **commit-then-reveal** — each side sends a hash
+  commitment to its ephemeral key(s) (a new opaque `commit` envelope) and reveals its
+  `pubkey` only after receiving the peer's commit, verifying the reveal against it, so
+  keys can't be chosen adaptively (ZRTP-style); (2) **transcript binding** — both sides
+  fold a canonical hash of the whole transcript (version, both X25519 pubkeys, ML-KEM
+  public key + ciphertext) into `RK₀` via a new third `deriveRootKey` step, so any framing
+  tamper changes the root key (fails closed) and the safety number. New pure
+  `crypto/transcript.ts` (`computeHandshakeCommit` + `computeTranscriptHash`);
+  `deriveRootKey`/`initSession` gained a `transcriptHash` arg; kdf + safety-number domains
+  bumped v3 → v4; `PROTOCOL_VERSION` 3 → 4; `App.tsx exchangeKeys` restructured to
+  commit → reveal → verify → KEM → seed, with the single-shot guards extended to
+  `commit`/`pubkey`/`kemct`. **No server change** (the relay forwards `commit` verbatim,
+  like `pubkey`/`kemct`/`msg` — confirmed in `server.ts`) and **no new dependency**
+  (BLAKE2b). One extra relay round-trip, hidden by the existing ≥2600 ms handshake
+  screen — UX identical. Verified: `npm run typecheck` clean, **185** client tests pass
+  (7 new: transcript ×5, kdf transcript-binding, ratchetSession per-side-transcript-
+  mismatch), `npm run build` green. Manual two-browser eyeball pending (Playwright is now
+  set up — the recurring "no browser-automation tool" caveat is obsolete). Spec:
+  `docs/superpowers/specs/2026-07-26-hardened-handshake-design.md`; plan:
+  `docs/superpowers/plans/2026-07-26-hardened-handshake.md`. Remaining in round 2: A+B
+  (PQ ratchet + header encryption, co-designed as one wire revision) then E (periodic
+  rekey).
