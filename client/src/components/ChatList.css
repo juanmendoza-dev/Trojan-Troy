@@ -1,0 +1,121 @@
+/* client/src/components/ChatList.css */
+.chat-list {
+  width: 256px;
+  flex: none;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  gap: 8px;
+  overflow-y: auto;
+}
+.chat-list__new {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 11px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+}
+.chat-list__new:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.chat-list__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  overflow-y: auto;
+}
+.chat-list__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.chat-list__row--active {
+  border-color: var(--accent);
+}
+.chat-list__row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chat-list__label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-list__label-input {
+  flex: 1;
+  font-size: 13px;
+  font-family: var(--font-ui);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: var(--text-primary);
+}
+.chat-list__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.chat-list__icon-button:hover {
+  color: var(--text-primary);
+}
+.chat-list__row-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.chat-list__status--error {
+  color: #e2685c;
+}
+.chat-list__status--chat {
+  color: var(--accent);
+}
+.chat-list__unread {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.chat-list__unread-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
