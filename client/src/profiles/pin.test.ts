@@ -1,6 +1,7 @@
 import sodium from "libsodium-wrappers-sumo";
 import { describe, expect, it, beforeAll } from "vitest";
 import { isValidPin, newSalt, deriveVaultKey, defaultKdfParams } from "./pin";
+import * as pinModule from "./pin";
 
 beforeAll(async () => {
   await sodium.ready;
@@ -52,5 +53,10 @@ describe("KDF cost sanity", () => {
     expect(p.alg).toBe(sodium.crypto_pwhash_ALG_ARGON2ID13);
     expect(p.ops).toBeGreaterThanOrEqual(sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE);
     expect(p.mem).toBeGreaterThanOrEqual(sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE);
+  });
+
+  it("exposes no fast-hash helpers (no fast-hash export remains)", () => {
+    expect("hashPin" in pinModule).toBe(false);
+    expect("verifyPin" in pinModule).toBe(false);
   });
 });
