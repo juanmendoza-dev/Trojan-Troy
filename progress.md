@@ -697,13 +697,19 @@ and `decisions.md` for why things were done a certain way.
   **Verification:** `npm run typecheck` clean, **183** vitest tests green (net −3
   deleted model tests +2 new: store legacy-drop, pin no-fast-hash guard), `npm run
   build` green. A throwaway real-module integration test (written, run, deleted)
-  confirmed the full flow: create seals the avatar → the stored record holds
+  confirmed the module-level flow: create seals the avatar → the stored record holds
   `cipher`/`kdf`/`pinSalt` and **no** cleartext avatar → the correct PIN recovers it →
-  a wrong PIN returns `null` → a legacy cleartext record is purged on load. Dev-server
-  smoke test: home, `?screen=profiles`, and all touched modules serve 200 with no
-  errors. **Still pending (needs a human — no browser-automation tool in this
-  environment, as every prior visual phase):** the manual eyeball via `npm run dev`
-  `?screen=profiles` — reload→Anonymous visually, DevTools → IndexedDB showing
-  `cipher`/`kdf`/`pinSalt` and no cleartext `avatar`, and a live two-browser sharing
-  round-trip with an unlocked profile. Full task-by-task ledger:
+  a wrong PIN returns `null` → a legacy cleartext record is purged on load. **Then a
+  real-browser end-to-end run** (headless-Chromium Playwright script against the live
+  dev server, written/run/deleted — the same pattern prior visual phases used) drove
+  the actual UI at `/` and confirmed all 17 checks: start Anonymous → open modal →
+  create a profile *with an uploaded photo* → active shows the decrypted data-URL
+  avatar → **DevTools-equivalent IndexedDB read** shows one record with
+  `cipher`/`kdf.alg`/`pinSalt`, **no `avatar` field, and no `data:image` bytes** at
+  rest → **reload reverts to Anonymous (R2)** while the profile still lists →
+  wrong PIN shows "Wrong PIN — try again" and does not unlock → correct PIN unlocks
+  and restores the avatar in memory → zero page/console errors throughout. **Only
+  residual for a human:** a live two-browser *peer sharing* round-trip (needs the relay
+  running + a second client) — the profile-card wire format is unchanged by this work,
+  so it's confirmatory. Full task-by-task ledger:
   `.superpowers/sdd/2026-07-25-at-rest-profile-vault/progress.md`.
