@@ -1,10 +1,11 @@
 import type { RatchetHeader } from "../crypto/ratchet";
 
 // Bumped whenever the handshake / post-handshake wire format changes. Sent on
-// `pubkey` and checked by the peer, so a stale client hits an error screen
-// instead of deriving keys against a format it can't speak. v3 adds the hybrid
-// post-quantum handshake (KEM public key on `pubkey` + the `kemct` envelope).
-export const PROTOCOL_VERSION = 3;
+// `commit`/`pubkey` and checked by the peer, so a stale client hits an error
+// screen instead of deriving keys against a format it can't speak. v3 added the
+// hybrid post-quantum handshake (KEM public key on `pubkey` + the `kemct`
+// envelope); v4 adds the commit-then-reveal `commit` round + transcript binding.
+export const PROTOCOL_VERSION = 4;
 
 export type { RatchetHeader };
 
@@ -19,6 +20,10 @@ export type Envelope =
   | { type: "join"; roomCode: string }
   | { type: "peer-connected" }
   | { type: "peer-disconnected" }
+  // `commit` = base64 hash commitment to a party's ephemeral handshake key(s),
+  // sent before the `pubkey` reveal so keys can't be chosen adaptively (v4).
+  // Opaque to the relay, forwarded verbatim like `pubkey`/`kemct`/`msg`.
+  | { type: "commit"; v: number; commit: string }
   // `payload` = base64 X25519 handshake public key. `kem` (responder only) =
   // base64 ML-KEM-768 public key for the hybrid post-quantum leg.
   | { type: "pubkey"; payload: string; v: number; kem?: string }

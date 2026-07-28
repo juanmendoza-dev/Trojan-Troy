@@ -1,4 +1,4 @@
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 
 export async function toBase64(bytes: Uint8Array): Promise<string> {
   await sodium.ready;

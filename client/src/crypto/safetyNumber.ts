@@ -1,4 +1,4 @@
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 
 export async function computeSafetyNumber(
   publicKeyA: Uint8Array,
@@ -16,16 +16,16 @@ export async function computeSafetyNumber(
   // only this domain-separated hash of it enters the number.
   const confirmTag = sodium.crypto_generichash(
     32,
-    sodium.from_string("TTr:sas-confirm:v3"),
+    sodium.from_string("TTr:sas-confirm:v4"),
     rootKey
   );
-  const domain = sodium.from_string("TTr:sas:v3");
+  const domain = sodium.from_string("TTr:sas:v4");
   const combined = new Uint8Array(domain.length + first.length + second.length + confirmTag.length);
   combined.set(domain, 0);
   combined.set(first, domain.length);
   combined.set(second, domain.length + first.length);
   combined.set(confirmTag, domain.length + first.length + second.length);
-  const digest = sodium.crypto_generichash(20, combined);
+  const digest = sodium.crypto_generichash(20, combined, null);
 
   const decimal = Array.from(digest)
     .map((byte) => byte.toString().padStart(3, "0"))

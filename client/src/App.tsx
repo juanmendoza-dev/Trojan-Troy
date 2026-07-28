@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { RelayClient, type Envelope, PROTOCOL_VERSION } from "./net/relayClient";
 import { parseInviteCode } from "./net/inviteLink";
 import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
 import { generateKemKeypair, kemEncapsulate, kemDecapsulate } from "./crypto/pqkem";
+import { computeHandshakeCommit, computeTranscriptHash } from "./crypto/transcript";
 import { computeSafetyNumber } from "./crypto/safetyNumber";
 import { toBase64, fromBase64 } from "./crypto/encoding";
 import { measureClipDurationMs } from "./audio/clipDuration";
@@ -22,7 +23,15 @@ import {
   parsePresenceState,
   PRESENCE_EXPIRY_MS,
   type PresenceState,
+  jitteredHeartbeatMs,
 } from "./protocol/presenceState";
+import {
+  nextAction,
+  jitteredInterval,
+  coverBodyLen,
+  COVER_INTERVAL_MS,
+  COVER_JITTER_FRAC,
+} from "./protocol/coverTraffic";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
 import { type ConnectStatus } from "./screens/ConnectingBar";
 import { CONNECT_COMPLETE_HOLD_MS } from "./screens/barPhases";
@@ -35,16 +44,21 @@ import { HandshakeJourney } from "./screens/HandshakeJourney";
 import { ErrorScreen } from "./screens/ErrorScreen";
 import { scenarioFromServerMessage, type ErrorScenario } from "./screens/errorScenario";
 import { ProfileModal } from "./components/ProfileModal";
-import { resolveActiveProfile, ANONYMOUS_ID, type Profile, type PeerProfile } from "./profiles/profileModel";
+import {
+  ANONYMOUS_ID,
+  type StoredProfile,
+  type ActiveProfile,
+  type Profile,
+  type PeerProfile,
+} from "./profiles/profileModel";
 import {
   listProfiles,
   putProfile,
   deleteProfile,
-  getActiveProfileId,
   getShareProfile,
-  setActiveProfileId as persistActiveProfileId,
   setShareProfile as persistShareProfile,
 } from "./profiles/profileStore";
+import type { ProfileSecrets } from "./profiles/vault";
 import { detectDevice } from "./profiles/device";
 import { parseScreenOverride } from "./dev/screenOverride";
 
@@ -142,16 +156,21 @@ export default function App() {
   // (i.e. before receiving the initiator's primer/first message) — flushed the
   // moment a content receive establishes the chain.
   const outboxRef = useRef<Uint8Array[]>([]);
+  // Last time a real-or-cover c:0 content frame went to the wire — the cover
+  // scheduler backs off whenever this is recent (see protocol/coverTraffic.ts).
+  const lastContentSentRef = useRef(0);
+  const coverTimerRef = useRef<number | null>(null);
   const clientRef = useRef<RelayClient | null>(null);
   const listenerCleanupsRef = useRef<Array<() => void>>([]);
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
   const { setTheme } = useTheme();
 
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [activeProfileId, setActiveProfileId] = useState<string>(() => getActiveProfileId());
+  const [profiles, setProfiles] = useState<StoredProfile[]>([]);
+  // Reload starts Anonymous (R2): a named identity requires the PIN re-entered.
+  const [activeProfile, setActiveProfile] = useState<ActiveProfile>({ kind: "anonymous" });
+  const activeProfileId = activeProfile.kind === "named" ? activeProfile.profile.id : ANONYMOUS_ID;
   const [profilesOpen, setProfilesOpen] = useState(false);
-  const activeProfile = resolveActiveProfile(profiles, activeProfileId);
   const [ownDevice] = useState(detectDevice);
   const selfCard: PeerProfile = {
     name: activeProfile.kind === "named" ? activeProfile.profile.name : "Anonymous",
@@ -173,19 +192,27 @@ export default function App() {
     void listProfiles().then(setProfiles);
   }, []);
 
-  function selectProfile(id: string) {
-    persistActiveProfileId(id);
-    setActiveProfileId(id);
+  function toRuntime(p: StoredProfile, secrets: ProfileSecrets): Profile {
+    return { id: p.id, name: p.name, createdAt: p.createdAt, avatar: secrets.avatar };
   }
-  async function handleCreateProfile(profile: Profile) {
+
+  async function handleCreateProfile(profile: StoredProfile, secrets: ProfileSecrets) {
     await putProfile(profile);
     setProfiles(await listProfiles());
-    selectProfile(profile.id);
+    setActiveProfile({ kind: "named", profile: toRuntime(profile, secrets) });
+  }
+  function handleSelectNamed(profile: StoredProfile, secrets: ProfileSecrets) {
+    setActiveProfile({ kind: "named", profile: toRuntime(profile, secrets) });
+  }
+  function handleSelectAnonymous() {
+    setActiveProfile({ kind: "anonymous" });
   }
   async function handleDeleteProfile(id: string) {
     await deleteProfile(id);
     setProfiles(await listProfiles());
-    if (activeProfileId === id) selectProfile(ANONYMOUS_ID);
+    if (activeProfile.kind === "named" && activeProfile.profile.id === id) {
+      setActiveProfile({ kind: "anonymous" });
+    }
   }
 
   const pendingReadIdsRef = useRef<Set<string>>(new Set());
@@ -235,6 +262,7 @@ export default function App() {
         lastSentAt: last.at,
         now,
         ghostMode: ghostModeRef.current,
+        heartbeatMs: jitteredHeartbeatMs(Math.random),
       })
     ) {
       return;
@@ -272,6 +300,44 @@ export default function App() {
     };
   }, []);
 
+  // Cover traffic: while in chat with an established sending chain, keep the
+  // outbound c:0 frame rate at/above a jittered baseline so the relay can't see
+  // idle gaps or typing pauses. Real sends reset lastContentSentRef, so cover
+  // only fills genuine silence — real messages incur zero added latency.
+  useEffect(() => {
+    if (screen.name !== "chat") return;
+    let cancelled = false;
+    function scheduleCover() {
+      if (cancelled) return;
+      const interval = jitteredInterval(COVER_INTERVAL_MS, COVER_JITTER_FRAC, Math.random);
+      coverTimerRef.current = window.setTimeout(async () => {
+        const sc = sessionCryptoRef.current;
+        const client = clientRef.current;
+        if (sc && client && sc.ratchet.CKs) {
+          const action = nextAction({
+            now: performance.now(),
+            lastContentSentAt: lastContentSentRef.current,
+            hasQueuedReal: false,
+            interval,
+          });
+          if (action === "cover") {
+            const body = sodium.randombytes_buf(coverBodyLen(Math.random));
+            await sendContentFrame(sc, client, frame({ channel: "cover", id: "", body }));
+          }
+        }
+        scheduleCover();
+      }, interval);
+    }
+    scheduleCover();
+    return () => {
+      cancelled = true;
+      if (coverTimerRef.current !== null) {
+        clearTimeout(coverTimerRef.current);
+        coverTimerRef.current = null;
+      }
+    };
+  }, [screen.name]);
+
   useEffect(() => {
     if (devOverride?.theme) setTheme(devOverride.theme);
   }, []);
@@ -301,6 +367,9 @@ export default function App() {
     const kemKeypair = role === "responder" ? generateKemKeypair() : null;
     let classicalKeys: SessionKeys | null = null;
     let peerPub: Uint8Array | null = null;
+    // The peer's hash commitment, received before its `pubkey` reveal; the
+    // reveal is verified against it (commit-then-reveal, v4).
+    let peerCommit: Uint8Array | null = null;
     // The initiator's primer/profile card can reach the responder before it has
     // derived RK₀ (the async listener runs handlers concurrently). Buffer any
     // `msg` until seeded, then drain in order.
@@ -312,9 +381,10 @@ export default function App() {
     async function finishHandshake(
       sessionKeys: SessionKeys,
       peerPublicKey: Uint8Array,
-      pqSecret: Uint8Array
+      pqSecret: Uint8Array,
+      transcriptHash: Uint8Array
     ) {
-      const sc = await initSession(sessionKeys, role, own, peerPublicKey, pqSecret);
+      const sc = await initSession(sessionKeys, role, own, peerPublicKey, pqSecret, transcriptHash);
       sessionCryptoRef.current = sc;
       if (shareProfileRef.current && activeProfileRef.current.kind === "named") {
         const self = activeProfileRef.current.profile;
@@ -328,7 +398,7 @@ export default function App() {
       // now. The responder decrypts it (gaining a sending chain) and drops it —
       // invisible, but it lets either side type first.
       if (role === "initiator") {
-        client.send(await sealContent(sc, frame({ channel: "primer", id: "", body: EMPTY_BODY })));
+        await sendContentFrame(sc, client, frame({ channel: "primer", id: "", body: EMPTY_BODY }));
       }
       // The safety number now binds the derived hybrid root key (not just the
       // relayed pubkeys), so a key swap or a PQ downgrade changes the digits.
@@ -368,6 +438,9 @@ export default function App() {
       switch (received.channel) {
         case "primer":
           // Hidden bootstrap message: its only job was to advance the ratchet.
+          break;
+        case "cover":
+          // Decoy traffic: its only job was to advance the ratchet. Drop it.
           break;
         case "text": {
           const text = textDecoder.decode(received.body);
@@ -441,11 +514,49 @@ export default function App() {
         setScreen({ name: "error", scenario: "friend_left" });
         return;
       }
+      if (envelope.type === "commit") {
+        // Commit-then-reveal (v4): the peer commits to its ephemeral key(s)
+        // before either side reveals, so keys can't be chosen adaptively. A
+        // second commit, a commit after we've revealed/seeded, or a version
+        // mismatch is a protocol violation — single-shot (extends H2).
+        if (sessionCryptoRef.current || peerPub || peerCommit) {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        if (envelope.v !== PROTOCOL_VERSION) {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        try {
+          peerCommit = await fromBase64(envelope.commit);
+        } catch {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        // Holding the peer's commitment, reveal our own public key(s) now.
+        const revealPayload = await toBase64(own.publicKey);
+        if (kemKeypair) {
+          client.send({
+            type: "pubkey",
+            payload: revealPayload,
+            v: PROTOCOL_VERSION,
+            kem: await toBase64(kemKeypair.publicKey),
+          });
+        } else {
+          client.send({ type: "pubkey", payload: revealPayload, v: PROTOCOL_VERSION });
+        }
+        return;
+      }
       if (envelope.type === "pubkey") {
-        // H2 (extended to the pre-seed window): the handshake is single-shot. A
-        // second pubkey — before or after seeding — is a protocol violation,
-        // never a silent re-key.
+        // Single-shot: a second reveal — before or after seeding — is a protocol
+        // violation, never a silent re-key (H2, extended to the pre-seed window).
         if (sessionCryptoRef.current || peerPub) {
+          setScreen({ name: "error", scenario: "handshake_failed" });
+          return;
+        }
+        // A reveal must follow the peer's commit; its absence means a stripped
+        // commit round (a forced downgrade / an injected reveal).
+        if (!peerCommit) {
           setScreen({ name: "error", scenario: "handshake_failed" });
           return;
         }
@@ -455,18 +566,34 @@ export default function App() {
           return;
         }
         try {
-          peerPub = await fromBase64(envelope.payload);
+          const revealedPub = await fromBase64(envelope.payload);
+          const revealedKem = envelope.kem ? await fromBase64(envelope.kem) : null;
+          // Verify the reveal against the earlier commitment: a relay that swaps
+          // a key (or strips the responder's KEM) after the commit is caught here.
+          const expected = await computeHandshakeCommit(revealedPub, revealedKem);
+          if (sodium.to_hex(expected) !== sodium.to_hex(peerCommit)) {
+            setScreen({ name: "error", scenario: "handshake_failed" });
+            return;
+          }
+          peerPub = revealedPub;
           classicalKeys = await deriveSessionKeys(own, peerPub, role);
           if (role === "initiator") {
-            // Fail closed: a v3 responder MUST supply a KEM key. A missing one
+            // Fail closed: a v4 responder MUST supply a KEM key. A missing one
             // is a downgrade attempt — never fall back to classical-only.
-            if (!envelope.kem) {
+            if (!revealedKem) {
               setScreen({ name: "error", scenario: "handshake_failed" });
               return;
             }
-            const { cipherText, sharedSecret } = kemEncapsulate(await fromBase64(envelope.kem));
+            const { cipherText, sharedSecret } = kemEncapsulate(revealedKem);
             client.send({ type: "kemct", payload: await toBase64(cipherText) });
-            await finishHandshake(classicalKeys, peerPub, sharedSecret);
+            const transcriptHash = await computeTranscriptHash(
+              own.publicKey,
+              peerPub,
+              revealedKem,
+              cipherText,
+              PROTOCOL_VERSION
+            );
+            await finishHandshake(classicalKeys, peerPub, sharedSecret, transcriptHash);
           }
           // Responder: wait for the kemct before seeding.
         } catch {
@@ -475,7 +602,7 @@ export default function App() {
         return;
       }
       if (envelope.type === "kemct") {
-        // Only the responder decapsulates, only after its pubkey step, only once.
+        // Only the responder decapsulates, only after its reveal step, only once.
         if (
           role !== "responder" ||
           !classicalKeys ||
@@ -487,8 +614,16 @@ export default function App() {
           return;
         }
         try {
-          const sharedSecret = kemDecapsulate(await fromBase64(envelope.payload), kemKeypair.secretKey);
-          await finishHandshake(classicalKeys, peerPub, sharedSecret);
+          const cipherText = await fromBase64(envelope.payload);
+          const sharedSecret = kemDecapsulate(cipherText, kemKeypair.secretKey);
+          const transcriptHash = await computeTranscriptHash(
+            own.publicKey,
+            peerPub,
+            kemKeypair.publicKey,
+            cipherText,
+            PROTOCOL_VERSION
+          );
+          await finishHandshake(classicalKeys, peerPub, sharedSecret, transcriptHash);
         } catch {
           setScreen({ name: "error", scenario: "handshake_failed" });
         }
@@ -505,17 +640,14 @@ export default function App() {
       }
     }));
 
-    const payload = await toBase64(own.publicKey);
-    if (kemKeypair) {
-      client.send({
-        type: "pubkey",
-        payload,
-        v: PROTOCOL_VERSION,
-        kem: await toBase64(kemKeypair.publicKey),
-      });
-    } else {
-      client.send({ type: "pubkey", payload, v: PROTOCOL_VERSION });
-    }
+    // Opening move: send our commitment. We reveal our public key only after we
+    // receive the peer's commit (handled in the listener above) — commit-then-
+    // reveal, so neither side can pick its keys as a function of the other's.
+    const ownCommit = await computeHandshakeCommit(
+      own.publicKey,
+      kemKeypair ? kemKeypair.publicKey : null
+    );
+    client.send({ type: "commit", v: PROTOCOL_VERSION, commit: await toBase64(ownCommit) });
   }
 
   async function handleStart() {
@@ -598,6 +730,14 @@ export default function App() {
     client.send({ type: "join", roomCode });
   }
 
+  // One choke point for every real ratcheted content send, so the cover timer
+  // sees real traffic and backs off. Static signals (presence/ack/profile) do
+  // NOT go through here — only c:0 content counts toward the cover baseline.
+  async function sendContentFrame(sc: SessionCrypto, client: RelayClient, frameBytes: Uint8Array) {
+    lastContentSentRef.current = performance.now();
+    client.send(await sealContent(sc, frameBytes));
+  }
+
   // Send ratcheted content, or — if we're the responder and haven't received
   // the initiator's primer yet — queue it until our sending chain exists.
   async function sendContent(frameBytes: Uint8Array) {
@@ -608,7 +748,7 @@ export default function App() {
       outboxRef.current.push(frameBytes);
       return;
     }
-    client.send(await sealContent(sc, frameBytes));
+    await sendContentFrame(sc, client, frameBytes);
   }
 
   async function flushOutbox() {
@@ -618,7 +758,7 @@ export default function App() {
     const pending = outboxRef.current;
     outboxRef.current = [];
     for (const frameBytes of pending) {
-      client.send(await sealContent(sc, frameBytes));
+      await sendContentFrame(sc, client, frameBytes);
     }
   }
 
@@ -661,6 +801,10 @@ export default function App() {
     if (presenceExpiryRef.current !== null) {
       clearTimeout(presenceExpiryRef.current);
       presenceExpiryRef.current = null;
+    }
+    if (coverTimerRef.current !== null) {
+      clearTimeout(coverTimerRef.current);
+      coverTimerRef.current = null;
     }
     presenceSentRef.current = { state: "idle", at: 0 };
     setPeerPresence("idle");
@@ -755,9 +899,9 @@ export default function App() {
     );
   }
   if (devOverride?.screen === "profiles") {
-    const sample: Profile[] = [
-      { id: "s1", name: "Jay", avatar: null, pinSalt: "", pinHash: "", createdAt: 0 },
-      { id: "s2", name: "Work", avatar: null, pinSalt: "", pinHash: "", createdAt: 0 },
+    const sample: StoredProfile[] = [
+      { id: "s1", name: "Jay", createdAt: 0, pinSalt: "cw==", kdf: { ops: 2, mem: 67108864, alg: 2 }, cipher: "cw==" },
+      { id: "s2", name: "Work", createdAt: 0, pinSalt: "cw==", kdf: { ops: 2, mem: 67108864, alg: 2 }, cipher: "cw==" },
     ];
     return (
       <>
@@ -805,8 +949,8 @@ export default function App() {
           <ProfileModal
             profiles={profiles}
             activeId={activeProfileId}
-            onSelectAnonymous={() => selectProfile(ANONYMOUS_ID)}
-            onSelectNamed={(profile) => selectProfile(profile.id)}
+            onSelectAnonymous={handleSelectAnonymous}
+            onSelectNamed={handleSelectNamed}
             onCreate={handleCreateProfile}
             onDelete={handleDeleteProfile}
             onClose={() => setProfilesOpen(false)}

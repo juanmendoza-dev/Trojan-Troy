@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { deriveRootKey, kdfRoot, kdfChain, deriveChannelSubkey } from "./kdf";
 
 const rand = (n = 32) => sodium.randombytes_buf(n);
@@ -11,8 +11,9 @@ describe("kdf", () => {
     const k1 = rand();
     const k2 = rand();
     const pq = rand();
-    const initiator = await deriveRootKey(k1, k2, pq); // rx=k1, tx=k2
-    const responder = await deriveRootKey(k2, k1, pq); // rx=k2, tx=k1
+    const tr = rand();
+    const initiator = await deriveRootKey(k1, k2, pq, tr); // rx=k1, tx=k2
+    const responder = await deriveRootKey(k2, k1, pq, tr); // rx=k2, tx=k1
     expect(same(initiator, responder)).toBe(true);
     expect(initiator.length).toBe(32);
   });
@@ -23,7 +24,8 @@ describe("kdf", () => {
     const k2 = rand();
     const k3 = rand();
     const pq = rand();
-    expect(same(await deriveRootKey(k1, k2, pq), await deriveRootKey(k1, k3, pq))).toBe(false);
+    const tr = rand();
+    expect(same(await deriveRootKey(k1, k2, pq, tr), await deriveRootKey(k1, k3, pq, tr))).toBe(false);
   });
 
   it("deriveRootKey depends on the post-quantum secret (a downgrade changes the root)", async () => {
@@ -32,7 +34,18 @@ describe("kdf", () => {
     const k2 = rand();
     const pq1 = rand();
     const pq2 = rand();
-    expect(same(await deriveRootKey(k1, k2, pq1), await deriveRootKey(k1, k2, pq2))).toBe(false);
+    const tr = rand();
+    expect(same(await deriveRootKey(k1, k2, pq1, tr), await deriveRootKey(k1, k2, pq2, tr))).toBe(false);
+  });
+
+  it("deriveRootKey binds the transcript (a framing tamper changes the root)", async () => {
+    await sodium.ready;
+    const k1 = rand();
+    const k2 = rand();
+    const pq = rand();
+    const tr1 = rand();
+    const tr2 = rand();
+    expect(same(await deriveRootKey(k1, k2, pq, tr1), await deriveRootKey(k1, k2, pq, tr2))).toBe(false);
   });
 
   it("kdfRoot is deterministic and separates rk from ck", async () => {

@@ -8,6 +8,166 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-28 — Landed the three finished crypto branches on one integration branch
+  rather than merging three PRs into `main` separately; dropped
+  `libsodium-wrappers` so only the sumo build can be imported.** Three completed,
+  individually-green crypto features (D hardened handshake, ③ traffic-analysis cover
+  traffic, ④ at-rest Argon2id vault) had never been merged or even met each other —
+  all three branched off `main` @ `4f43a56`. Calls:
+  (1) **One integration branch (`feat/crypto-round-integration`), one PR.** Merging the
+  three PRs into `main` independently would hit the same `decisions.md`/`progress.md`
+  conflict three times and, worse, would leave `main` transiently holding ④'s sumo
+  import swap without D's new file following it (see (2)). Merging them together off
+  `main` first means the combination is what gets tested and reviewed. PRs #13/#14 are
+  superseded, not abandoned.
+  (2) **`libsodium-wrappers` removed from `client/package.json`; sumo is the only sodium.**
+  ④ swapped every sodium import to `libsodium-wrappers-sumo` for `crypto_pwhash`, but D
+  added a *new* file (`crypto/transcript.ts`) importing plain `libsodium-wrappers`. Git
+  merged both cleanly — nothing textually conflicts — and the result would have bundled
+  **two libsodium wasm builds with two independent `ready` gates**. This is the failure
+  mode a clean merge hides, so the fix is structural rather than a one-line edit: point
+  `transcript.ts` at sumo *and* delete the base dependency, so any future
+  `from "libsodium-wrappers"` fails to resolve at build time instead of silently doubling
+  the payload. `@types/libsodium-wrappers` **stays** — `@types/libsodium-wrappers-sumo`
+  declares it as a dependency (the sumo typings are an augmentation of the base module),
+  which is also why ④'s config-alias approach couldn't typecheck.
+  (3) **Verification is a throwaway script run from a scratch dir, not a committed
+  harness.** The Playwright setup lives on `feat/mobile-web-support` and isn't on this
+  line; installing it here would drag an unrelated dependency into a crypto PR. Wrote
+  the two-browser check outside the repo, ran it (19/19), deleted it — the pattern prior
+  phases used. Its most valuable assertion is that **both browsers show the same safety
+  number**, which is the cross-client proof of transcript binding that D's own tests
+  (single-process) can't give.
+  (4) **Not merged to `main`.** The relay is unchanged, but a `main` merge redeploys the
+  client, so it waits on Jay — consistent with how Track B's relay merge was held.
+  (Decided by: Claude, under Jay's standing constraints; merge-to-`main` left to Jay.)
+
+- **2026-07-26 — Round-2 crypto hardening (A/B/D/E green-lit); shipped feature D
+  first: hardened handshake = commit-then-reveal + transcript binding.
+  `PROTOCOL_VERSION` 3 → 4.** With the app ship-ready, Jay green-lit a *second*
+  backend-only, UX-invisible crypto round (extends the `phase-5-security-direction`
+  steer): (A) post-quantum Double Ratchet, (B) ratchet header encryption, (D)
+  hardened handshake, (E) periodic rekey. (C) key-committing AEAD was offered and
+  **declined** — niche in a 2-party ratchet. Claude's sequencing: **D first**
+  (handshake-only, lowest risk, and E re-runs it) → A+B as one wire revision → E.
+  **D, built on `feat/hardened-handshake`:** (1) **Commit-then-reveal (ZRTP-style):**
+  each side sends `H(its ephemeral key(s))` as a new opaque `commit` envelope and
+  reveals its `pubkey` only after receiving the peer's commit (verifying the reveal
+  against it), so neither side — nor a MITM relay — can choose its keys as a function
+  of the other's. Closes the adaptive-key-choice gap the safety number alone left
+  open. (2) **Transcript binding:** both sides fold a canonical hash of the full
+  handshake transcript (version, both X25519 pubkeys, ML-KEM public key + ciphertext)
+  into `RK₀` via a new third `deriveRootKey` step, so any framing tamper (a version
+  downgrade, a swapped ciphertext) changes `RK₀` → the session fails closed *and* the
+  safety-number digits change. Domain tags bumped v3 → v4 (`kdf.ts` + `safetyNumber.ts`).
+  **No server change** — the `commit` envelope rides the relay's opaque pass-through
+  (only `create`/`join` are inspected; confirmed in `server.ts`). **No new dependency**
+  — commit/transcript hashes are BLAKE2b (`crypto_generichash`, already used). Costs
+  one extra relay round-trip, absorbed by the existing ≥2600 ms handshake screen — UX
+  identical. Verified: typecheck clean, **185** client tests (transcript ×5 +
+  transcript-binding cases in `kdf`/`ratchetSession`), build green; manual two-browser
+  eyeball pending (Playwright now available). Spec/plan dated 2026-07-26.
+  (Decided by: Jay; architecture by Claude)
+
+- **2026-07-25 — Traffic-analysis resistance (③): cover traffic rides the `c:0`
+  content channel; zero-latency "minimum frame rate" cadence chosen as the default;
+  presence heartbeat jittered.** Implemented spec ③
+  (`docs/superpowers/specs/2026-07-23-traffic-analysis-resistance-design.md`) on
+  `feat/traffic-analysis-cover`. Key calls:
+  (1) **Cover frames are real ratcheted content (`c:0`), not a static channel.** A
+  cover frame is `frame({ channel: "cover", ... })` → `sealContent` → a normal `msg`
+  envelope, decrypted-then-dropped on receipt exactly like `"primer"`. This makes it
+  **byte-indistinguishable** from real text/voice (same class, same ratchet header,
+  same size buckets) so the relay can't filter cover out; bonus, it spins the ratchet
+  for extra key rotation. No new crypto, no new dependency — reuses the audited path.
+  (2) **Zero-latency "minimum frame rate" model is the wired default, per Jay's
+  no-latency filter.** Real messages send **immediately** (route through one
+  `sendContentFrame` choke point that stamps `lastContentSentRef`); a background timer
+  emits a cover frame only when the `c:0` line has been idle ≥ a jittered interval, so
+  the relay never sees idle gaps but real sends incur **no delay**. The strict
+  constant-rate model (which would add up to one interval of latency and also mask
+  burst intensity) is **supported by the pure `nextAction` `flush-real` branch but
+  left off-by-default / unwired** — an opt-in Jay can flip on if he relaxes the UX bar.
+  (3) **`COVER_INTERVAL_MS = 1500` ± 40% jitter (~1 frame/sec) with a
+  `COVER_INTERVAL_FLOOR_MS = 500` floor.** The floor guards against a misconfigured
+  tiny interval approaching the relay's abuse cap; ~1/sec sits far under Track B's
+  30 msg/sec sustained throttle, so it's safe with or without Track B
+  (`fix/relay-dos-limits`) merged. Cover body length varies across the common 64/256
+  buckets (occasionally 1024) so cover isn't pinned to one size.
+  (4) **Presence heartbeat jittered ±30% (`PRESENCE_HEARTBEAT_JITTER_FRAC = 0.3`),
+  bounded < `PRESENCE_EXPIRY_MS`.** Max beat = 2500×1.3 = 3250 ms < 5000 ms expiry, so
+  the peer's online indicator can never flicker off between beats. Kills the
+  fixed-period heartbeat fingerprint without a new channel.
+  (5) **Honest residuals (do not oversell).** Zero-latency cover masks the *rhythm of
+  silence* (idle / typing / pausing), NOT: burst intensity of an active back-and-forth
+  (needs the strict model), voice-clip size (large frames still read as "probably
+  voice"; bucket variety only helps), or session existence/duration (inherent to any
+  relay). The about/security copy was updated to claim only that rhythm is hidden.
+  (6) **Sodium import note.** The plan's constraint said "every sodium import is
+  `libsodium-wrappers-sumo`", but the live repo actually imports `"libsodium-wrappers"`
+  everywhere (App.tsx + all `crypto/*`). Cover body bytes reuse App.tsx's existing
+  `sodium.randombytes_buf` import unchanged — no new sodium import added, so the
+  sumo-vs-not question never arises.
+  (7) **Corrected `coverBodyLen` buckets to 256-modal / 1024-tail, never 64 —
+  deviation from the plan/spec, forced by the byte-indistinguishability hard
+  constraint (final-review finding).** The plan and spec both assumed 64 was a
+  "common text bucket" and put ~70% of cover there. Empirically wrong: a real `c:0`
+  text frame's `id` is a 36-char UUID, so its meta alone (~63B) overflows the 64
+  bucket — **all** real text lands in ≥256 (verified: empty-body text = 256; only
+  the once-per-session primer is 64). A steady stream of 64-bucket cover would
+  therefore be trivially size-classified as decoy by the relay, defeating the
+  feature. Fixed `coverBodyLen` to draw bodies of 31–222B (→256, ~80%) and 223–990B
+  (→1024, ~20%), matching real text's actual bucket distribution; updated its unit
+  test to assert cover **never** lands in 64 (only {256, 1024}). Re-verified with a
+  two-browser eyeball: a real "hi" send and idle cover frames both land at the 256
+  bucket (identical 396-byte wire payload), cover tail at 1024 — size-indistinguishable.
+  This overrides the plan's literal `coverBodyLen` code because the plan's own
+  hard constraint ("byte-indistinguishable from content on the wire") takes
+  precedence over its mistaken bucket assumption. (Decided by: implementing agent
+  under Jay's standing constraints — conservative choice satisfying the hard
+  constraint while Jay was away; cadence/jitter defaults from spec ③. Flag for Jay:
+  this is a deliberate, verified deviation from the approved plan text.)
+
+- **2026-07-25 — At-rest profile vault (review S1, spec ④): the PIN now derives a
+  real Argon2id key that seals the avatar with `crypto_secretbox`; the fast-hash
+  access check is gone with no fallback.** Built on `feat/at-rest-profile-vault`.
+  Key calls:
+  (1) **`libsodium-wrappers` → `libsodium-wrappers-sumo` via a direct import-site
+  swap, not the config alias the spec/plan first proposed.** The alias approach
+  (Vite/Vitest `resolve.alias` + a tsconfig `paths` entry) could not typecheck:
+  the sumo `.d.ts` is authored as a self-referential base-module augmentation that
+  `paths` can't redirect, so `crypto_pwhash` stayed invisible to `tsc`. Took the
+  plan's documented escape hatch — changed all ~10 `import sodium from
+  "libsodium-wrappers"` sites to `"libsodium-wrappers-sumo"` directly; sumo bundles
+  its own types, so `crypto_pwhash` resolves with zero gymnastics. Same audited
+  vendor, bigger build. **Bundle delta: negligible** — prod bundle 1,606 kB → 1,608 kB
+  (gzip ~499 kB), because the classical libsodium wasm was already loaded; sumo just
+  exposes more of the same binary's API surface. Any future file importing sodium
+  must use the `-sumo` specifier.
+  (2) **Argon2id at `INTERACTIVE` (OPSLIMIT/MEMLIMIT_INTERACTIVE, ALG_ARGON2ID13),
+  not MODERATE/SENSITIVE.** ~64 MiB / ~0.1 s keeps profile-unlock imperceptible (the
+  spec's "no UX change" rule) while still being memory-hard — a categorical upgrade
+  over the fast hash. SENSITIVE (~1 GiB) can OOM a browser tab. The KDF params are
+  stored per-profile (`kdf` field) so the cost can be raised later without locking
+  out existing profiles.
+  (3) **Profile `name` stays clear (listing metadata); only the avatar (+ future
+  history) is encrypted.** `ProfileModal` lists profiles by name before the PIN is
+  entered; encrypting the name would turn the list into "locked profile"
+  placeholders — a visible flow change. Documented residual: a thief who copies
+  IndexedDB sees self-chosen display names but no avatars/history.
+  (4) **Migration = delete legacy (option a), NOT the spec's soft-preferred re-seal
+  (option b).** A record lacking `cipher`/`kdf` is deleted on `listProfiles()` load
+  (purging its cleartext avatar). Re-seal would require verifying the typed PIN
+  against the legacy `pinHash` — i.e. keeping the fast-hash path that S1 forbids.
+  The hard constraint (no fast-hash survives) outranks the soft preference. No real
+  users exist, so deletion is safe.
+  (5) **Reload → Anonymous (R2).** The decrypted avatar and active named identity
+  live in memory only; `activeProfile` is React state defaulting to
+  `{ kind: "anonymous" }` and is never persisted, so a page reload always reverts to
+  Anonymous and re-presents nothing named without the PIN re-entered that session.
+  The profile still appears in the list (name + default thumbnail) until unlocked.
+  (Decided by: Jay's R2 call; other calls per the spec, executed by Claude.)
+
 - **2026-07-23 — Backend-only "post-quantum hardening" security round (4 specs) to
   deepen the crypto for the hackathon submission; building ①+② first. New crypto
   dependency accepted.** With the app ship-ready, Jay chose to make the encryption

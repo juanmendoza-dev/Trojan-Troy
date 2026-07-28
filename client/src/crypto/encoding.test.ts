@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { toBase64, fromBase64 } from "./encoding";
 
 describe("encoding", () => {

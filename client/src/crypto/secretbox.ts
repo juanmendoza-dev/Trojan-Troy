@@ -1,4 +1,4 @@
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { toBase64, fromBase64 } from "./encoding";
 
 export async function encryptBytes(key: Uint8Array, plaintext: Uint8Array): Promise<string> {

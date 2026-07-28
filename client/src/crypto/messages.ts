@@ -1,4 +1,4 @@
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { encryptBytes, decryptBytes } from "./secretbox";
 
 export async function encryptMessage(key: Uint8Array, plaintext: string): Promise<string> {

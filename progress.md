@@ -23,7 +23,11 @@ and `decisions.md` for why things were done a certain way.
 | 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
 | 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
 | 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | Ratchet track (Tasks 0-7) shipped to `main` (`683d3a3`, fast-forward) — Double Ratchet + sealed `msg` framing + padding + host-primer, plus honest about/security copy. typecheck/156 tests/build green; two-browser smoke (text both ways + joiner-first) confirmed live. Track B (relay DoS/lifecycle hardening — H3/M1/M5/L5) built + green on `fix/relay-dos-limits` (server 30/30, build clean, probe-verified), **pending Jay's go-ahead to fast-forward merge** (deploys the relay to Render). Remaining after that: a fuller voice/receipts/presence eyeball. |
-| PQ hardening ①+② — hybrid post-quantum handshake (X25519 + ML-KEM-768) + safety-number binding | Built on `feat/pq-hybrid-handshake` — typecheck/163 tests/build green; full handshake choreography verified via a throwaway real-module test (root-key agreement, session-bound safety number, joiner-first via primer, corrupt-`kemct` fails). Manual two-browser eyeball pending. ③ traffic-analysis + ④ at-rest specced, not built. |
+| PQ hardening ①+② — hybrid post-quantum handshake (X25519 + ML-KEM-768) + safety-number binding | Merged to `main` — typecheck/163 tests/build green; full handshake choreography verified via a throwaway real-module test (root-key agreement, session-bound safety number, joiner-first via primer, corrupt-`kemct` fails). |
+| PQ hardening ③ — traffic-analysis resistance (cover traffic + cadence jitter) | Built on `feat/traffic-analysis-cover`, now folded into `feat/crypto-round-integration` — typecheck/**189** tests/build green; two-browser Playwright eyeball 10/10 (steady ~1/sec jittered cover stream, byte-indistinguishable, zero added latency, no stray bubbles, stops on leave). Zero-latency "minimum frame rate" cadence + ±30% heartbeat jitter; honest metadata copy. |
+| Round 2 — D: Hardened handshake (commit-then-reveal + transcript binding) | Built on `feat/hardened-handshake`, now folded into `feat/crypto-round-integration` — new opaque `commit` round (keys committed before either side reveals) + full-transcript binding into `RK₀`, `PROTOCOL_VERSION` 3→4, no server change, no new dep. typecheck / **185** tests / build green (transcript ×5 + kdf/ratchetSession binding cases). First of the round-2 four (A/B/D/E; see `decisions.md` 2026-07-26) — A+B and E still to build. |
+| PQ hardening ④ — at-rest Argon2id profile vault | Built on `feat/at-rest-profile-vault`, now folded into `feat/crypto-round-integration` — PIN derives a real Argon2id key (`crypto_pwhash`, sumo build) sealing the avatar with `crypto_secretbox`; fast-hash access check removed, legacy cleartext records purged on load, reload reverts to Anonymous. typecheck/**183** tests/build green; real-browser Playwright run 17/17 (IndexedDB holds `cipher`/`kdf`/`pinSalt` and no avatar bytes). |
+| **Crypto round integration** — D + ③ + ④ merged onto one branch | **Built + verified on `feat/crypto-round-integration`** — all three unmerged crypto branches folded together (no code conflicts; ledger conflicts resolved), the split-libsodium defect fixed, `libsodium-wrappers` dropped for sumo-only. typecheck clean / **201** tests / build green (1,610 kB, no double wasm) + **two-browser Playwright run 19/19** — matching safety numbers on both sides, commit-before-pubkey on the wire, one `kemct`, cover traffic on both sides with no stray bubbles, joiner-first send at 88 ms, no console errors. **PR open against `main`, not merged** (merging deploys). |
 
 ## Log
 
@@ -662,3 +666,158 @@ and `decisions.md` for why things were done a certain way.
   `docs/superpowers/specs/2026-07-23-pq-hybrid-handshake-design.md` +
   `…-safety-number-binding-design.md`; plan:
   `docs/superpowers/plans/2026-07-23-pq-hybrid-handshake.md`.
+
+- **2026-07-25** — Traffic-analysis resistance (spec ③) built on
+  `feat/traffic-analysis-cover` (5 tasks). The relay now sees a **steady, jittered
+  stream of decoy `msg` frames** whether or not anyone is talking, so it can no longer
+  read the conversation's rhythm (idle / typing / pausing). A cover frame is a real
+  ratcheted `c:0` content message — `frame({ channel: "cover", ... })` → `sealContent`
+  — decrypted-then-dropped on receipt exactly like the `"primer"`, so it is
+  **byte-indistinguishable** from real text/voice on the wire (same class, ratchet
+  header, size buckets) and spins the ratchet for free. Cadence is the **zero-latency
+  "minimum frame rate"** model (Jay's no-latency filter): real sends go out immediately
+  through one `sendContentFrame` choke point that all three `c:0` send sites route
+  through; a background timer emits cover only when the content line has been idle ≥ a
+  jittered interval (`COVER_INTERVAL_MS = 1500` ±40%, ~1/sec, `500` ms floor, far under
+  Track B's 30/sec cap). The strict constant-rate model is supported by the pure
+  `nextAction` `flush-real` branch but left **unwired / opt-in**. The presence heartbeat
+  now jitters ±30% (`jitteredHeartbeatMs`, max 3250 ms < 5000 ms expiry, so the online
+  dot never flickers off). Files: `crypto/framing.ts` (+`"cover"` channel), new pure
+  `protocol/coverTraffic.ts` (`nextAction`/`jitteredInterval`/`coverBodyLen`),
+  `protocol/presenceState.ts` (heartbeat jitter), `App.tsx` (cover scheduler + drop
+  case + teardown), and honest `Settings.tsx` copy (claims only that rhythm is hidden;
+  burst intensity / voice size / session existence remain documented residuals).
+  Verified: `npm run typecheck` clean, **189** client tests (11 new: framing cover
+  round-trip, coverTraffic ×7, presence jitter/override ×3), `npm run build` green.
+  **Two-browser Playwright eyeball (run then deleted): 10/10** — idle emits a steady
+  ~1/1.3s cover stream, each frame carrying a ratchet header, **no** stray bubbles on
+  either side, a real message goes out within 1s (zero added latency) and shows exactly
+  one bubble per side, and the stream stops on leave.
+  **Final whole-branch review (opus) found one Important efficacy defect, now fixed:**
+  the original `coverBodyLen` put ~70% of cover in the 64-byte bucket, but real `c:0`
+  text always lands in ≥256 (its 36-char UUID `id` overflows 64), so a size-aware relay
+  could classify the 64-bucket stream as decoy on sight — breaking the
+  byte-indistinguishability constraint. Fixed `coverBodyLen` to 256-modal (~80%) /
+  1024-tail (~20%), never 64, and updated its test; re-verified live that a real "hi"
+  send and idle cover both land at the 256 bucket (identical 396-byte wire payload).
+  See `decisions.md` point (7) — a deliberate, verified deviation from the plan text.
+  (Note: Playwright browser automation **is** available in this env — drive with
+  `page.wait_for_timeout`, not Python `time.sleep`, which blocks event delivery and
+  reads stale zeros.) Spec:
+  `docs/superpowers/specs/2026-07-23-traffic-analysis-resistance-design.md`; plan:
+  `docs/superpowers/plans/2026-07-25-traffic-analysis-cover.md`. Folded into
+  `feat/crypto-round-integration` on 2026-07-28 (see that entry).
+
+- **2026-07-25** — At-rest profile encryption (review S1, spec ④) built on
+  `feat/at-rest-profile-vault`. The profile PIN now derives a real Argon2id key
+  (`crypto_pwhash`) that seals the avatar at rest with `crypto_secretbox`; the old
+  fast-hash access check (`crypto_generichash`) is removed with no fallback. Spec:
+  `docs/superpowers/specs/2026-07-23-at-rest-encryption-design.md`; plan:
+  `docs/superpowers/plans/2026-07-25-at-rest-profile-vault.md`; rationale in
+  `decisions.md` (2026-07-25). **All 5 tasks done:**
+  - Task 1 (`a084697`) — `libsodium-wrappers` → `-sumo` via a direct import-site swap
+    of all ~10 sodium imports (the config-alias approach couldn't typecheck against
+    the self-referential sumo `.d.ts`); `crypto_pwhash` now available. Bundle
+    negligibly larger (1,606 → 1,608 kB, gzip ~499 kB). Reviewed clean.
+  - Task 2 (`fa94c19`) — new `profiles/vault.ts` `sealProfileSecrets`/
+    `openProfileSecrets` (`crypto_secretbox` + `TTr-vault-v1` magic sentinel); returns
+    `null` on wrong key / tamper / bad-base64 / wrong-magic. 5 tests. Reviewed clean.
+  - Task 3 (`df803d7`) — `deriveVaultKey` + `defaultKdfParams` (Argon2id
+    INTERACTIVE / ARGON2ID13) added to `pin.ts`; `newSalt` sizes to
+    `crypto_pwhash_SALTBYTES`. (Its dedicated task-review was interrupted; folded into
+    the whole-branch review instead.)
+  - Task 4 (`98cfc1f`) — storage-format split + migration + UI wiring, fast hash
+    removed. `StoredProfile` (clear `id`/`name`/`createdAt`/`pinSalt`/`kdf` + opaque
+    `cipher`) vs runtime in-memory `Profile` (decrypted `avatar`); new
+    `ActiveProfile` union. `profileStore` retyped, migration deletes any legacy record
+    lacking `cipher`/`kdf` on load (purging cleartext avatars). `hashPin`/`verifyPin`
+    deleted + a guard test asserts no fast-hash export survives. `App.tsx` holds
+    `activeProfile` as in-memory state defaulting to Anonymous — **reload reverts to
+    Anonymous (Jay's R2 call)**, nothing named without the PIN re-entered.
+    `ProfileModal` derives+seals on create, derives+opens on unlock, shows the default
+    thumbnail until unlock. `resolveActiveProfile`/`get/setActiveProfileId` removed;
+    obsolete `profileModel.test.ts` deleted.
+  - Task 5 — this log + `decisions.md`.
+  **Verification:** `npm run typecheck` clean, **183** vitest tests green (net −3
+  deleted model tests +2 new: store legacy-drop, pin no-fast-hash guard), `npm run
+  build` green. A throwaway real-module integration test (written, run, deleted)
+  confirmed the module-level flow: create seals the avatar → the stored record holds
+  `cipher`/`kdf`/`pinSalt` and **no** cleartext avatar → the correct PIN recovers it →
+  a wrong PIN returns `null` → a legacy cleartext record is purged on load. **Then a
+  real-browser end-to-end run** (headless-Chromium Playwright script against the live
+  dev server, written/run/deleted — the same pattern prior visual phases used) drove
+  the actual UI at `/` and confirmed all 17 checks: start Anonymous → open modal →
+  create a profile *with an uploaded photo* → active shows the decrypted data-URL
+  avatar → **DevTools-equivalent IndexedDB read** shows one record with
+  `cipher`/`kdf.alg`/`pinSalt`, **no `avatar` field, and no `data:image` bytes** at
+  rest → **reload reverts to Anonymous (R2)** while the profile still lists →
+  wrong PIN shows "Wrong PIN — try again" and does not unlock → correct PIN unlocks
+  and restores the avatar in memory → zero page/console errors throughout. **Only
+  residual for a human:** a live two-browser *peer sharing* round-trip (needs the relay
+  running + a second client) — the profile-card wire format is unchanged by this work,
+  so it's confirmatory. Folded into `feat/crypto-round-integration` on 2026-07-28
+  (see that entry).
+
+- **2026-07-26** — Round-2 crypto hardening kicked off (A/B/D/E green-lit by Jay —
+  backend-only, UX-invisible; see `decisions.md` 2026-07-26). **Feature D — hardened
+  handshake — built** on `feat/hardened-handshake` off `main`, first in the round
+  (handshake-only, lowest risk, and E will re-run it). Two additions, both closing gaps
+  the hybrid-PQ handshake left open: (1) **commit-then-reveal** — each side sends a hash
+  commitment to its ephemeral key(s) (a new opaque `commit` envelope) and reveals its
+  `pubkey` only after receiving the peer's commit, verifying the reveal against it, so
+  keys can't be chosen adaptively (ZRTP-style); (2) **transcript binding** — both sides
+  fold a canonical hash of the whole transcript (version, both X25519 pubkeys, ML-KEM
+  public key + ciphertext) into `RK₀` via a new third `deriveRootKey` step, so any framing
+  tamper changes the root key (fails closed) and the safety number. New pure
+  `crypto/transcript.ts` (`computeHandshakeCommit` + `computeTranscriptHash`);
+  `deriveRootKey`/`initSession` gained a `transcriptHash` arg; kdf + safety-number domains
+  bumped v3 → v4; `PROTOCOL_VERSION` 3 → 4; `App.tsx exchangeKeys` restructured to
+  commit → reveal → verify → KEM → seed, with the single-shot guards extended to
+  `commit`/`pubkey`/`kemct`. **No server change** (the relay forwards `commit` verbatim,
+  like `pubkey`/`kemct`/`msg` — confirmed in `server.ts`) and **no new dependency**
+  (BLAKE2b). One extra relay round-trip, hidden by the existing ≥2600 ms handshake
+  screen — UX identical. Verified: `npm run typecheck` clean, **185** client tests pass
+  (7 new: transcript ×5, kdf transcript-binding, ratchetSession per-side-transcript-
+  mismatch), `npm run build` green. Spec:
+  `docs/superpowers/specs/2026-07-26-hardened-handshake-design.md`; plan:
+  `docs/superpowers/plans/2026-07-26-hardened-handshake.md`. Remaining in round 2: A+B
+  (PQ ratchet + header encryption, co-designed as one wire revision) then E (periodic
+  rekey).
+
+- **2026-07-28** — **Crypto round integration**: the three finished-but-unmerged crypto
+  branches folded onto one branch, `feat/crypto-round-integration` (off `main` @
+  `4f43a56`), and verified together. Nothing new was designed here — this closes the gap
+  where three completed features (D hardened handshake, ③ traffic-analysis cover traffic,
+  ④ at-rest Argon2id vault) were each green on their own branch but had never met.
+  Merged in order D → ③ → ④; **no code conflicts at all** (git auto-merged even
+  `App.tsx`, where D restructured `exchangeKeys` while ③ added the cover scheduler and
+  ④ moved the profile state), only the `decisions.md` / `progress.md` ledgers, resolved
+  by keeping every entry in date order. Also fixed on the way:
+  - **The split-libsodium defect** — ④ swapped all ~10 sodium imports to
+    `libsodium-wrappers-sumo` (for Argon2id), but D's *new* `crypto/transcript.ts`
+    imported plain `libsodium-wrappers`. Textually clean, semantically wrong: the merged
+    app would have shipped two libsodium wasm builds with two independent `ready` gates.
+    Pointed `transcript.ts` (+ its test) at sumo and **dropped `libsodium-wrappers` from
+    `package.json`** so the wrong import can't resolve again — the same mistake is now a
+    build error instead of a silent 2× wasm payload. Bundle confirmed at 1,610 kB (gzip
+    500 kB), i.e. one wasm, matching ④'s own measurement.
+  - The duplicated, mid-sentence-truncated ③ log entry in `progress.md`.
+  - Stopped tracking `client/playwright-report/` + `client/test-results/` (730 KB of
+    report artifacts an earlier auto-commit had swept in); both are now gitignored.
+  **Verified:** `npm run typecheck` clean, **201** client tests (exactly the union:
+  178 base + 7 D + 11 ③ + 8 ④ − 3 deleted), `npm run build` green, and a **throwaway
+  two-browser Playwright run: 19/19** (written, run, deleted — driven from a scratch
+  dir so no harness landed in the repo). What it proves, beyond the unit suites: both
+  browsers derive the **same safety number** (so transcript binding + the hybrid root
+  key agree across two real clients — the manual eyeball D was still waiting on);
+  `commit` precedes `pubkey` on the wire on both sides and exactly one `kemct` is sent;
+  cover traffic flows from both sides as `c:0` frames with ratchet headers while idle,
+  rendering **zero** bubbles; the joiner can send first (primer) and it lands in 88 ms;
+  exactly 2 bubbles per side after a round-trip; no decryption-error bubbles; no console
+  errors. Observed `c:0` payload sizes 140 / 396 / 1420 — the once-per-session 64-bucket
+  primer, real text *and* cover both at the 256 bucket, cover tail at 1024, which is ③'s
+  size-indistinguishability fix holding in the merged build. **PR open against `main`,
+  not merged** — a merge redeploys the client (Vercel), so it waits on Jay. PRs #13/#14
+  are superseded by this one. Remaining in round 2: **A+B** (PQ ratchet + ratchet header
+  encryption, co-designed as one wire revision) then **E** (periodic rekey) — still
+  unspecced.

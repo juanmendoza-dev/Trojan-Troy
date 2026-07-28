@@ -66,4 +66,12 @@ describe("framing", () => {
     new DataView(bad.buffer).setUint32(0, 0xffffff, true); // claim a huge inner length
     expect(() => unframe(bad)).toThrow();
   });
+
+  it("round-trips a cover frame like primer", () => {
+    const body = new Uint8Array([1, 2, 3, 4]);
+    const out = unframe(frame({ channel: "cover", id: "", body }));
+    expect(out.channel).toBe("cover");
+    expect(out.id).toBe("");
+    expect(Array.from(out.body)).toEqual([1, 2, 3, 4]);
+  });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { generateKeypair, deriveSessionKeys } from "../crypto/keys";
 import { generateKemKeypair, kemEncapsulate, kemDecapsulate } from "../crypto/pqkem";
 import { frame } from "../crypto/framing";
+import { computeTranscriptHash } from "../crypto/transcript";
 import type { Envelope } from "../net/relayClient";
 import { initSession, sealContent, sealStatic, openMsg, type SessionCrypto } from "./ratchetSession";
 
@@ -27,8 +28,15 @@ async function pair(): Promise<{ a: SessionCrypto; b: SessionCrypto }> {
   const bobKem = generateKemKeypair();
   const { cipherText, sharedSecret: pqAlice } = kemEncapsulate(bobKem.publicKey);
   const pqBob = kemDecapsulate(cipherText, bobKem.secretKey);
-  const a = await initSession(aliceKeys, "initiator", alice, bob.publicKey, pqAlice);
-  const b = await initSession(bobKeys, "responder", bob, alice.publicKey, pqBob);
+  const transcript = await computeTranscriptHash(
+    alice.publicKey,
+    bob.publicKey,
+    bobKem.publicKey,
+    cipherText,
+    4
+  );
+  const a = await initSession(aliceKeys, "initiator", alice, bob.publicKey, pqAlice, transcript);
+  const b = await initSession(bobKeys, "responder", bob, alice.publicKey, pqBob, transcript);
   return { a, b };
 }
 
@@ -37,6 +45,23 @@ describe("ratchetSession", () => {
     const { a, b } = await pair();
     expect(a.rootKey.length).toBe(32);
     expect(Array.from(a.rootKey)).toEqual(Array.from(b.rootKey));
+  });
+
+  it("binds the transcript: a per-side transcript mismatch makes the root keys diverge", async () => {
+    const alice = await generateKeypair();
+    const bob = await generateKeypair();
+    const aliceKeys = await deriveSessionKeys(alice, bob.publicKey, "initiator");
+    const bobKeys = await deriveSessionKeys(bob, alice.publicKey, "responder");
+    const bobKem = generateKemKeypair();
+    const { cipherText, sharedSecret: pqAlice } = kemEncapsulate(bobKem.publicKey);
+    const pqBob = kemDecapsulate(cipherText, bobKem.secretKey);
+    // Alice binds the true transcript; Bob's was tampered (version downgraded to
+    // 3), as a relay stripping the v4 framing would produce. They must not agree.
+    const trA = await computeTranscriptHash(alice.publicKey, bob.publicKey, bobKem.publicKey, cipherText, 4);
+    const trB = await computeTranscriptHash(alice.publicKey, bob.publicKey, bobKem.publicKey, cipherText, 3);
+    const a = await initSession(aliceKeys, "initiator", alice, bob.publicKey, pqAlice, trA);
+    const b = await initSession(bobKeys, "responder", bob, alice.publicKey, pqBob, trB);
+    expect(Array.from(a.rootKey)).not.toEqual(Array.from(b.rootKey));
   });
 
   it("round-trips a content message and a reply", async () => {

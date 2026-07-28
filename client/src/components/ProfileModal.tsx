@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { ANONYMOUS_ID, type Profile } from "../profiles/profileModel";
-import { isValidPin, hashPin, verifyPin, newSalt } from "../profiles/pin";
+import { ANONYMOUS_ID, type StoredProfile } from "../profiles/profileModel";
+import { isValidPin, newSalt, deriveVaultKey, defaultKdfParams } from "../profiles/pin";
+import { sealProfileSecrets, openProfileSecrets, type ProfileSecrets } from "../profiles/vault";
 import { avatarSrc, defaultAvatar, downscaleToDataUrl } from "../profiles/avatar";
 import { Icon } from "./Icon";
 import "./ProfileModal.css";
 
 interface ProfileModalProps {
-  profiles: Profile[];
+  profiles: StoredProfile[];
   activeId: string;
   onSelectAnonymous: () => void;
   /** Called only after the profile's PIN is entered correctly. */
-  onSelectNamed: (profile: Profile) => void;
-  onCreate: (profile: Profile) => void;
+  onSelectNamed: (profile: StoredProfile, secrets: ProfileSecrets) => void;
+  onCreate: (profile: StoredProfile, secrets: ProfileSecrets) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
 }
@@ -19,8 +20,8 @@ interface ProfileModalProps {
 type View =
   | { name: "list" }
   | { name: "create" }
-  | { name: "unlock"; profile: Profile }
-  | { name: "confirm-delete"; profile: Profile };
+  | { name: "unlock"; profile: StoredProfile }
+  | { name: "confirm-delete"; profile: StoredProfile };
 
 const TITLES: Record<View["name"], string> = {
   list: "Profiles",
@@ -94,7 +95,7 @@ export function ProfileModal({
                   if (event.key === "Enter" || event.key === " ") setView({ name: "unlock", profile });
                 }}
               >
-                <img className="profile-tile__avatar" src={avatarSrc(profile.avatar)} alt="" />
+                <img className="profile-tile__avatar" src={defaultAvatar} alt="" />
                 <span className="profile-tile__name">{profile.name}</span>
                 <button
                   type="button"
@@ -126,8 +127,8 @@ export function ProfileModal({
         {view.name === "create" && (
           <CreateView
             onCancel={() => setView({ name: "list" })}
-            onCreate={(profile) => {
-              onCreate(profile);
+            onCreate={(profile, secrets) => {
+              onCreate(profile, secrets);
               onClose();
             }}
           />
@@ -137,8 +138,8 @@ export function ProfileModal({
           <UnlockView
             profile={view.profile}
             onCancel={() => setView({ name: "list" })}
-            onUnlocked={(profile) => {
-              onSelectNamed(profile);
+            onUnlocked={(profile, secrets) => {
+              onSelectNamed(profile, secrets);
               onClose();
             }}
           />
@@ -148,7 +149,7 @@ export function ProfileModal({
           <div className="profile-modal__confirm">
             <img
               className="profile-modal__confirm-avatar"
-              src={avatarSrc(view.profile.avatar)}
+              src={defaultAvatar}
               alt=""
             />
             <p className="profile-modal__confirm-text">
@@ -180,7 +181,7 @@ function CreateView({
   onCreate,
 }: {
   onCancel: () => void;
-  onCreate: (profile: Profile) => void;
+  onCreate: (profile: StoredProfile, secrets: ProfileSecrets) => void;
 }) {
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -206,15 +207,13 @@ function CreateView({
     if (pin !== confirm) return setError("The PINs don't match.");
     setBusy(true);
     const salt = await newSalt();
-    const pinHash = await hashPin(pin, salt);
-    onCreate({
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      avatar,
-      pinSalt: salt,
-      pinHash,
-      createdAt: Date.now(),
-    });
+    const kdf = await defaultKdfParams();
+    const vaultKey = await deriveVaultKey(pin, salt, kdf);
+    const cipher = await sealProfileSecrets(vaultKey, { avatar });
+    onCreate(
+      { id: crypto.randomUUID(), name: name.trim(), createdAt: Date.now(), pinSalt: salt, kdf, cipher },
+      { avatar }
+    );
   }
 
   return (
@@ -266,7 +265,8 @@ function CreateView({
         placeholder="Confirm PIN"
       />
       <p className="profile-form__note">
-        The PIN locks this profile on this device — it doesn't encrypt your messages.
+        The PIN encrypts this profile's photo on this device — basic protection for a
+        lost device. It doesn't encrypt your messages.
       </p>
 
       {error && <p className="profile-form__error">{error}</p>}
@@ -292,16 +292,22 @@ function UnlockView({
   onCancel,
   onUnlocked,
 }: {
-  profile: Profile;
+  profile: StoredProfile;
   onCancel: () => void;
-  onUnlocked: (profile: Profile) => void;
+  onUnlocked: (profile: StoredProfile, secrets: ProfileSecrets) => void;
 }) {
   const [pin, setPin] = useState("");
   const [wrong, setWrong] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function submit() {
-    if (await verifyPin(pin, profile.pinSalt, profile.pinHash)) {
-      onUnlocked(profile);
+    if (busy) return;
+    setBusy(true);
+    const vaultKey = await deriveVaultKey(pin, profile.pinSalt, profile.kdf);
+    const secrets = await openProfileSecrets(vaultKey, profile.cipher);
+    setBusy(false);
+    if (secrets) {
+      onUnlocked(profile, secrets);
     } else {
       setWrong(true);
       setPin("");
@@ -310,7 +316,7 @@ function UnlockView({
 
   return (
     <div className="profile-form profile-form--unlock">
-      <img className="profile-form__avatar" src={avatarSrc(profile.avatar)} alt="" />
+      <img className="profile-form__avatar" src={defaultAvatar} alt="" />
       <span className="profile-form__unlock-name">{profile.name}</span>
       <input
         className={`profile-form__input profile-form__input--pin${wrong ? " profile-form__input--wrong" : ""}`}
@@ -334,7 +340,7 @@ function UnlockView({
         <button
           className="profile-modal__btn profile-modal__btn--primary"
           onClick={() => void submit()}
-          disabled={pin.length !== 4}
+          disabled={pin.length !== 4 || busy}
         >
           Unlock
         </button>
