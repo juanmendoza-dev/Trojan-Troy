@@ -7,198 +7,205 @@ should never be able to read plaintext. Built for Hack Club Horizons Polaris
 Build in this order. Do not skip ahead to a later phase before the current
 one works.
 
-## Phase 1 — Foundation
-- [ ] Key generation and key exchange between two users, using an existing
-      audited crypto library (libsodium.js or Web Crypto API — X25519 for
-      exchange, AES-GCM for symmetric encryption). No hand-rolled crypto.
-- [ ] Safety number verification screen — lets two users confirm they're
-      talking to who they think they're talking to (Signal-style
-      fingerprint verification).
+---
 
-## Phase 2 — Encrypted messaging
-- [ ] Thin relay server that only ever sees ciphertext, never plaintext.
-- [ ] Real-time encrypted text messaging between two clients.
+## Where things stand (2026-07-28)
 
-## Phase 3 — Encrypted voice messages
-- [ ] Async voice messages only — record a clip, encrypt it, send it,
-      recipient decrypts and plays it. NOT live/streaming calling.
+Phases 1–4.7 are **done and on `main`**. The app pairs two browsers over a
+room code, runs a hybrid post-quantum handshake, and exchanges encrypted text
+and voice messages through a relay that can't read any of it.
 
-**Backlog (not blocking, come back to later):**
-- Known bug (flagged by Jay, 2026-07-20): recorded voice message duration
-  is inaccurate on playback — e.g. a ~5s recording shows/sends as ~23s.
-  Needs investigation into how clip duration is measured/stored (likely
-  timing the record/encode/send pipeline instead of the actual audio
-  length).
+Since then the crypto has been deepened twice, in two backend-only rounds that
+kept the UX identical (see the next section — that work is the strongest part
+of this project and used to be one unchecked line here). Everything from both
+rounds is merged: `PROTOCOL_VERSION` is at **5**.
 
-## Phase 4 — UI design
-- [ ] A genuinely clean, beautiful interface. Handled externally via a
-      separate design tool/process, not built by an agent in this repo.
-      Comes after the plumbing works, not before.
-- [ ] Known gap found during preview: Iris Glass and Pulse Slate are both
-      missing their background animations from the design handoff — Iris
-      Glass's two drifting ambient orbs (`floatOrb`), Pulse Slate's central
-      ambient glow pulse (`glowPulse`). Both keyframes already exist in
-      `client/src/styles/keyframes.css` but aren't applied to any element
-      yet. Iris Glass's fix is now the blocking first task of Phase 4.5
-      below; Pulse Slate's is backlog — not on the critical path now that
-      Iris Glass is the standard design.
+What's left is Phase 5's remaining *feature* work (offline delivery, history,
+group chats, files, disappearing messages), Phase 6 polish, and finishing the
+mobile pass.
 
-## Phase 4.5 — Working prototype: unify design, add settings, host it
-Before touching Phase 5's expanded scope, get one polished, hosted,
-end-to-end chat prototype solid. Build in this order:
+---
 
-- [ ] Fix Iris Glass's missing background-orb animation (`floatOrb` — see
-      Phase 4 gap above). Blocking prerequisite for everything else in this
-      phase.
-- [ ] Make Iris Glass the standard/default design and unify the loading
-      screen with the chat screen so they share one consistent visual
-      language. Today the loading screen always renders Apple-style
-      regardless of the selected chat theme (a deliberate Phase 4 deviation,
-      see `decisions.md`) — revisit that now that Iris Glass is becoming the
-      default instead of Apple.
-- [ ] Settings — a floating centered modal (gear icon in the chat
-      screen's title bar), holding: the theme switcher, room/session info
-      (room code + safety number), a "leave chat" action, and an
-      about/security info panel. Design in
-      `docs/superpowers/specs/2026-07-19-phase4.5-design.md`.
-- [ ] Host the prototype: client on Vercel, relay server on Render (split
-      hosting — the relay's in-memory WebSocket state doesn't fit
-      Vercel's serverless model). One persistent shareable link instead
-      of ad-hoc localhost link-sharing.
+## Security architecture — what's actually shipped
 
-**Backlog (not in this phase, come back to later):**
-- Make the loading screen fully theme-aware (a distinct style per
-  Apple/Iris/Pulse selection) instead of always rendering Iris-Glass-
-  styled once Phase 4.5 lands.
-- Brainstorm additional settings scope beyond the four items Phase 4.5
-  builds (theme switcher, room/session info, leave chat, about/security).
-- Redesign the delivered/read receipt indicator — Jay's feedback
-  (2026-07-20) on the shipped Chat polish work is that it currently reads
-  as too generic/"AI vibe coded." Revisit the visual treatment (tick
-  icons, styling, animation) once back in a design/polish pass.
+All of this is live on `main`, verified by 243 client + 31 server tests plus
+two-browser Playwright runs. No custom primitives: libsodium (sumo) and
+`@noble/post-quantum` only.
 
-## Phase 4.6 — Style the remaining unstyled screens
-Follow-up to Phase 4's design scope cut: `StartJoinScreen` (the app's
-home/entry screen), `WaitingScreen`, and `SafetyNumberScreen` were
-explicitly left unstyled in Phase 4 and 4.5 — the original design handoff
-only specced the loading and chat screens (see `decisions.md`).
-`SafetyNumberScreen` has since gotten a minimal legibility-only CSS pass
-(dark background/text color) as part of the handshake-to-chat transition
-work, but none of the three have real design applied. Jay is designing
-these with Fable (the same external design-tool workflow used for the
-original Phase 4 handoff), taking advantage of a window of substantially
-higher compute availability starting 2026-07-21.
+**Pairing and key agreement**
+- Ephemeral X25519 (`crypto_kx`) **+ ML-KEM-768** (FIPS 203) — both secrets
+  folded into the ratchet's initial root key, so a session stays safe unless
+  *both* break. Defeats "harvest now, decrypt later."
+- **Commit-then-reveal** (ZRTP-style): each side publishes a hash commitment to
+  its ephemeral key(s) and reveals only after holding the peer's commitment, so
+  neither side — nor a malicious relay — can choose keys adaptively.
+- **Transcript binding**: a canonical hash of the whole handshake (version, both
+  public keys, KEM public key + ciphertext) is folded into the root key, so any
+  framing tamper or version downgrade changes the root key *and* the safety
+  number. Fails closed; there is no classical fallback path.
+- **Safety number binds the derived session**, not just the relayed public keys.
 
-Important: a Fable design is only half the work. Each screen still has to be
-**implemented** in the repo afterward (real React + CSS, wired into the app
-and matching the existing theme system) — not just produced as a mockup. That
-implementation is its own effort and burns its own compute/token budget, so
-the high-compute window has to cover *both* designing and implementing all
-three screens, not the design pass alone. Don't treat a screen as done when
-it's only been designed.
+**Message encryption**
+- **Double Ratchet** — per-message keys (forward secrecy) and post-compromise
+  self-healing. XChaCha20-Poly1305 bodies, keyed-BLAKE2b chains.
+- **Post-quantum healing**: fresh ML-KEM secrets are agreed in-band and folded
+  into the root chain roughly every 30 seconds, so recovery from a compromise
+  doesn't rest on X25519 alone. (Honest claim: "re-secures every ~30s" — *not*
+  "every message is post-quantum.")
+- **Encrypted ratchet headers**: the key class, sender's ratchet public key and
+  chain counters are sealed in a fixed 84-byte header. The relay sees
+  `{type, payload}` and nothing else.
+- **Sealed framing + size-bucket padding**: channel, message id, voice mimeType
+  and receipt kind all live inside the ciphertext, padded to fixed buckets.
+- Replay protection on both the ratcheted and the static channels; transactional
+  decrypt, so a tampered packet can never corrupt a live session.
 
-- [ ] Fable design handoff for `StartJoinScreen`, `WaitingScreen`, and
-      `SafetyNumberScreen`, matching the existing chat-theme visual
-      language (Apple / Iris Glass / Pulse Slate) established in Phase 4.
-- [ ] Implement each design in the repo via this project's usual workflow
-      (superpowers:brainstorming → spec → plan →
-      superpowers:subagent-driven-development) — don't build ahead of the
-      handoff landing. A screen isn't done until its design is actually
-      coded, wired in, and verified — budget tokens for this, not just the
-      design.
+**Metadata resistance**
+- **Cover traffic**: a jittered ~1/sec stream of decoy frames, byte-
+  indistinguishable from real content, so the relay can't read the conversation's
+  rhythm (typing, pausing, idle). Real sends incur **zero** added latency.
+- Presence heartbeat jittered to kill its fixed-period fingerprint.
 
-## Phase 4.7 — Fable Ultra code review
-Jay plans to run an ultra-depth code review of the existing codebase using
-Fable (the frontier-capability model), during the same high-compute window
-as Phase 4.6, to surface improvement opportunities before Phase 5 adds more
-scope on top. This is a review pass, not a rewrite — findings get triaged
-and applied deliberately (see superpowers:receiving-code-review), not
-auto-applied wholesale.
+**At rest and in transit**
+- Profile avatars sealed with **Argon2id** (`crypto_pwhash`) from the user's PIN;
+  no fast-hash fallback, legacy cleartext records purged on load, and a reload
+  reverts to Anonymous.
+- Relay hardening: payload cap, per-connection rate limiting, per-IP and global
+  connection caps, room caps, heartbeat reaping, origin allowlist, one-room-per-peer.
 
-- [ ] Run the review.
-- [ ] Triage findings with Jay; apply agreed fixes as normal follow-up
-      work, logging any resulting non-obvious calls in `decisions.md`.
+**Honest residuals** (documented, not hidden)
+- Safety-number verification is **not enforced** — a user can proceed without
+  comparing digits (review H1; the biggest remaining real-world gap).
+- The relay still learns that a session exists, its duration, and how many
+  frames cross it.
+- The per-step DH inside the ratchet is still X25519; PQ material is folded in
+  periodically, not per message.
+- Profile *names* are stored in the clear for the picker UI; only avatars are
+  sealed. No PIN attempt backoff.
+
+---
+
+## Phase 1 — Foundation ✅
+- [x] Key generation and key exchange between two users, using an existing
+      audited crypto library (X25519 via libsodium's `crypto_kx`). No
+      hand-rolled crypto.
+- [x] Safety number verification screen — Signal-style fingerprint comparison.
+
+## Phase 2 — Encrypted messaging ✅
+- [x] Thin relay server that only ever sees ciphertext, never plaintext.
+- [x] Real-time encrypted text messaging between two clients.
+
+## Phase 3 — Encrypted voice messages ✅
+- [x] Async voice messages — record, encrypt, send, recipient decrypts and
+      plays. Not live/streaming calling.
+- [x] Voice clip duration reported accurately (was a known bug, fixed).
+
+## Phase 4 — UI design ✅
+- [x] Three chat themes (Apple, Iris Glass, Pulse Slate) behind a runtime
+      switcher, plus the kinetic-cipher loading screen.
+- [x] Iris Glass's missing ambient orb animation (`floatOrb`) applied.
+
+## Phase 4.5 — Working prototype ✅
+- [x] Iris Glass as the standard design; loading and chat screens unified.
+- [x] Settings modal — theme switcher, room/session info, privacy toggles,
+      leave chat, about/security panel.
+- [x] Hosted: client on Vercel, relay on Render.
+      **Action for Jay:** `ALLOWED_ORIGINS` is still unset on Render, so the
+      relay accepts any origin (it fails open by design — see `decisions.md`).
+
+## Phase 4.6 — Style the remaining screens ✅
+- [x] Fable designs for `StartJoinScreen`, `WaitingScreen` and
+      `SafetyNumberScreen`, **and** all three implemented in the repo (real
+      React + CSS, wired into the theme system) — not just designed.
+
+## Phase 4.7 — Fable Ultra code review ✅
+- [x] Review run (`docs/superpowers/reviews/2026-07-22-security-review.md`).
+- [x] Findings triaged and applied — all H1–H4 / M1–M8 / L1–L8 items
+      remediated, except H1 (verification enforcement) which is deliberately
+      deferred because it changes the UX, and one refuted finding left alone.
 
 ## Phase 5 — New features
-Substantially expands project scope/complexity beyond Version A's original
-plan (see `decisions.md` for why). Waits until Phase 4.5's working
-prototype, Phase 4.6's screen styling, and Phase 4.7's code review are all
-done — get the chatting version solid and reviewed before increasing
-security complexity (5.2 onward). Built as a sequence of independent
-sub-projects, each with its own spec in `docs/superpowers/specs/` and its
-own plan/implementation cycle. Build in this order — later items depend on
-earlier ones:
 
-- [ ] **Security hardening round (2026-07-23, backend-only, UX-invisible)** — four
-      specs Jay green-lit to deepen the crypto for the submission, all under
-      `docs/superpowers/specs/2026-07-23-*`: post-quantum hybrid handshake
-      (X25519 + ML-KEM-768) + safety-number binding (in build on
-      `feat/pq-hybrid-handshake`), traffic-analysis resistance (cover traffic), and
-      at-rest Argon2id profile encryption. Orthogonal to the 5.x feature order below;
-      keeps the UX identical. See `decisions.md` (2026-07-23).
-- [ ] 5.1 — **Local Profiles** (REPLACES the retired persistent-identity
-      approach — Jay's call, 2026-07-22, see `decisions.md`). Device-local,
-      PIN-gated profiles (name + picture) with an always-present Anonymous
-      default, plus opt-in *encrypted* name/photo sharing with the peer.
-      Deliberately light: no long-term identity keypair, session crypto
-      unchanged. Layer A (profiles + PIN + modal + sharing) built on
-      `feat/profiles`; Layer B (per-profile saved conversation history,
-      IndexedDB, archive-only, encrypted at rest) is a follow-up. Spec:
-      `docs/superpowers/specs/2026-07-22-local-profiles-design.md`; plan:
-      `docs/superpowers/plans/2026-07-22-local-profiles.md`.
-      The earlier persistent-identity (5.1) + contacts-privacy (5.1a) build was
-      rolled back (`main` @ `1ee0e35`); those specs are shelved, not deleted.
-      NOTE: 5.2 (ratchet) has been re-specced independent of persistent identity
-      (it rides on the existing ephemeral crypto_kx handshake; spec + plan dated
-      2026-07-22) and is now in build on `feat/forward-secrecy-ratchet`. 5.3
-      (offline delivery) was specced on top of persistent identity keys — with
-      identity retired, revisit its design before building (not started).
-- [x] 5.2 — Forward-secrecy ratchet (Double Ratchet: per-message key rotation →
-      forward secrecy + post-compromise self-healing), seeded from the existing
-      ephemeral crypto_kx handshake — independent of Local Profiles / retired
-      persistent identity, not built on top of it. Also seals framing
-      (channel/messageId/mimeType inside the ciphertext) and pads to size
-      buckets; collapses content/signal envelopes into one opaque `msg` (no
-      server change). Spec:
-      docs/superpowers/specs/2026-07-22-phase5.2-forward-secrecy-ratchet-design.md;
-      plan: docs/superpowers/plans/2026-07-22-phase5.2-forward-secrecy-ratchet.md.
-- [ ] 5.3 — Encrypted offline delivery: server holds ciphertext for a peer
-      who isn't currently connected, addressed via 5.1's persistent
-      identity, instead of dropping it.
-- [ ] 5.4 — Local encrypted message history/search (client-side storage,
-      encrypted at rest), sharing a storage layer with 5.3's delivery
-      mailbox.
-- [ ] 5.5 — Group chats (3+ people). Requires group-key encryption (e.g.
-      sender-keys), built on top of 5.2's ratchet.
-- [ ] 5.6 — Encrypted file/image sharing, extending the voice-message
-      encryption pattern to arbitrary files.
+### Security hardening — round 1 (2026-07-23, backend-only) ✅
+Four specs under `docs/superpowers/specs/2026-07-23-*`, all merged:
+- [x] Hybrid post-quantum handshake (X25519 + ML-KEM-768).
+- [x] Safety-number session binding (review L2).
+- [x] Traffic-analysis resistance — cover traffic + cadence jitter (review B12).
+- [x] At-rest Argon2id profile encryption (review S1).
+- [x] Relay DoS / lifecycle hardening (review H3/M1/M5/L5).
+
+### Security hardening — round 2 (2026-07-26, backend-only) ✅ except E
+- [x] **D** — hardened handshake: commit-then-reveal + transcript binding.
+- [x] **A** — post-quantum ratchet: ML-KEM folded into the root chain ~every 30s.
+- [x] **B** — ratchet header encryption.
+- [ ] **E** — periodic rekey. **Re-scope before building.** A already re-seeds
+      the root chain every 30s, and the ratchet rotates DH keys on every chain
+      flip (~1/sec under cover traffic), so E's marginal value is small — and its
+      core idea conflicts with itself: a re-handshake produces a *new safety
+      number*, which either confuses the user or leaves the displayed number no
+      longer describing the live session.
+- Declined: (C) key-committing AEAD — niche in a two-party ratchet.
+
+### Feature work
+- [x] 5.1 — **Local Profiles** (Layer A): device-local, PIN-gated profiles
+      (name + picture) with an always-present Anonymous default, plus opt-in
+      encrypted name/photo sharing with the peer. No long-term identity keypair.
+      Layer B (per-profile saved conversation history) is **not built**.
+- [x] 5.2 — Forward-secrecy ratchet (Double Ratchet), sealed framing, size-bucket
+      padding, one opaque `msg` envelope. Extended by round 2's A+B.
+- [x] Encrypted presence indicator (typing + recording) — client-only, no server
+      change.
+- [ ] 5.3 — Encrypted offline delivery: relay holds ciphertext for a peer who
+      isn't connected. **Needs redesign** — the original spec addressed peers via
+      the retired persistent-identity keys.
+- [ ] 5.4 — Local encrypted message history / search, sharing a storage layer
+      with 5.3's mailbox. (Overlaps Local Profiles Layer B.)
+- [ ] 5.5 — Group chats (3+ people). Needs group-key encryption (e.g.
+      sender-keys) on top of the ratchet.
+- [ ] 5.6 — Encrypted file / image sharing, extending the voice-message pattern.
 - [ ] 5.7 — Disappearing messages (self-destruct timer).
 
-**Backlog (not in this phase, come back to later):**
-- Harden the read/delivered-receipt protocol's metadata privacy: the
-  `messageId` used to correlate delivery/read acks to a specific message is
-  currently sent as a cleartext envelope field, visible to the relay (see
-  `decisions.md`, 2026-07-20). Revisit embedding it inside the encrypted
-  payload instead once back in a security-hardening phase — see the chat
-  UI polish spec's design for the exact current mechanism.
-- Add a "peer is typing" indicator. Cut from Phase 4's UI-only scope (see
-  `decisions.md`, 2026-07-19); Jay requested it back on 2026-07-20. Now
-  designed as an **encrypted presence indicator** (typing *and* voice
-  recording) — spec at
-  `docs/superpowers/specs/2026-07-22-typing-presence-design.md`. The Phase 4
-  note that this needs a "relay event/protocol change" is corrected there:
-  the relay forwards unknown envelope types opaquely (as it already does for
-  `ciphertext`/`voice`/`delivered`/`read`), so it's a client-only change with
-  no server work. Spec'd, not yet built.
-
 ## Phase 6 — Polish
-- [ ] Harden and polish whatever Phase 5 sub-projects actually get built —
-      UX rough edges, error states, edge cases — once the new feature set
-      is in place.
+- [ ] Harden and polish whatever Phase 5 work lands — UX rough edges, error
+      states, edge cases.
+
+## Mobile web support (added 2026-07-23)
+Mobile web via a hamburger drawer plus responsive/app-like polish. No PWA.
+- [x] Playwright set up for browser and mobile testing.
+- [x] Responsive foundation (viewport, reset, safe-area, app-height).
+- [ ] Finish the pass on `feat/mobile-web-support` (PR #10, still WIP). The core
+      flow already works on a phone — no overflow, and the room code, QR and copy
+      buttons are all reachable — but several screens still render at desktop
+      scale (the waiting-screen radar overflows, the security ticker clips).
+
+---
+
+## Backlog (not blocking; revisit later)
+- **Enforce safety-number verification** (review H1) — require an explicit "these
+  match" confirmation and show a persistent unverified banner. Deliberately
+  excluded from both hardening rounds because it changes the UX; it is the
+  biggest remaining real-world security gap.
+- Per-step post-quantum ratchet (Signal's SPQR direction) — fold ML-KEM on every
+  ratchet step instead of every ~30s. Needs chunked key transmission; high
+  complexity for a small delta over what's shipped.
+- Pulse Slate's central ambient glow pulse is still not applied to the chat
+  background (the `glowPulse` keyframe now drives the presence indicator instead).
+- Make the loading screen fully theme-aware per Apple/Iris/Pulse selection.
+- Redesign the delivered/read receipt indicator — Jay's feedback (2026-07-20) is
+  that it currently reads as too generic.
+- Brainstorm settings scope beyond what 4.5 shipped.
+- PIN attempt backoff, and a passphrase option instead of a numeric PIN, for the
+  at-rest vault.
+- ~~Hide the cleartext `messageId` from the relay~~ — **done**: message ids moved
+  inside the sealed frame in 5.2, and 4.7's remaining header metadata was sealed
+  by round 2's feature B.
 
 ## Hard constraints (apply to every phase)
-- Never implement custom cryptographic primitives — audited libraries only.
-- The relay server must be architecturally incapable of reading message
-  content.
-- Live calling / true peer-to-peer networking is explicitly out of scope
-  for this version.
+- **Never implement custom cryptographic primitives** — audited libraries only.
+  Currently libsodium (`-sumo` build) and `@noble/post-quantum` (ML-KEM-768,
+  Cure53-audited). Composition of audited primitives (KDF chains, hybrid
+  combiners) is fine; new primitives are not.
+- **The relay server must be architecturally incapable of reading message
+  content** — it only ever handles ciphertext, and inspects only `create`/`join`.
+- Live calling / true peer-to-peer networking is explicitly out of scope for
+  this version.
