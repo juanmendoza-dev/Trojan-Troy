@@ -8,6 +8,95 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-28 — WP-D's mobile tests assert element geometry, not horizontal overflow —
+  because the spec's own acceptance check passes on the broken screen.** The mobile spec
+  (§8) proposed `document.documentElement.scrollWidth <= window.innerWidth` as the
+  per-package check. On the pre-WP-D chat screen that check **passed at every size**:
+  measured on iPhone 13, `?screen=chat` reported `scrollWidth - innerWidth = 0` while the
+  sidebar occupied 256 of 390px, the message column was 134px, a bubble was **34px wide ×
+  528px tall** (one character per line), and the composer's mic sat at `x=521` — 131px past
+  the right edge. The roots are `position: fixed`, so flexbox squeezes children and
+  overflow escapes the document's scroll width entirely; the assertion is blind to the whole
+  failure class. `client/e2e/chat-mobile.spec.ts` therefore asserts *where things are*:
+  the parked drawer's `rect.right <= 0`, `.chat-screen__main` within 4px of `innerWidth`, a
+  bubble wider than 100px (the direct regression test for one-char-per-line), computed
+  `font-size` exactly `16px`, and ≥44px boxes on every control. The overflow check is kept,
+  but only as a supplement. **Anyone adding a mobile spec should copy this shape** — an
+  overflow-only assertion buys a green result on an unusable screen.
+  (Decided by: Jay (flagged the trap, with the measurement) + Claude (assertion design))
+
+- **2026-07-28 — WP-D implementation calls (mobile chat shell).** (1) **Drawer state is
+  React, not CSS-only** — `ChatScreen` owns `drawerOpen` plus a local `useIsMobile`
+  `matchMedia("(max-width: 640px)")` hook, because `paused={!drawerOpen}` would otherwise
+  freeze the sidebar visualizers on desktop, where there is no drawer to open. The hook is
+  local to `ChatScreen` rather than a new `hooks/` file: it's the only consumer, and WP-D's
+  file ownership is narrow. (2) **The parked drawer is `visibility: hidden`, not merely
+  translated off-canvas**, with the visibility transition delayed by the 260ms slide — so
+  nothing inside it can be tabbed into or read out while parked, and the slide-out still
+  animates. Tests must use `waitForSelector(..., { state: "attached" })` on drawer contents
+  for the same reason. (3) **A busy voice recorder takes the whole composer row on mobile**
+  via a `data-recorder` attribute on `.composer`, fed by a new `onStatusChange` prop on
+  `VoiceRecorder`. CSS alone can't do it: the input is a *preceding* sibling of
+  `.composer__preview`, so it would need `:has()` (missing on iOS Safari < 15.4) to hide.
+  (4) **iris and pulse get an explicit opaque drawer background.** Their `--bg-sidebar` is
+  `rgba(255,255,255,0.025)` / `rgba(167,139,250,0.02)` — nearly transparent, which is right
+  for a column sitting *beside* the chat and wrong for a panel sitting *over* it (messages
+  showed through). Overridden inside the mobile block only, with the journey's own hardcoded
+  colours, matching how `HandshakeJourney.css` already hardcodes them. (5) **One file
+  outside WP-D's ownership: `Icon.tsx` gained a `menu` glyph** (union member + switch case,
+  purely additive). The hamburger had to be an `Icon`, not a unicode `☰`, and there was no
+  hamburger in the set; the ownership rule existed to stop parallel agents colliding, and
+  that dispatch finished with PR #10. (Decided by: Claude, flagged in the WP-D report)
+
+- **2026-07-28 — The voice preview was unreachable in dev for a reason that was NOT the
+  fake audio device: `VoiceRecorder`'s `mountedRef` was never set back to `true`.**
+  Partly supersedes the "voice can't be verified by headless Playwright" entry below.
+  React 18 `StrictMode` (on, in `main.tsx`) mounts → unmounts → re-mounts effects in dev.
+  The mount-only effect cleared `mountedRef.current = false` on the simulated unmount and
+  nothing ever restored it, so `handle.result.then(… if (!mountedRef.current) return …)`
+  bailed for the rest of the session and a finished recording **never** became a preview —
+  under the dev server, in any browser, with a working recorder. Fixed by setting the flag
+  in the effect body as well as clearing it in the cleanup. Production builds were
+  unaffected (StrictMode's double-invoke is dev-only). With that fixed, the voice preview
+  **is** verifiable in Playwright by stubbing the two platform APIs the harness can't
+  provide — `navigator.mediaDevices.getUserMedia` and `MediaRecorder` — via
+  `addInitScript`; the real component path still runs, rendering the real `<audio>` and the
+  real buttons (see `stubMicrophone` in `chat-mobile.spec.ts`). Both mobile projects now
+  drive record → preview → discard. (Decided by: Claude, during WP-D verification)
+
+- **2026-07-28 — Bound the static channels to the hybrid root key (v6), and accepted
+  that the version bump changes the safety-number digits.** An external review found
+  that `presence`/`ack`/`profile` derived their body and sealed-header subkeys straight
+  from the raw `crypto_kx` outputs, so those three channels were protected by **X25519
+  alone** — no ML-KEM, no transcript binding — while the ratchet correctly took both
+  from `RK₀`. Since the `profile` channel carries the display name and avatar, a
+  harvest-now-decrypt-later adversary who broke X25519 would have recovered names,
+  avatars, presence rhythm and every read receipt, which contradicted the README's
+  blanket post-quantum claim. Reproduced before fixing (same classical handshake,
+  different PQ secret → byte-identical static keys), then closed by hashing each
+  directional key under `RK₀` (`bindDirKey`). Calls:
+  (1) **Bind each direction independently, never sorted.** `deriveRootKey` sorts its
+  pair to produce one shared value; doing that here would collapse tx and rx into one
+  key and destroy reflection protection. Verified the guard has teeth by deliberately
+  introducing the collapse — exactly one test caught it and the other 19 still passed,
+  which is why that test exists.
+  (2) **`PROTOCOL_VERSION` 5→6, accepting a changed root key.** The spec asked for the
+  root key to stay byte-identical, but `PROTOCOL_VERSION` is folded into the transcript
+  hash (`App.tsx:770`), which feeds `deriveRootKey` — so the two requirements are
+  mutually exclusive. Took the bump: it costs nothing (the safety number is ephemeral,
+  never persisted, and the 60-digit format is unchanged) and it buys a **clean, early
+  failure** — a stale tab paired against a fresh one now hits the existing
+  `handshake_failed` screen instead of desynchronising silently and dying later on the
+  first presence frame.
+  (3) **Authenticate the static body before consuming its replay counter.** The old
+  order let a relay keep an authentic header, mangle the body, and permanently lock out
+  the genuine frame behind that burnt counter. Costs one extra AEAD open per replay.
+  (4) **Declined** PIN attempt backoff (user-facing by definition) and origin
+  fail-closed (`render.yaml` sets no `ALLOWED_ORIGINS`, so it would reject every
+  production connection).
+  (Decided by: external review (found it) + Claude (reproduced, implemented, and flagged
+  the §0/§4 contradiction))
+
 - **2026-07-28 — Pinned the voice recording bitrate (`audioBitsPerSecond = 32_000`)
   rather than leaving it to the browser.** Found while confirming Jay's successful
   real 60s voice send. `audio/recorder.ts` passed only a mimeType to
@@ -33,6 +122,12 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 - **2026-07-28 — Voice messages cannot be verified by headless Playwright in this
   environment; verify the voice *crypto* path with a real-module test instead.**
+  **⚠ Partly superseded — see the `mountedRef` entry above.** The conclusion below
+  blamed the fake audio device alone, but an app-side bug (`StrictMode` leaving
+  `mountedRef` false) would have blocked the preview even with a working recorder. That
+  bug is fixed and the preview *is* now driven in Playwright via stubbed media APIs. The
+  advice about verifying the voice **crypto** with a real-module test still stands, as do
+  the selector traps.
   Worth recording so nobody re-chases it. `--use-fake-device-for-media-stream` gives
   Chromium a synthetic mic and recording *starts* fine (the peer even sees the
   "recording" presence state), but `MediaRecorder`'s stop never settles, so

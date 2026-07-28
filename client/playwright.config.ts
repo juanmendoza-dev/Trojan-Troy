@@ -16,15 +16,33 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
-  // Start the dev server on a fixed port so baseURL is stable; reuse one that's
-  // already running, so `npm run dev` in another terminal is picked up instead
-  // of spawning a second server.
-  webServer: {
-    command: "npm run dev -- --port 5173 --strictPort",
-    url: "http://localhost:5173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  // Both halves of the app, so `npx playwright test` works on a clean checkout
+  // with nothing started by hand. The relay is not optional: handshake.spec.ts
+  // pairs two browsers through it, and without it that spec just times out after
+  // 30s instead of saying anything useful.
+  //
+  // `reuseExistingServer` is on for both so this doesn't fight a `npm run dev`
+  // you already have open in another terminal — but note that it also means a
+  // manually-started relay will mask a broken config here. Verify changes to this
+  // block with nothing listening on :5173 or :8080.
+  webServer: [
+    {
+      command: "npm run dev -- --port 5173 --strictPort",
+      url: "http://localhost:5173",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      // Relay lives in the sibling package; it has no HTTP route to poll, so
+      // readiness is the TCP port opening.
+      command: "npm --prefix ../server run dev",
+      port: 8080,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  ],
   projects: [
     { name: "desktop-chrome", use: { ...devices["Desktop Chrome"] } },
     { name: "iphone-safari", use: { ...devices["iPhone 13"] } },

@@ -43,6 +43,48 @@ async function pair(): Promise<{ a: SessionCrypto; b: SessionCrypto }> {
   return { a, b };
 }
 
+// Every static key a session holds, flattened to hex so a test can assert that
+// two sessions share none of them. Six per direction pair: three channels x
+// (body subkey, sealed-header subkey), for both tx and rx.
+function staticKeysHex(sc: SessionCrypto): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const ch of ["presence", "ack", "profile"] as const) {
+    out[`txSub.${ch}`] = sodium.to_hex(sc.txSub[ch]);
+    out[`rxSub.${ch}`] = sodium.to_hex(sc.rxSub[ch]);
+    out[`txHdr.${ch}`] = sodium.to_hex(sc.txHdr[ch]);
+    out[`rxHdr.${ch}`] = sodium.to_hex(sc.rxHdr[ch]);
+  }
+  return out;
+}
+
+// Two sessions seeded from the SAME crypto_kx handshake, differing only in the
+// post-quantum secret or the transcript hash. Used to prove the static channels
+// actually bind those inputs: if they don't, both sessions produce byte-identical
+// static keys no matter what the hybrid root key did.
+async function sharedKxPair(varyBy: "pq" | "transcript"): Promise<{
+  one: SessionCrypto;
+  two: SessionCrypto;
+}> {
+  const alice = await generateKeypair();
+  const bob = await generateKeypair();
+  const aliceKeys = await deriveSessionKeys(alice, bob.publicKey, "initiator");
+  const bobKem = generateKemKeypair();
+  const { cipherText } = kemEncapsulate(bobKem.publicKey);
+
+  const pq1 = sodium.randombytes_buf(32);
+  const pq2 = varyBy === "pq" ? sodium.randombytes_buf(32) : pq1;
+  const tr1 = await computeTranscriptHash(alice.publicKey, bob.publicKey, bobKem.publicKey, cipherText, 5);
+  const tr2 =
+    varyBy === "transcript"
+      ? await computeTranscriptHash(alice.publicKey, bob.publicKey, bobKem.publicKey, cipherText, 4)
+      : tr1;
+
+  return {
+    one: await initSession(aliceKeys, "initiator", alice, bob.publicKey, pq1, tr1),
+    two: await initSession(aliceKeys, "initiator", alice, bob.publicKey, pq2, tr2),
+  };
+}
+
 describe("ratchetSession", () => {
   it("derives an identical hybrid root key on both sides", async () => {
     const { a, b } = await pair();
@@ -168,6 +210,56 @@ describe("ratchetSession", () => {
     });
   });
 
+  // v6. Before this, the static channels derived straight from the raw crypto_kx
+  // outputs, so presence/ack/profile were protected by X25519 ALONE — no ML-KEM,
+  // no transcript binding — while the ratchet took both from RK0. A harvest-now-
+  // decrypt-later adversary who broke X25519 would have recovered the profile card,
+  // the presence rhythm and every read receipt. These are the regression tests.
+  describe("static-channel hybrid binding (v6)", () => {
+    it("binds the ML-KEM secret into every static key", async () => {
+      const { one, two } = await sharedKxPair("pq");
+      const a = staticKeysHex(one);
+      const b = staticKeysHex(two);
+      // Same classical handshake, different PQ secret: nothing static may match.
+      for (const name of Object.keys(a)) {
+        expect(b[name], `${name} ignores the post-quantum secret`).not.toBe(a[name]);
+      }
+    });
+
+    it("binds the transcript hash into every static key", async () => {
+      const { one, two } = await sharedKxPair("transcript");
+      const a = staticKeysHex(one);
+      const b = staticKeysHex(two);
+      for (const name of Object.keys(a)) {
+        expect(b[name], `${name} ignores the transcript hash`).not.toBe(a[name]);
+      }
+    });
+
+    it("keeps the two directions separate after binding", async () => {
+      const { a } = await pair();
+      const env = await sealStatic(
+        a,
+        "presence",
+        frame({ channel: "presence", id: "p1", body: enc('{"state":"typing"}') })
+      );
+      // Reflected straight back at the sender. Binding each direction to RK0 must
+      // NOT canonicalise tx/rx the way deriveRootKey sorts them — that would
+      // collapse both into one key and let Alice's own receive subkey open her own
+      // frame, destroying reflection protection.
+      await expect(openMsg(a, env)).rejects.toThrow(/no key opened/);
+    });
+
+    it("still round-trips all three static channels in both directions", async () => {
+      const { a, b } = await pair();
+      for (const ch of ["presence", "ack", "profile"] as const) {
+        const aToB = await sealStatic(a, ch, frame({ channel: ch, id: `${ch}-ab`, body: enc("x") }));
+        expect((await openMsg(b, aToB)).id).toBe(`${ch}-ab`);
+        const bToA = await sealStatic(b, ch, frame({ channel: ch, id: `${ch}-ba`, body: enc("y") }));
+        expect((await openMsg(a, bToA)).id).toBe(`${ch}-ba`);
+      }
+    });
+  });
+
   describe("class binding and replay", () => {
     it("drops a static frame whose header class does not match its body key", async () => {
       const { a, b } = await pair();
@@ -223,6 +315,25 @@ describe("ratchetSession", () => {
       expect((await openMsg(b, one)).id).toBe("m1"); // older, still inside the window
       expect((await openMsg(b, two)).id).toBe("m2");
       await expect(openMsg(b, one)).rejects.toThrow(); // but not twice
+    });
+
+    it("does not burn a static counter when the body failed to authenticate", async () => {
+      const { a, b } = await pair();
+      const env = asMsg(
+        await sealStatic(a, "presence", frame({ channel: "presence", id: "p1", body: enc("x") }))
+      );
+      // A relay keeps the authentic sealed header and mangles the body. The header
+      // opens, so the counter is in reach — but consuming it before the body is
+      // verified would let that relay permanently lock out the genuine frame.
+      const blob = await fromBase64(env.payload);
+      const tampered = blob.slice();
+      tampered[tampered.length - 1] ^= 0x01;
+      await expect(
+        openMsg(b, { type: "msg", payload: await toBase64(tampered) })
+      ).rejects.toThrow();
+
+      // So the real frame, carrying that same counter, must still be accepted.
+      expect((await openMsg(b, env)).id).toBe("p1");
     });
 
     it("keeps each static channel's counter independent", async () => {

@@ -28,7 +28,10 @@ and `decisions.md` for why things were done a certain way.
 | Round 2 — D: Hardened handshake (commit-then-reveal + transcript binding) | On `main` (via PR #15) — new opaque `commit` round (keys committed before either side reveals) + full-transcript binding into `RK₀`, `PROTOCOL_VERSION` 3→4, no server change, no new dep. typecheck / **185** tests / build green (transcript ×5 + kdf/ratchetSession binding cases). First of the round-2 four (A/B/D/E); A+B have since shipped too, leaving only E. |
 | PQ hardening ④ — at-rest Argon2id profile vault | On `main` (via PR #15) — PIN derives a real Argon2id key (`crypto_pwhash`, sumo build) sealing the avatar with `crypto_secretbox`; fast-hash access check removed, legacy cleartext records purged on load, reload reverts to Anonymous. typecheck/**183** tests/build green; real-browser Playwright run 17/17 (IndexedDB holds `cipher`/`kdf`/`pinSalt` and no avatar bytes). |
 | **Crypto round integration** — D + ③ + ④ merged onto one branch | **Merged to `main` (PR #15, `1dcb5b4`)** — all three unmerged crypto branches folded together (no code conflicts; ledger conflicts resolved), the split-libsodium defect fixed, `libsodium-wrappers` dropped for sumo-only. typecheck clean / **201** tests / build green (1,610 kB, no double wasm) + **two-browser Playwright run 19/19** — matching safety numbers on both sides, commit-before-pubkey on the wire, one `kemct`, cover traffic on both sides with no stray bubbles, joiner-first send at 88 ms, no console errors. Merged 2026-07-28. |
+| **v6 — static-channel PQ binding + two hardening fixes** | On `feat/v6-static-channel-pq-binding` — closes a real, undisclosed gap: `presence`/`ack`/`profile` derived from the raw `crypto_kx` output, so they were **X25519-only** (no ML-KEM, no transcript binding) while the ratchet took both from `RK₀`. Reproduced first — same classical handshake with a different PQ secret gave byte-identical static keys — then fixed by binding each direction to `RK₀`. Plus: static replay counter no longer consumed before the body authenticates, and `unframe` now allowlists the channel. `PROTOCOL_VERSION` 5→6. typecheck / **248** tests / build green (+5 new, **zero edits to the existing 243**), server 31/31, and a **new committed two-browser Playwright test** passing. Zero `.tsx` / copy / `ui/` changes. |
 | Round 2 — A+B: post-quantum ratchet + sealed ratchet headers | **Merged to `main` (PR #16, `898420e`)** — one wire revision, `PROTOCOL_VERSION` 4→5. The `msg` envelope is now `{type, payload}` and nothing else: the key class, ratchet public key and chain counters live in a fixed 84-byte sealed header. Fresh ML-KEM secrets fold into the root chain every ~30s via two new in-band channels, so post-compromise healing is post-quantum too. Static channels gained replay protection. typecheck / **243** tests / build green + **two-browser Playwright run 18/18** — 7 folds, both sides in sync, messages still decrypting after them. No server change. Remaining in round 2: **E** (periodic rekey), which A largely subsumes — re-scope before building. |
+| Mobile web support — WP0 + WP-A/B/C/E/F (entry, loading, safety, message body, modals) | **Merged to `main` (PR #10, `13654dd`)** — responsive foundation (`viewport-fit=cover`, global reset, safe-area vars, `--app-height` visual-viewport hook) plus mobile blocks on every screen except the chat shell. |
+| Mobile web support — **WP-D: chat shell + drawer + composer** | Built (this branch) — the critical-path package, never built in PR #10, so the chat screen was unusable on a phone. Hamburger off-canvas drawer + scrim, full-width single column, 16px composer with ≥44px controls, stacked voice preview, auto-scroll to newest, data-viz paused while the drawer is parked. typecheck / **248** tests (zero edits to existing) / build green + **new `e2e/chat-mobile.spec.ts` 17/17** across `iphone-safari` + `android-chrome` + a `desktop-chrome` regression, asserting **geometry** rather than overflow (the spec's overflow check passed on the broken screen). Still open: real-device soft-keyboard + true notch insets. |
 
 ## Log
 
@@ -937,3 +940,76 @@ and `decisions.md` for why things were done a certain way.
   **415,255 bytes on the wire = 19.8% of the cap**, a ~5× margin instead of a ~1.15×
   one. Bandwidth improves as a side effect. The only cost is some fidelity, most
   noticeable on the AAC fallback path — the constant is one line if it ever needs raising.
+
+- **2026-07-28** — **WP-D built: the mobile chat shell.** Mobile web was dispatched as WP0
+  plus six parallel packages; PR #10 landed WP0 and A/B/C/E/F, but **WP-D — the critical
+  path — was never built**, so the one screen the app exists for did not work on a phone.
+  Measured first, at iPhone 13 / `?screen=chat`: the sidebar took **256 of 390px**, the
+  message column was **134px**, a bubble was **34px wide × 528px tall** (one character per
+  line), and the composer's mic button sat at **x=521** — 131px past the right edge.
+  Built, all behind `@media (max-width: 640px)` and additive to the existing rules:
+  - **Off-canvas drawer.** `.sidebar` becomes `position: absolute; width: min(300px, 84vw)`,
+    parked at `translateX(-100%)` and `visibility: hidden` (so nothing in it is tabbable
+    while closed), sliding in over the chat with a tap-to-close scrim. `ChatScreen` owns the
+    state — `App.tsx` untouched — plus a local `matchMedia` hook, because React has to know
+    it's mobile: `paused={!drawerOpen}` would otherwise freeze the desktop visualizers.
+    Escape closes it, and it stands down while Settings or a profile card is on top.
+  - **Hamburger** as the TitleBar's first child (a new `menu` glyph in `Icon.tsx` — the one
+    file outside WP-D's ownership, flagged); the room label, Verified pill and peer name hide
+    on mobile since they live in the drawer and Settings. Bar height picks up `--safe-top`.
+  - **Composer**: input 15px → **16px** (below that iOS Safari zooms on focus), mic and send
+    42 → **44px**, `padding-bottom: max(20px, var(--safe-bottom))`. A busy voice recorder now
+    takes the whole row via a `data-recorder` attribute, so the preview isn't squeezed beside
+    the input: the clip goes full-width with Send | Discard splitting the width beneath it.
+  - **Auto-scroll**, which did not exist at all: pin to bottom on a new message, *and* on a
+    `ResizeObserver` — the column shrinking is what the soft keyboard looks like from in
+    there, and without it the newest message slides out of view as `--app-height` drops.
+  - **PacketViz** gained the `paused` prop the other four viz already had (four of five
+    landed in PR #10), so the whole monitor stops while the drawer is parked.
+
+  **The verification trap, and why the numbers are worth reading.** The spec's own
+  acceptance check — `documentElement.scrollWidth <= window.innerWidth` — **passed on the
+  broken screen at every size** (`overflow = 0px` while the sidebar ate two thirds of the
+  viewport). The roots are `position: fixed`, so flexbox compresses children and the
+  overflow never reaches the document's scroll width. `client/e2e/chat-mobile.spec.ts`
+  therefore asserts geometry. Real numbers, iPhone 13 (390px) / Pixel 7 (412px):
+  - parked drawer `rect = {left: -300, right: 0, width: 300}` — off-canvas, and `toBeHidden`;
+  - `.chat-screen__main` **390px / 412px** wide at `left: 0` (was 134px at `left: 256`);
+  - bubble **198.66 × 66px** (was 34 × 528) — the direct one-char-per-line regression test;
+  - `.composer__input` computed font-size **exactly `16px`**; mic and send **44 × 44** at
+    `right: 326 / 348` and `378 / 400`, both on screen;
+  - composer bottom is flush with `.chat-screen`'s bottom to **0.00002px**, and the column's
+    height equals `--app-height` exactly (664 / 839) — the measured-height chain that makes
+    the composer ride the keyboard;
+  - hamburger **44 × 44** at `left: 6`; open drawer `left: 0, width: 300`; after a scrim tap
+    it re-parks at `right: 0`, and the hamburger still works;
+  - voice: Stop **67.7 × 44**, preview block 366 / 388px wide inside the viewport, `<audio>`
+    340 / 362px, Send **164 / 175 × 44**, Discard **166 / 177 × 44**, stacked below the clip;
+  - `.viz-packet__p` computed `animation-play-state` is `paused` parked / `running` open;
+  - a short-viewport run proves the auto-scroll isn't trivially true: `scrollHeight 352 >
+    clientHeight 193`, pinned at `scrollTop 159`;
+  - the avatar popover (WP-F's, but rendered outside the box WP-D now clips) still opens
+    fully on screen: `{left: 8, right: 228, width: 220}`;
+  - **desktop regression asserted, not eyeballed**: sidebar still `256px` at `left: 0`, main
+    at `left: 256`, no hamburger, no scrim, room label + Verified pill + peer name all still
+    visible, input still `15px`, mic still `42 × 42`, title bar still `46px`,
+    `animation-play-state: running`.
+  Also verified by eye at both phone sizes and on desktop, and at 360px explicitly.
+
+  **One real bug found and fixed on the way** (`VoiceRecorder.tsx`): `mountedRef` was
+  cleared on unmount and never set back, so React 18 `StrictMode`'s dev-only
+  mount→unmount→remount left it `false` forever and **a finished recording never became a
+  preview under the dev server, in any browser**. This is a correction to the 2026-07-28
+  note that blamed Chromium's fake audio device for that same symptom; the app-side bug
+  would have blocked the preview even with a working recorder. Production builds were fine.
+  With it fixed, the preview *is* Playwright-testable by stubbing `getUserMedia` +
+  `MediaRecorder` through `addInitScript` — the real component path still runs.
+
+  `npx tsc --noEmit` clean, **248/248** Vitest (no existing test needed editing),
+  `npm run build` green, `npx playwright test` **21/21** across all three projects
+  (including the two-browser handshake), and a doubled `--repeat-each=2` run of the whole
+  suite was clean too — no flakes. **Not verified here, and
+  it can't be:** actual soft-keyboard riding and true iOS safe-area insets — Playwright
+  emulation raises no keyboard and reports zero insets, so those need a real device.
+  Cosmetic nit left for Jay: the composer placeholder "Message — encrypted end-to-end"
+  truncates to "…end-to-" at 390px — a copy call, not a layout bug.

@@ -121,9 +121,36 @@ export async function kdfChain(ck: Uint8Array): Promise<{ ck: Uint8Array; mk: Ui
   return { ck: next, mk };
 }
 
+// Bind a directional crypto_kx key to the hybrid root key before it is used to
+// derive the static channels' subkeys (v6).
+//
+// Why this exists: the static channels (presence/ack/profile) used to derive
+// straight from the raw crypto_kx output, which made them X25519-ONLY — no
+// ML-KEM, no transcript binding — while the ratchet and its header keys took
+// both from RK0. A harvest-now-decrypt-later adversary who broke X25519 would
+// therefore have recovered the profile card (display name + avatar), the
+// presence rhythm, and every read receipt, even though message content stayed
+// safe. Folding RK0 in closes that gap.
+//
+// The directional key stays the *message* and RK0 the *key*, so tx/rx remain
+// distinct: direction separation (a reflected frame must not open under our own
+// receive subkey) survives the binding. Deliberately NOT sorted the way
+// deriveRootKey sorts its pair — that sorting exists to produce one shared value,
+// and here it would collapse both directions into one key.
+export async function bindDirKey(dirKey: Uint8Array, rk0: Uint8Array): Promise<Uint8Array> {
+  await sodium.ready;
+  return sodium.crypto_generichash(
+    32,
+    concat(sodium.from_string("TTr:dir:v6"), dirKey),
+    rk0
+  );
+}
+
 // Static per-channel subkey for the non-ratcheted channels (presence/ack/
 // profile). Derive from a directional key (tx for sending, rx for receiving)
-// so a reflected ciphertext won't open under our receive subkey.
+// so a reflected ciphertext won't open under our receive subkey. As of v6 the
+// caller passes a root-key-bound directional key (see bindDirKey), so these
+// inherit the hybrid-PQ and transcript binding too.
 export async function deriveChannelSubkey(
   dirKey: Uint8Array,
   channel: string

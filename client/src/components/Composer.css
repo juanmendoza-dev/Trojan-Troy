@@ -108,6 +108,13 @@
   border: 1px solid var(--border);
   color: var(--text-secondary);
 }
+/* Send + Discard, grouped. Same 10px gap as the row it sits in, so on desktop
+   this reads as one flat `clip · Send · Discard` line exactly as before. */
+.composer__preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .composer__preview audio {
   height: 32px;
 }
@@ -133,4 +140,72 @@
 }
 .composer__input-wrap--sent {
   animation: composerSent 0.3s ease;
+}
+
+/* ── Mobile ──────────────────────────────────────────────────────────────────
+   The composer is the flex:none bottom child of the --app-height column, so it
+   already rides up with the visual viewport when the soft keyboard opens; what
+   it needs here is to clear the home indicator, stop iOS zooming on focus, and
+   give the voice-recorder states room to be usable. */
+@media (max-width: 640px) {
+  .composer {
+    padding-top: 14px;
+    padding-bottom: max(20px, var(--safe-bottom));
+    padding-left: max(12px, var(--safe-left));
+    padding-right: max(12px, var(--safe-right));
+    gap: 8px;
+  }
+  /* 16px is the threshold: anything smaller and iOS Safari zooms the page in on
+     focus. Set on both, since the input takes its size from the wrap. */
+  .composer__input-wrap {
+    padding: 11px 16px;
+    font-size: 16px;
+  }
+  .composer__input {
+    font-size: 16px;
+  }
+  .composer__mic,
+  .composer__send-button {
+    width: 44px;
+    height: 44px;
+  }
+  /* A recording / preview / error takes over the row — there isn't width for it
+     beside the input, and the native <audio> element in particular overflows. */
+  .composer:not([data-recorder="idle"]) .composer__input-wrap,
+  .composer:not([data-recorder="idle"]) .composer__send-button {
+    display: none;
+  }
+  .composer__recording,
+  .composer__preview,
+  .composer__error {
+    flex: 1;
+    min-width: 0;
+    border-radius: 18px;
+    padding: 10px 12px;
+  }
+  /* Clip on its own line, then Send | Discard splitting the width under it. */
+  .composer__preview {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .composer__preview audio {
+    width: 100%;
+    max-width: 100%;
+    height: 36px;
+  }
+  .composer__preview-actions > button {
+    flex: 1;
+  }
+  .composer__stop,
+  .composer__send,
+  .composer__discard {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px 18px;
+    font-size: 15px;
+  }
+  .composer__recording {
+    justify-content: space-between;
+  }
 }

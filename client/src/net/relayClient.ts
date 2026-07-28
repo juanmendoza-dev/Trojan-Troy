@@ -4,8 +4,10 @@
 // hybrid post-quantum handshake (KEM public key on `pubkey` + the `kemct`
 // envelope); v4 added the commit-then-reveal `commit` round + transcript binding;
 // v5 seals the ratchet header (so the key class and chain counters leave the wire)
-// and folds post-quantum secrets into the ratchet's root chain.
-export const PROTOCOL_VERSION = 5;
+// and folds post-quantum secrets into the ratchet's root chain; v6 binds the
+// static channels (presence/ack/profile) to the hybrid root key, so they inherit
+// the post-quantum and transcript binding instead of resting on X25519 alone.
+export const PROTOCOL_VERSION = 6;
 
 // After the handshake, every content/signal envelope collapses into one opaque
 // `msg` so the relay can't tell text from voice from a receipt. As of v5 there is

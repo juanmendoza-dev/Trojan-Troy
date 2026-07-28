@@ -171,3 +171,52 @@
   padding: 10px 6px 0;
   border-top: 1px solid var(--border-soft);
 }
+
+/* ── Mobile: the fixed 256px column becomes an off-canvas drawer ─────────────
+   It's toggled from the TitleBar hamburger; ChatScreen owns the open state and
+   renders the scrim. Everything in here stays exactly as it is on desktop — only
+   the column's placement changes. */
+@media (max-width: 640px) {
+  .sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    width: min(300px, 84vw);
+    padding-left: max(12px, var(--safe-left));
+    padding-bottom: max(16px, var(--safe-bottom));
+    overflow-y: auto;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.45);
+    transform: translateX(-100%);
+    /* Hidden, not merely off-screen: parked drawer content must not be tabbable
+       or read out. Delayed by the slide so the slide-out stays visible. */
+    visibility: hidden;
+    transition:
+      transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1),
+      visibility 0s linear 260ms;
+  }
+  .sidebar--open {
+    transform: translateX(0);
+    visibility: visible;
+    transition:
+      transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1),
+      visibility 0s;
+  }
+  /* On desktop this column sits *beside* the chat, so iris/pulse tint it almost
+     transparently and let the journey gradient read through it. A drawer sits
+     *over* the chat, so those two themes need a surface of their own here or the
+     messages show through the panel. (apple's --bg-sidebar is already opaque.) */
+  :root[data-theme="iris"] .sidebar {
+    background: linear-gradient(160deg, #0d0f18 0%, #101223 100%);
+  }
+  :root[data-theme="pulse"] .sidebar {
+    background: #0a0a10;
+  }
+}
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar--open {
+    transition: none;
+  }
+}
