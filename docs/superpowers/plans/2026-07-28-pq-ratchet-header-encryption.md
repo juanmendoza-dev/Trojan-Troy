@@ -8,6 +8,41 @@ Branch: `feat/pq-ratchet-header-encryption` (off `feat/crypto-round-integration`
 must land in order; 5–7 are independent. Each task ends green (typecheck + tests)
 before the next starts.
 
+## BUILD STATUS — COMPLETE (built + green, 2026-07-28)
+
+- [x] Task 1 — `crypto/kdf.ts`: 96-byte `kdfRoot` (+ optional `pqSecret`), header keys
+- [x] Task 2 — `crypto/header.ts` (new): fixed 44/84-byte pack/seal/open
+- [x] Task 3 — `crypto/framing.ts`: `pqoffer` / `pqaccept` channels
+- [x] Task 4 — `crypto/ratchet.ts`: header keys, trial decrypt, PQ folds, `{hk, mk}` skipped store
+- [x] Task 5 — `protocol/pqRekey.ts` (new): pure schedule
+- [x] Task 6 — `protocol/ratchetSession.ts`: single-blob payload, static counters + replay window
+- [x] Task 7 — `protocol/coverTraffic.ts`: 4096 tail
+- [x] Task 8 — `net/relayClient.ts`: opaque `msg`, `PROTOCOL_VERSION = 5`
+- [x] Task 9 — `App.tsx`: rekey timer, offer/accept, drop cases, zeroize
+- [x] Task 10 — copy, docs, verification
+
+**Verified:** typecheck clean, **243** client tests, build green, and a throwaway
+two-browser Playwright run **18/18** — both sides folded **7** post-quantum secrets
+and stayed exactly in sync (`pqFold` host 7 / guest 7, nothing left pending),
+messages sent *after* those folds still decrypted, no `c`/`header` field on any
+`msg` frame, every payload an 84-byte sealed header plus a bucketed body, cover
+traffic unaffected, 64 ms send latency, no console errors.
+
+**Two deviations from the plan text, both deliberate:**
+1. **`kdfRoot` needs two keyed BLAKE2b calls, not one.** BLAKE2b's output caps at
+   64 bytes, so 96 bytes of key material can't come from a single call. It also
+   domain-separates folded from unfolded steps (`TTr:rk:pq:v5` vs `TTr:rk:v5`), so
+   a fold can never accidentally collide with a non-fold — the one place the two
+   sides could silently disagree now fails loudly instead.
+2. **`deriveHeaderKeys` returns two seeds, not four.** Signal's header-encryption
+   variant only needs each side's *first* sending header key agreed out of band;
+   every later chain takes its header key from `kdfRoot`'s `nhk`.
+
+Also added, not in the plan: a **DEV-only read-only counter hook**
+(`window.__ttRatchetCounters`) exposing `pqFold` / pending counts — never key
+material — because the offer/accept frames are encrypted, so a fold is otherwise
+unobservable from a browser test. Vite drops it from production builds.
+
 ## Task 1 — `crypto/kdf.ts`: 96-byte root KDF + header-key derivation
 
 - `kdfRoot(rk, dh, pqSecret?)` → `{ rk, ck, nhk }`, from a single 96-byte

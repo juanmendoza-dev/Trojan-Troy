@@ -346,6 +346,25 @@ export default function App() {
     };
   }, []);
 
+  // DEV-only, read-only counters so a two-browser test can prove the post-quantum
+  // ratchet is actually folding (the offer/accept frames are encrypted, so a fold
+  // is otherwise invisible from outside). Counters only — never key material — and
+  // Vite drops the whole block from a production build.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (window as unknown as { __ttRatchetCounters?: () => unknown }).__ttRatchetCounters = () => {
+      const sc = sessionCryptoRef.current;
+      if (!sc) return null;
+      return {
+        pqFold: sc.ratchet.pqFold,
+        pqPending: sc.ratchet.pqPending.length,
+        ns: sc.ratchet.Ns,
+        nr: sc.ratchet.Nr,
+        role: roleRef.current,
+      };
+    };
+  }, []);
+
   // Cover traffic: while in chat with an established sending chain, keep the
   // outbound c:0 frame rate at/above a jittered baseline so the relay can't see
   // idle gaps or typing pauses. Real sends reset lastContentSentRef, so cover

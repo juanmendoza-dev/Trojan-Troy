@@ -8,6 +8,67 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-28 — Round-2 A+B built as one wire revision: post-quantum ratchet +
+  sealed ratchet headers. `PROTOCOL_VERSION` 4 → 5. PQ folds are periodic (~30s),
+  not per-step — Jay's call.** The two features were co-designed because they fight
+  each other, and resolving that fight is the whole design. Spec/plan dated
+  2026-07-28; branch `feat/pq-ratchet-header-encryption` off
+  `feat/crypto-round-integration` (not `main` — A+B revise the same `msg` format
+  PR #15 just consolidated). Calls:
+  (1) **The ML-KEM material does NOT ride the ratchet header — it ships as ordinary
+  padded content frames.** B wants a fixed-size header (any variation is a signal);
+  A wants ~2.3 KB of ML-KEM material on chain flips. And "chain flip" is far more
+  often than it sounds: with ③'s cover traffic both sides send ~1/sec forever, so
+  flips are ~1/sec, and per-flip KEM material would mean ~3 KB extra per message per
+  side *and* make flip-vs-non-flip visible by size. So the KEM blobs move onto two
+  new sealed channels (`pqoffer`/`pqaccept`) that ride the normal content path,
+  where ③ already pads and buckets them. The header then carries only a 2-byte fold
+  counter and stays **fixed at 84 bytes, forever**. Designed separately these two
+  features would have undercut each other; designed together, each pays for the
+  other.
+  (2) **Riding inside the classically-chained ratchet does not weaken the PQ
+  guarantee.** A quantum adversary who records everything and later breaks X25519
+  can read those frames — they contain an ML-KEM *public* key and a *ciphertext*.
+  Recovering the secret still requires breaking ML-KEM; the ML-KEM secret key never
+  leaves the device and is zeroized after decapsulation. So the folded secret, and
+  the root chain past that fold, stay post-quantum.
+  (3) **Periodic folds (~30s), not per ratchet step (Jay chose this from three
+  options).** Per-step PQ (Signal's SPQR direction) needs chunked key transmission
+  across messages and much more desync risk. The honest claim is therefore "healing
+  re-secures with post-quantum material every ~30 seconds", **not** "every message
+  is post-quantum" — the about copy says exactly that.
+  (4) **The SENDER decides when to fold; the receiver mirrors it from the header's
+  `fold` counter.** Both sides walk an identical root-key chain (each `RK` computed
+  once per side, from the same predecessor and DH output), so a fold has to land on
+  the same link on both sides. Folding on "when the secret arrived" would be
+  timing-dependent and would desync; letting the sender decide and announce it is
+  deterministic. A fold-counter jump greater than one is treated as a protocol
+  violation rather than guessed at — it's impossible in a two-party ratchet, since
+  each side's folds are separated by one of the other's flips.
+  (5) **Only the initiator offers.** One offerer means one monotonic id sequence, no
+  collisions, and no ambiguity about the order two pending secrets fold in. Both
+  directions still benefit — the secret goes into the *shared* root chain. Same role
+  split the handshake already uses.
+  (6) **`libsodium-wrappers` stays gone / two keyed BLAKE2b calls for 96 bytes.**
+  BLAKE2b caps at 64 bytes of output, so the root KDF's 96 bytes come from two
+  domain-separated calls; folded and unfolded steps use *different* domains so they
+  can never collide even on a zero-length secret.
+  (7) **Static channels got replay protection, which was a documented residual.**
+  The v5 header already carries an `n` field for presence/ack/profile, so a
+  monotonic per-channel counter plus a 64-wide sliding window cost ~15 lines.
+  Previously a relay could replay a captured heartbeat or receipt; impact was
+  cosmetic, which is why it had been deferred — it was nearly free to close here.
+  (8) **Cover traffic gained a ~3% 4096-byte tail** (owed back to ③): an ML-KEM
+  offer lands in the 4096 bucket, and without cover reaching that size a 4096 frame
+  every ~30s would read as "PQ rekey" on sight — handing back a periodic beat to
+  fingerprint a session by, which is exactly what ③ set out to remove.
+  (9) **A DEV-only read-only counter hook** (`window.__ttRatchetCounters`) exposes
+  `pqFold`/pending counts — never key material — because the offer/accept frames are
+  encrypted, so a fold is otherwise unobservable from a browser test. Vite strips it
+  from production builds. Without it the E2E could only assume A worked; with it the
+  run *proved* 7 folds on both sides.
+  (Decided by: Jay (fold cadence) + Claude (all other crypto/design calls))
+
 - **2026-07-28 — Landed the three finished crypto branches on one integration branch
   rather than merging three PRs into `main` separately; dropped
   `libsodium-wrappers` so only the sumo build can be imported.** Three completed,

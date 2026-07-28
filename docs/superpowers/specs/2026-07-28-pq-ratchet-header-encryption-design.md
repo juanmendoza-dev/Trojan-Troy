@@ -161,10 +161,13 @@ created. State gains Signal's four:
 - `HKs` / `HKr` — header keys for the current sending / receiving chain
 - `NHKs` / `NHKr` — the next ones, known one chain early
 
-Seeding: `deriveHeaderKeys(rk0)` → four domain-separated keys
-(`TTr:hdr:i2r:v5`, `TTr:hdr:r2i:v5`, `TTr:nhdr:i2r:v5`, `TTr:nhdr:r2i:v5`).
-The initiator takes `HKs = i2r`, `HKr = r2i`, `NHKs = nhdr:i2r`,
-`NHKr = nhdr:r2i`; the responder mirrors.
+Seeding: `deriveHeaderKeys(rk0)` → **two** domain-separated keys
+(`TTr:hdr:i2r:v5`, `TTr:hdr:r2i:v5`) — Signal's `shared_hka` / `shared_nhkb`.
+(Corrected during implementation: four were specced, but only each side's *first*
+sending header key needs agreeing out of band; every later chain takes one from
+`kdfRoot`'s `nhk`.) The initiator takes `HKs = i2r`, `NHKr = r2i`, `NHKs` from its
+seeding `kdfRoot`; the responder takes `NHKs = r2i`, `NHKr = i2r`, and has no
+sending header key until its first ratchet.
 
 On a DH ratchet: the recv step sets `HKr = NHKr` then `NHKr = nhk` from that
 `kdfRoot`; the send step sets `HKs = NHKs` then `NHKs = nhk` from its `kdfRoot`.
@@ -236,15 +239,22 @@ Flow:
    is FIFO per sender, so the `pqaccept` precedes any frame that folds it — but the
    buffer means a reordering bug degrades to a delay, not a dead session.
 
-`kdfRoot` becomes `kdfRoot(rk, dh, pqSecret?)`:
+`kdfRoot` becomes `kdfRoot(rk, dh, pqSecret?)`, emitting 96 bytes as
+`(rk', ck, nhk)`. **Corrected during implementation:** BLAKE2b's output caps at 64
+bytes, so this is two keyed calls under the same key rather than one, and the fold
+carries its own domain so a folded step can never collide with an unfolded one:
 
 ```
-okm = BLAKE2b-96( key = rk,  msg = "TTr:rk:v5" ‖ dh ‖ (pqSecret ?? "") )
-→ (rk', ck, nhk)
+no fold:  okm = BLAKE2b-64( key = rk, msg = "TTr:rk:v5"    ‖ dh )
+          nhk = BLAKE2b-32( key = rk, msg = "TTr:nhk:v5"   ‖ dh )
+fold:     okm = BLAKE2b-64( key = rk, msg = "TTr:rk:pq:v5" ‖ dh ‖ pqSecret )
+          nhk = BLAKE2b-32( key = rk, msg = "TTr:nhk:pq:v5" ‖ dh ‖ pqSecret )
 ```
 
-Absent `pqSecret` the message is byte-identical to a v5 no-PQ step, so non-fold
-steps and fold steps share one code path.
+Folding is the one point where the two sides could silently disagree, so the
+separate domain makes a mismatch fail loudly (chains diverge, nothing opens)
+instead of quietly agreeing by accident — including if a caller bug ever passed a
+zero-length secret.
 
 ### Cover-traffic interaction (owed back to ③)
 

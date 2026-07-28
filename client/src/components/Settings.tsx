@@ -104,11 +104,15 @@ export function Settings({
             padded ciphertext, and your keys never leave this device. The connection keys are agreed
             with a hybrid post-quantum exchange (X25519 + ML-KEM-768), so traffic recorded today
             stays sealed even against a future quantum computer. Every message then gets its own key,
-            discarded right after (a Double Ratchet), so a stolen key can't unlock past messages, and
-            the connection re-secures itself after a compromise. The app also blends in a steady stream
-            of decoy traffic, so the relay can tell a chat is happening but not its rhythm — when you're
-            typing, pausing, or sitting idle — and never what's said. The safety number above is tied to
-            this exact session; if it ever changes unexpectedly, don't trust the connection.
+            discarded right after (a Double Ratchet), so a stolen key can't unlock past messages — and
+            about every thirty seconds the connection quietly re-secures itself with fresh
+            post-quantum key material, so recovery from a compromise doesn't rest on classical
+            cryptography either. Even the routing details are sealed: the relay can't see which
+            messages belong to the same run, or tell a text from a voice note from a read receipt.
+            The app also blends in a steady stream of decoy traffic, so the relay can tell a chat is
+            happening but not its rhythm — when you're typing, pausing, or sitting idle — and never
+            what's said. It can still count how many packets cross it. The safety number above is
+            tied to this exact session; if it ever changes unexpectedly, don't trust the connection.
           </p>
         </div>
 
