@@ -35,3 +35,47 @@
   font-weight: 600;
   color: var(--text-secondary);
 }
+/* Closes the drawer when tapped. Mobile-only — ChatScreen only renders it below
+   the breakpoint, and this keeps it invisible if the two ever disagree. */
+.chat-screen__scrim {
+  display: none;
+}
+
+/* ── Mobile: one column, with the sidebar overlaid as a drawer ───────────────
+   The sidebar's own off-canvas rules are in Sidebar.css; this side is just
+   "stop reserving a column for it" plus the scrim that sits over the chat. */
+@media (max-width: 640px) {
+  .chat-screen__body {
+    /* Positioning context for the drawer + scrim; overflow keeps the parked
+       drawer from being anything the page could scroll to. */
+    position: relative;
+    overflow: hidden;
+  }
+  .chat-screen__scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    padding: 0;
+    border: none;
+    background: rgba(6, 7, 14, 0.55);
+    cursor: pointer;
+    animation: scrimIn 200ms ease both;
+  }
+  .chat-screen__messages {
+    padding: 16px 12px;
+  }
+}
+@keyframes scrimIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-screen__scrim {
+    animation: none;
+  }
+}

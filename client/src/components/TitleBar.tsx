@@ -10,14 +10,36 @@ interface TitleBarProps {
   onOpenSettings: () => void;
   /** Mask the room code (driven by the sidebar's eye toggle). */
   roomHidden?: boolean;
+  /** Mobile only: open/close the sidebar drawer. Omit it and no menu button renders. */
+  onToggleDrawer?: () => void;
+  /** Whether that drawer is currently showing. */
+  drawerOpen?: boolean;
 }
 
-export function TitleBar({ roomCode, peerProfile, onOpenSettings, roomHidden }: TitleBarProps) {
+export function TitleBar({
+  roomCode,
+  peerProfile,
+  onOpenSettings,
+  roomHidden,
+  onToggleDrawer,
+  drawerOpen = false,
+}: TitleBarProps) {
   const { theme } = useTheme();
   const isApple = theme === "apple";
 
   return (
     <div className="title-bar">
+      {onToggleDrawer && (
+        <button
+          type="button"
+          className="title-bar__menu"
+          onClick={onToggleDrawer}
+          aria-label={drawerOpen ? "Close menu" : "Open menu"}
+          aria-expanded={drawerOpen}
+        >
+          <Icon name="menu" size={20} />
+        </button>
+      )}
       <div className="title-bar__wordmark">
         Trojan Troy<span className="title-bar__wordmark-dot">.</span>
       </div>

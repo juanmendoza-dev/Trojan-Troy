@@ -163,22 +163,26 @@ function RainViz({ paused }: { paused?: boolean }) {
   return <canvas ref={ref} className="viz-rain" aria-hidden="true" />;
 }
 
-// 5 · packet flow (you ↔ peer) — pure CSS motion
-function PacketViz() {
+// 5 · packet flow (you ↔ peer) — pure CSS motion, so pausing is a style flip
+// rather than a rAF guard. It's inline because the animation (and its per-packet
+// delay and direction) lives on these three spans, not on the container.
+function PacketViz({ paused }: { paused?: boolean }) {
+  const style = paused ? { animationPlayState: "paused" as const } : undefined;
   return (
     <div className="viz-packet" aria-hidden="true">
       <span className="viz-packet__node">you</span>
       <span className="viz-packet__wire">
-        <span className="viz-packet__p" />
-        <span className="viz-packet__p" />
-        <span className="viz-packet__p" />
+        <span className="viz-packet__p" style={style} />
+        <span className="viz-packet__p" style={style} />
+        <span className="viz-packet__p" style={style} />
       </span>
       <span className="viz-packet__node">peer</span>
     </div>
   );
 }
 
-export function DataMonitor({ messages }: { messages: string[] }) {
+/** `paused` stops every instrument — the mobile drawer passes it while closed. */
+export function DataMonitor({ messages, paused }: { messages: string[]; paused?: boolean }) {
   const tip = useRef<HTMLDivElement>(null);
   const show = (text: string) => {
     const t = tip.current;
@@ -191,11 +195,11 @@ export function DataMonitor({ messages }: { messages: string[] }) {
   const hide = () => tip.current?.classList.remove("is-visible");
 
   const rows = [
-    { key: "morph", desc: "live visuals of ur data", node: <MorphViz messages={messages} /> },
-    { key: "hex", desc: "the raw ciphertext, live", node: <HexStreamViz /> },
-    { key: "scope", desc: "ur secure line", node: <ScopeViz /> },
-    { key: "rain", desc: "encryption, falling", node: <RainViz /> },
-    { key: "packet", desc: "packets flying you ↔ peer", node: <PacketViz /> },
+    { key: "morph", desc: "live visuals of ur data", node: <MorphViz messages={messages} paused={paused} /> },
+    { key: "hex", desc: "the raw ciphertext, live", node: <HexStreamViz paused={paused} /> },
+    { key: "scope", desc: "ur secure line", node: <ScopeViz paused={paused} /> },
+    { key: "rain", desc: "encryption, falling", node: <RainViz paused={paused} /> },
+    { key: "packet", desc: "packets flying you ↔ peer", node: <PacketViz paused={paused} /> },
   ];
 
   return (

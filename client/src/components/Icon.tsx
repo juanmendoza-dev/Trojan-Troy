@@ -10,6 +10,7 @@ export type IconName =
   | "play"
   | "pause"
   | "chevron-left"
+  | "menu"
   | "eye"
   | "eye-off";
 
@@ -77,6 +78,8 @@ function glyph(name: IconName): ReactNode {
       return <path d="M12 19V5M5 12l7-7 7 7" />;
     case "chevron-left":
       return <path d="M15 18l-6-6 6-6" />;
+    case "menu":
+      return <path d="M4 7h16M4 12h16M4 17h16" />;
     case "eye":
       return (
         <>

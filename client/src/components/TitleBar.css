@@ -101,3 +101,53 @@
   color: var(--text-primary);
   background: var(--bg-card-alt, rgba(255, 255, 255, 0.06));
 }
+/* Drawer toggle — mobile only, so it's hidden until the breakpoint below. */
+.title-bar__menu {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.title-bar__menu:active {
+  color: var(--text-primary);
+}
+
+/* ── Mobile: hamburger + wordmark + settings, and clear of the notch ─────────
+   The room code, the Verified pill and the peer name all live one tap away (the
+   drawer and Settings), so the bar keeps only what has to be here. */
+@media (max-width: 640px) {
+  .title-bar {
+    /* border-box, so the safe-area padding has to be added to the 46px bar. */
+    height: calc(46px + var(--safe-top));
+    padding-top: var(--safe-top);
+    padding-left: max(6px, var(--safe-left));
+    padding-right: max(6px, var(--safe-right));
+    gap: 6px;
+  }
+  .title-bar__menu {
+    display: inline-flex;
+  }
+  /* Takes over the room label's job of pushing the settings button right. */
+  .title-bar__wordmark {
+    flex: 1;
+    min-width: 0;
+  }
+  .title-bar__peer,
+  .title-bar__room,
+  .title-bar__verified {
+    display: none;
+  }
+  .title-bar__settings-button {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+}

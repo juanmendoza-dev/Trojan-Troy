@@ -15,6 +15,10 @@ interface SidebarProps {
   /** Whether the room code is masked (shared with the title bar). */
   roomHidden: boolean;
   onToggleRoomHidden: () => void;
+  /** Mobile only: this column is an off-canvas drawer, and it's slid in. */
+  open?: boolean;
+  /** Freeze the visualizers — the drawer passes this while it's parked (battery). */
+  paused?: boolean;
 }
 
 export function Sidebar({
@@ -23,6 +27,8 @@ export function Sidebar({
   sentMessages = [],
   roomHidden,
   onToggleRoomHidden,
+  open = false,
+  paused = false,
 }: SidebarProps) {
   const { theme } = useTheme();
   const sectionLabel = theme === "apple" ? (label: string) => label : (label: string) => label.toUpperCase();
@@ -47,7 +53,7 @@ export function Sidebar({
     });
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar${open ? " sidebar--open" : ""}`}>
       <button className="sidebar__new-chat" onClick={onNewChat}>
         <Icon name="plus" size={16} strokeWidth={2.25} />
         New chat
@@ -87,7 +93,7 @@ export function Sidebar({
       {rendered && (
         <div className={`data-monitor-wrap${monitorOn ? "" : " is-poofing"}`}>
           <span className="data-monitor-wrap__ring" aria-hidden="true" />
-          <DataMonitor messages={sentMessages} />
+          <DataMonitor messages={sentMessages} paused={paused} />
         </div>
       )}
 
