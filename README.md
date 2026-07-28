@@ -6,7 +6,7 @@
 
 Text and voice messages encrypted end-to-end. A safety-number handshake so you know it's really them. A relay server that is *architecturally incapable* of reading a single word — not "promises not to," can't.
 
-🔗 **Live demo:** _add your Vercel URL_ — open it in two browsers, "Start a chat" in one, join with the code in the other.
+🔗 **Live demo:** [trojan-troy.vercel.app](https://trojan-troy.vercel.app) — open it in two browsers, "Start a chat" in one, join with the code in the other. (The relay sleeps when idle — the first connection can take up to a minute to wake it.)
 
 ---
 
