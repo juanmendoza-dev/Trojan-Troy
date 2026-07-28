@@ -18,9 +18,12 @@ and voice messages through a relay that can't read any of it.
 Since then the crypto has been deepened twice, in two backend-only rounds that
 kept the UX identical (see the next section — that work is the strongest part
 of this project and used to be one unchecked line here). Everything from both
-rounds is merged. A third, smaller round (**v6**) then closed a real gap an external
-review found — the non-ratcheted channels were X25519-only — putting
-`PROTOCOL_VERSION` at **6**.
+rounds is merged, putting `PROTOCOL_VERSION` at **5** on `main`.
+
+A third, smaller round (**v6**) closed a real gap an external review found — the
+non-ratcheted channels were X25519-only — and takes `PROTOCOL_VERSION` to **6**. It
+is built and verified but **not yet merged**: it lives on
+`feat/v6-static-channel-pq-binding` (PR #18).
 
 What's left is Phase 5's remaining *feature* work (offline delivery, history,
 group chats, files, disappearing messages), Phase 6 polish, and finishing the
@@ -30,9 +33,11 @@ mobile pass.
 
 ## Security architecture — what's actually shipped
 
-All of this is live on `main`, verified by 248 client + 31 server tests plus a
-committed two-browser Playwright test (`client/e2e/handshake.spec.ts`). No custom
-primitives: libsodium (sumo) and `@noble/post-quantum` only.
+Everything below is on `main` **except the items marked (v6)**, which are built and
+verified on `feat/v6-static-channel-pq-binding` (PR #18) and awaiting merge.
+Verified by 248 client + 31 server tests plus a committed two-browser Playwright
+test (`client/e2e/handshake.spec.ts`). No custom primitives: libsodium (sumo) and
+`@noble/post-quantum` only.
 
 **Pairing and key agreement**
 - Ephemeral X25519 (`crypto_kx`) **+ ML-KEM-768** (FIPS 203) — both secrets
@@ -64,9 +69,10 @@ primitives: libsodium (sumo) and `@noble/post-quantum` only.
   now bound to `RK0` first, so they inherit the hybrid-PQ + transcript binding and the
   harvest-now-decrypt-later claim holds for *all* wire traffic, not just content.
 - Replay protection on both the ratcheted and the static channels; transactional
-  decrypt, so a tampered packet can never corrupt a live session. A static frame whose
-  body fails to authenticate no longer consumes its replay counter (v6), and `unframe`
-  allowlists the channel rather than trusting the decrypted JSON.
+  decrypt, so a tampered packet can never corrupt a live session.
+- **(v6)** A static frame whose body fails to authenticate no longer consumes its
+  replay counter, and **(v6)** `unframe` allowlists the channel rather than trusting
+  the decrypted JSON.
 
 **Metadata resistance**
 - **Cover traffic**: a jittered ~1/sec stream of decoy frames, byte-
