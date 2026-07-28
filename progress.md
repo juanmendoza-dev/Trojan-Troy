@@ -919,3 +919,21 @@ and `decisions.md` for why things were done a certain way.
   marginal, since it shares one code path with presence/ack and differs only in key
   derivation, which is unit-tested (round-trip, cross-class rejection, independent
   counters).
+
+- **2026-07-28** — **Jay sent a real 60-second voice message end-to-end on v5 and it
+  went through** — closing the last verification gap automation couldn't reach, and at
+  the worst case, since 60s is `MAX_RECORDING_MS`. Capture, encryption at maximum size,
+  transit through the relay and decrypt on the far side all confirmed by hand.
+  **Which surfaced a latent device-dependent bug, now fixed:** `audio/recorder.ts` created
+  its `MediaRecorder` with only a mimeType, so the **bitrate was whatever the browser
+  chose**. Clip size feeds a hard ceiling — the relay closes any frame over its 2 MiB
+  `maxPayload` — and a 60s clip at one browser's default measured **86.5%** of that cap.
+  Devices pick different defaults and Safari falls back to mp4/AAC, so a slightly
+  higher-bitrate device would have exceeded the cap and had its socket closed with 1009,
+  presenting as "voice just doesn't work on my phone" with nothing in the UI to explain
+  it. Pinned `audioBitsPerSecond = 32_000` (a normal voice bitrate; a browser that doesn't
+  honour it clamps or ignores it rather than throwing, so there's no regression risk).
+  Re-measured with a throwaway test (written, run, deleted): a full-length clip is now
+  **415,255 bytes on the wire = 19.8% of the cap**, a ~5× margin instead of a ~1.15×
+  one. Bandwidth improves as a side effect. The only cost is some fidelity, most
+  noticeable on the AAC fallback path — the constant is one line if it ever needs raising.
