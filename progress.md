@@ -706,6 +706,56 @@ and `decisions.md` for why things were done a certain way.
   `docs/superpowers/plans/2026-07-25-traffic-analysis-cover.md`. Folded into
   `feat/crypto-round-integration` on 2026-07-28 (see that entry).
 
+- **2026-07-25** — At-rest profile encryption (review S1, spec ④) built on
+  `feat/at-rest-profile-vault`. The profile PIN now derives a real Argon2id key
+  (`crypto_pwhash`) that seals the avatar at rest with `crypto_secretbox`; the old
+  fast-hash access check (`crypto_generichash`) is removed with no fallback. Spec:
+  `docs/superpowers/specs/2026-07-23-at-rest-encryption-design.md`; plan:
+  `docs/superpowers/plans/2026-07-25-at-rest-profile-vault.md`; rationale in
+  `decisions.md` (2026-07-25). **All 5 tasks done:**
+  - Task 1 (`a084697`) — `libsodium-wrappers` → `-sumo` via a direct import-site swap
+    of all ~10 sodium imports (the config-alias approach couldn't typecheck against
+    the self-referential sumo `.d.ts`); `crypto_pwhash` now available. Bundle
+    negligibly larger (1,606 → 1,608 kB, gzip ~499 kB). Reviewed clean.
+  - Task 2 (`fa94c19`) — new `profiles/vault.ts` `sealProfileSecrets`/
+    `openProfileSecrets` (`crypto_secretbox` + `TTr-vault-v1` magic sentinel); returns
+    `null` on wrong key / tamper / bad-base64 / wrong-magic. 5 tests. Reviewed clean.
+  - Task 3 (`df803d7`) — `deriveVaultKey` + `defaultKdfParams` (Argon2id
+    INTERACTIVE / ARGON2ID13) added to `pin.ts`; `newSalt` sizes to
+    `crypto_pwhash_SALTBYTES`. (Its dedicated task-review was interrupted; folded into
+    the whole-branch review instead.)
+  - Task 4 (`98cfc1f`) — storage-format split + migration + UI wiring, fast hash
+    removed. `StoredProfile` (clear `id`/`name`/`createdAt`/`pinSalt`/`kdf` + opaque
+    `cipher`) vs runtime in-memory `Profile` (decrypted `avatar`); new
+    `ActiveProfile` union. `profileStore` retyped, migration deletes any legacy record
+    lacking `cipher`/`kdf` on load (purging cleartext avatars). `hashPin`/`verifyPin`
+    deleted + a guard test asserts no fast-hash export survives. `App.tsx` holds
+    `activeProfile` as in-memory state defaulting to Anonymous — **reload reverts to
+    Anonymous (Jay's R2 call)**, nothing named without the PIN re-entered.
+    `ProfileModal` derives+seals on create, derives+opens on unlock, shows the default
+    thumbnail until unlock. `resolveActiveProfile`/`get/setActiveProfileId` removed;
+    obsolete `profileModel.test.ts` deleted.
+  - Task 5 — this log + `decisions.md`.
+  **Verification:** `npm run typecheck` clean, **183** vitest tests green (net −3
+  deleted model tests +2 new: store legacy-drop, pin no-fast-hash guard), `npm run
+  build` green. A throwaway real-module integration test (written, run, deleted)
+  confirmed the module-level flow: create seals the avatar → the stored record holds
+  `cipher`/`kdf`/`pinSalt` and **no** cleartext avatar → the correct PIN recovers it →
+  a wrong PIN returns `null` → a legacy cleartext record is purged on load. **Then a
+  real-browser end-to-end run** (headless-Chromium Playwright script against the live
+  dev server, written/run/deleted — the same pattern prior visual phases used) drove
+  the actual UI at `/` and confirmed all 17 checks: start Anonymous → open modal →
+  create a profile *with an uploaded photo* → active shows the decrypted data-URL
+  avatar → **DevTools-equivalent IndexedDB read** shows one record with
+  `cipher`/`kdf.alg`/`pinSalt`, **no `avatar` field, and no `data:image` bytes** at
+  rest → **reload reverts to Anonymous (R2)** while the profile still lists →
+  wrong PIN shows "Wrong PIN — try again" and does not unlock → correct PIN unlocks
+  and restores the avatar in memory → zero page/console errors throughout. **Only
+  residual for a human:** a live two-browser *peer sharing* round-trip (needs the relay
+  running + a second client) — the profile-card wire format is unchanged by this work,
+  so it's confirmatory. Folded into `feat/crypto-round-integration` on 2026-07-28
+  (see that entry).
+
 - **2026-07-26** — Round-2 crypto hardening kicked off (A/B/D/E green-lit by Jay —
   backend-only, UX-invisible; see `decisions.md` 2026-07-26). **Feature D — hardened
   handshake — built** on `feat/hardened-handshake` off `main`, first in the round

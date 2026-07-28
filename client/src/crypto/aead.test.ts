@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { aeadEncrypt, aeadDecrypt } from "./aead";
 
 const enc = (s: string) => sodium.from_string(s);

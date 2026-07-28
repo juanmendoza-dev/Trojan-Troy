@@ -1,13 +1,23 @@
 import type { DeviceKind } from "./device";
+import type { KdfParams } from "./pin";
 
+// Persisted shape: clear listing metadata + one opaque sealed blob. The avatar
+// (and future per-profile history) live only inside `cipher`.
+export interface StoredProfile {
+  id: string;
+  name: string;
+  createdAt: number;
+  pinSalt: string; // b64, the Argon2id salt
+  kdf: KdfParams; // params to reproduce the key (stored so cost can rise later)
+  cipher: string; // b64(nonce ‖ secretbox({ magic, avatar }))
+}
+
+// Runtime, decrypted view of the active profile — avatar held in memory only.
 export interface Profile {
   id: string;
   name: string;
-  /** Uploaded photo as a data-URL, or null → the bundled default picture. */
-  avatar: string | null;
-  pinSalt: string;
-  pinHash: string;
   createdAt: number;
+  avatar: string | null;
 }
 
 export type ActiveProfile =
@@ -24,12 +34,3 @@ export interface PeerProfile {
 }
 
 export const ANONYMOUS_ID = "anonymous";
-
-// Resolve which profile is active from the stored id. Anything unknown (never
-// set, the anonymous sentinel, or an id whose profile was deleted) falls back
-// to Anonymous — the always-present, share-nothing default.
-export function resolveActiveProfile(profiles: Profile[], activeId: string | null): ActiveProfile {
-  if (!activeId || activeId === ANONYMOUS_ID) return { kind: "anonymous" };
-  const profile = profiles.find((p) => p.id === activeId);
-  return profile ? { kind: "named", profile } : { kind: "anonymous" };
-}

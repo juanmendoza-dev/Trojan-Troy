@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { RelayClient, type Envelope, PROTOCOL_VERSION } from "./net/relayClient";
 import { parseInviteCode } from "./net/inviteLink";
 import { generateKeypair, deriveSessionKeys, type Keypair, type SessionKeys } from "./crypto/keys";
@@ -44,16 +44,21 @@ import { HandshakeJourney } from "./screens/HandshakeJourney";
 import { ErrorScreen } from "./screens/ErrorScreen";
 import { scenarioFromServerMessage, type ErrorScenario } from "./screens/errorScenario";
 import { ProfileModal } from "./components/ProfileModal";
-import { resolveActiveProfile, ANONYMOUS_ID, type Profile, type PeerProfile } from "./profiles/profileModel";
+import {
+  ANONYMOUS_ID,
+  type StoredProfile,
+  type ActiveProfile,
+  type Profile,
+  type PeerProfile,
+} from "./profiles/profileModel";
 import {
   listProfiles,
   putProfile,
   deleteProfile,
-  getActiveProfileId,
   getShareProfile,
-  setActiveProfileId as persistActiveProfileId,
   setShareProfile as persistShareProfile,
 } from "./profiles/profileStore";
+import type { ProfileSecrets } from "./profiles/vault";
 import { detectDevice } from "./profiles/device";
 import { parseScreenOverride } from "./dev/screenOverride";
 
@@ -161,10 +166,11 @@ export default function App() {
   messagesRef.current = messages;
   const { setTheme } = useTheme();
 
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [activeProfileId, setActiveProfileId] = useState<string>(() => getActiveProfileId());
+  const [profiles, setProfiles] = useState<StoredProfile[]>([]);
+  // Reload starts Anonymous (R2): a named identity requires the PIN re-entered.
+  const [activeProfile, setActiveProfile] = useState<ActiveProfile>({ kind: "anonymous" });
+  const activeProfileId = activeProfile.kind === "named" ? activeProfile.profile.id : ANONYMOUS_ID;
   const [profilesOpen, setProfilesOpen] = useState(false);
-  const activeProfile = resolveActiveProfile(profiles, activeProfileId);
   const [ownDevice] = useState(detectDevice);
   const selfCard: PeerProfile = {
     name: activeProfile.kind === "named" ? activeProfile.profile.name : "Anonymous",
@@ -186,19 +192,27 @@ export default function App() {
     void listProfiles().then(setProfiles);
   }, []);
 
-  function selectProfile(id: string) {
-    persistActiveProfileId(id);
-    setActiveProfileId(id);
+  function toRuntime(p: StoredProfile, secrets: ProfileSecrets): Profile {
+    return { id: p.id, name: p.name, createdAt: p.createdAt, avatar: secrets.avatar };
   }
-  async function handleCreateProfile(profile: Profile) {
+
+  async function handleCreateProfile(profile: StoredProfile, secrets: ProfileSecrets) {
     await putProfile(profile);
     setProfiles(await listProfiles());
-    selectProfile(profile.id);
+    setActiveProfile({ kind: "named", profile: toRuntime(profile, secrets) });
+  }
+  function handleSelectNamed(profile: StoredProfile, secrets: ProfileSecrets) {
+    setActiveProfile({ kind: "named", profile: toRuntime(profile, secrets) });
+  }
+  function handleSelectAnonymous() {
+    setActiveProfile({ kind: "anonymous" });
   }
   async function handleDeleteProfile(id: string) {
     await deleteProfile(id);
     setProfiles(await listProfiles());
-    if (activeProfileId === id) selectProfile(ANONYMOUS_ID);
+    if (activeProfile.kind === "named" && activeProfile.profile.id === id) {
+      setActiveProfile({ kind: "anonymous" });
+    }
   }
 
   const pendingReadIdsRef = useRef<Set<string>>(new Set());
@@ -885,9 +899,9 @@ export default function App() {
     );
   }
   if (devOverride?.screen === "profiles") {
-    const sample: Profile[] = [
-      { id: "s1", name: "Jay", avatar: null, pinSalt: "", pinHash: "", createdAt: 0 },
-      { id: "s2", name: "Work", avatar: null, pinSalt: "", pinHash: "", createdAt: 0 },
+    const sample: StoredProfile[] = [
+      { id: "s1", name: "Jay", createdAt: 0, pinSalt: "cw==", kdf: { ops: 2, mem: 67108864, alg: 2 }, cipher: "cw==" },
+      { id: "s2", name: "Work", createdAt: 0, pinSalt: "cw==", kdf: { ops: 2, mem: 67108864, alg: 2 }, cipher: "cw==" },
     ];
     return (
       <>
@@ -935,8 +949,8 @@ export default function App() {
           <ProfileModal
             profiles={profiles}
             activeId={activeProfileId}
-            onSelectAnonymous={() => selectProfile(ANONYMOUS_ID)}
-            onSelectNamed={(profile) => selectProfile(profile.id)}
+            onSelectAnonymous={handleSelectAnonymous}
+            onSelectNamed={handleSelectNamed}
             onCreate={handleCreateProfile}
             onDelete={handleDeleteProfile}
             onClose={() => setProfilesOpen(false)}

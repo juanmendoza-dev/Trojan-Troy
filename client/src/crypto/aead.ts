@@ -1,4 +1,4 @@
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { toBase64, fromBase64 } from "./encoding";
 
 // Authenticated encryption with associated data (XChaCha20-Poly1305 IETF).
