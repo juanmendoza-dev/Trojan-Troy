@@ -61,8 +61,8 @@ export function StartJoinScreen({
         <span className="start-join-screen__badge-dot" />
         Clear to talk ~{" "}
         <span className="start-join-screen__cipher-group">
-          <RainbowText text="SHA-256" className="start-join-screen__cipher" />
-          <ScrambleText text="encryption method" className="start-join-screen__cipher-sub" />
+          <RainbowText text="X25519 + ML-KEM-768" className="start-join-screen__cipher" />
+          <ScrambleText text="post-quantum hybrid key exchange" className="start-join-screen__cipher-sub" />
         </span>
       </div>
 

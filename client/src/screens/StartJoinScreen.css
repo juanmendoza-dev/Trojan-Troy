@@ -43,9 +43,10 @@
   50% { opacity: 0.55; box-shadow: 0 0 0 5px rgba(143, 166, 255, 0); }
 }
 
-/* The "SHA-256" cipher tag — bold like the Trojan Troy wordmark, always
-   sweeping the app's spark-gradient palette letter by letter (see RainbowText).
-   A small "encryption method" descriptor stacks beneath it. */
+/* The "X25519 + ML-KEM-768" cipher tag — bold like the Trojan Troy wordmark,
+   always sweeping the app's spark-gradient palette letter by letter (see
+   RainbowText). A small "post-quantum hybrid key exchange" descriptor stacks
+   beneath it. */
 .start-join-screen__cipher {
   font-weight: 800;
   letter-spacing: 1.5px;

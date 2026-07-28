@@ -83,7 +83,7 @@ export function LoadingScreen({ roomCode, durationMs = 2600 }: LoadingScreenProp
             <span className="loading-screen__check" style={{ animationDelay: "2.2s" }}>
               <Icon name="check" size={11} strokeWidth={3} />
             </span>
-            <span>Keys exchanged through the relay</span>
+            <span>Hybrid post-quantum keys agreed — X25519 + ML-KEM-768</span>
           </div>
           <div className="loading-screen__row" style={{ animationDelay: "2.1s" }}>
             <span className="loading-screen__pending" />

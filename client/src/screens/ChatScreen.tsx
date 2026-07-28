@@ -178,7 +178,7 @@ export function ChatScreen({
       <div className="chat-screen__body">
         <Sidebar
           roomCode={roomCode}
-          onNewChat={() => {}}
+          onNewChat={onLeave}
           sentMessages={sentTexts}
           roomHidden={roomHidden}
           onToggleRoomHidden={() => setRoomHidden((v) => !v)}

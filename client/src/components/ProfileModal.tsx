@@ -252,6 +252,8 @@ function CreateView({
       <label className="profile-form__label">4-digit PIN</label>
       <input
         className="profile-form__input profile-form__input--pin"
+        type="password"
+        autoComplete="new-password"
         value={pin}
         onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
         inputMode="numeric"
@@ -259,6 +261,8 @@ function CreateView({
       />
       <input
         className="profile-form__input profile-form__input--pin"
+        type="password"
+        autoComplete="new-password"
         value={confirm}
         onChange={(event) => setConfirm(event.target.value.replace(/\D/g, "").slice(0, 4))}
         inputMode="numeric"
@@ -320,6 +324,8 @@ function UnlockView({
       <span className="profile-form__unlock-name">{profile.name}</span>
       <input
         className={`profile-form__input profile-form__input--pin${wrong ? " profile-form__input--wrong" : ""}`}
+        type="password"
+        autoComplete="current-password"
         value={pin}
         onChange={(event) => {
           setWrong(false);
