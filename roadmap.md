@@ -185,12 +185,27 @@ Four specs under `docs/superpowers/specs/2026-07-23-*`, all merged:
 
 ## Mobile web support (added 2026-07-23)
 Mobile web via a hamburger drawer plus responsive/app-like polish. No PWA.
+Dispatched as WP0 + six parallel packages; see
+`docs/superpowers/specs/2026-07-23-mobile-web-support-design.md`.
 - [x] Playwright set up for browser and mobile testing.
-- [x] Responsive foundation (viewport, reset, safe-area, app-height).
-- [ ] Finish the pass on `feat/mobile-web-support` (PR #10, still WIP). The core
-      flow already works on a phone — no overflow, and the room code, QR and copy
-      buttons are all reachable — but several screens still render at desktop
-      scale (the waiting-screen radar overflows, the security ticker clips).
+- [x] WP0 — responsive foundation (viewport, reset, safe-area, app-height).
+- [x] WP-A/B/C/E/F — entry screens, loading backdrop, safety number, message
+      content, modals and popovers. **Merged in PR #10.**
+- [x] WP-D — chat shell: hamburger drawer + scrim, single-column chat, 16px
+      composer with ≥44px controls, stacked voice preview, auto-scroll to newest,
+      data-viz paused while the drawer is parked.
+- [ ] Manual real-device pass: soft-keyboard riding and true iOS safe-area insets.
+      Playwright emulation cannot raise a keyboard or report real notch insets, so
+      this is the one part of the definition of done that automation can't close.
+
+**Correcting an earlier note here:** this section previously said PR #10 was
+"still WIP" and that what remained was cosmetic — "the core flow already works on
+a phone." PR #10 is merged, and the core flow did **not** work: WP-D was never
+built, so the chat screen — which *is* the core flow — was unusable on a phone.
+The 256px sidebar took 256 of a 390px viewport, message text rendered one
+character per line (a bubble measured 34px wide × 528px tall), and the composer's
+mic and send buttons sat 130px off the right edge. It reported zero horizontal
+overflow the whole time; see the verification note in `decisions.md`.
 
 ---
 
