@@ -8,9 +8,17 @@ import {
 } from "../audio/recorder";
 import { Icon } from "../components/Icon";
 
+export type RecorderStatus = "idle" | "recording" | "preview" | "error";
+
 interface VoiceRecorderProps {
   onSend: (blob: Blob, mimeType: string) => void;
   onRecordingChange?: (isRecording: boolean) => void;
+  /**
+   * Every status change, not just recording. The composer needs it so that on
+   * mobile a busy recorder can take over the whole row instead of being squeezed
+   * in beside the input.
+   */
+  onStatusChange?: (status: RecorderStatus) => void;
 }
 
 type RecorderState =
@@ -19,7 +27,7 @@ type RecorderState =
   | { status: "preview"; blob: Blob; mimeType: string; audioUrl: string }
   | { status: "error"; message: string };
 
-export function VoiceRecorder({ onSend, onRecordingChange }: VoiceRecorderProps) {
+export function VoiceRecorder({ onSend, onRecordingChange, onStatusChange }: VoiceRecorderProps) {
   const [state, setState] = useState<RecorderState>({ status: "idle" });
   const [elapsedMs, setElapsedMs] = useState(0);
   const handleRef = useRef<RecordingHandle | null>(null);
@@ -29,10 +37,14 @@ export function VoiceRecorder({ onSend, onRecordingChange }: VoiceRecorderProps)
   stateRef.current = state;
   const onRecordingChangeRef = useRef(onRecordingChange);
   onRecordingChangeRef.current = onRecordingChange;
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
 
-  // Report recording start/stop up so the peer can see a "recording…" indicator.
+  // Report recording start/stop up so the peer can see a "recording…" indicator,
+  // and the whole status so the composer can lay itself out around us.
   useEffect(() => {
     onRecordingChangeRef.current?.(state.status === "recording");
+    onStatusChangeRef.current?.(state.status);
   }, [state.status]);
 
   useEffect(() => {
@@ -42,6 +54,10 @@ export function VoiceRecorder({ onSend, onRecordingChange }: VoiceRecorderProps)
   }, [state.status]);
 
   useEffect(() => {
+    // Set on the way in, not just cleared on the way out: StrictMode mounts,
+    // unmounts and re-mounts in dev, and without this the flag stayed false for
+    // the rest of the session — so a finished recording never became a preview.
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       handleRef.current?.stop();
@@ -120,12 +136,16 @@ export function VoiceRecorder({ onSend, onRecordingChange }: VoiceRecorderProps)
     return (
       <div className="composer__preview">
         <audio src={state.audioUrl} controls />
-        <button type="button" className="composer__send" onClick={handleSend}>
-          Send
-        </button>
-        <button type="button" className="composer__discard" onClick={handleDiscard}>
-          Discard
-        </button>
+        {/* Grouped so mobile can stack the clip over its two buttons. The wrapper
+            carries the same 10px gap as the row, so desktop is unchanged. */}
+        <div className="composer__preview-actions">
+          <button type="button" className="composer__send" onClick={handleSend}>
+            Send
+          </button>
+          <button type="button" className="composer__discard" onClick={handleDiscard}>
+            Discard
+          </button>
+        </div>
       </div>
     );
   }

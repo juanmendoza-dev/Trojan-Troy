@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { VoiceRecorder } from "../screens/VoiceRecorder";
+import { VoiceRecorder, type RecorderStatus } from "../screens/VoiceRecorder";
 import { Icon } from "./Icon";
 import "./Composer.css";
 
@@ -15,6 +15,10 @@ const SENT_ANIMATION_MS = 300;
 export function Composer({ onSend, onSendVoice, onTypingChange, onRecordingChange }: ComposerProps) {
   const [value, setValue] = useState("");
   const [justSent, setJustSent] = useState(false);
+  // A busy voice recorder takes the whole row on mobile — there isn't width for
+  // it *and* the text input at 390px. Published as an attribute so Composer.css
+  // can do the swap at the breakpoint without a second source of truth.
+  const [recorderStatus, setRecorderStatus] = useState<RecorderStatus>("idle");
 
   useEffect(() => {
     if (!justSent) return;
@@ -38,7 +42,7 @@ export function Composer({ onSend, onSendVoice, onTypingChange, onRecordingChang
   }
 
   return (
-    <form className="composer" onSubmit={handleSubmit}>
+    <form className="composer" data-recorder={recorderStatus} onSubmit={handleSubmit}>
       <div className={`composer__input-wrap${justSent ? " composer__input-wrap--sent" : ""}`}>
         <input
           className="composer__input"
@@ -49,7 +53,11 @@ export function Composer({ onSend, onSendVoice, onTypingChange, onRecordingChang
           autoComplete="off"
         />
       </div>
-      <VoiceRecorder onSend={onSendVoice} onRecordingChange={onRecordingChange} />
+      <VoiceRecorder
+        onSend={onSendVoice}
+        onRecordingChange={onRecordingChange}
+        onStatusChange={setRecorderStatus}
+      />
       <button className="composer__send-button" type="submit" aria-label="Send">
         <Icon name="arrow-up" size={18} strokeWidth={2.25} />
       </button>
