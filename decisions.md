@@ -8,6 +8,29 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-28 — Pinned the voice recording bitrate (`audioBitsPerSecond = 32_000`)
+  rather than leaving it to the browser.** Found while confirming Jay's successful
+  real 60s voice send. `audio/recorder.ts` passed only a mimeType to
+  `MediaRecorder`, so bitrate was the browser's choice — and clip size feeds a
+  **hard ceiling**: the relay closes any frame over its 2 MiB `maxPayload`. A 60s
+  clip at one browser's default measured 1.35 MB → 1,813,355 bytes on the wire once
+  padded, sealed and base64'd, i.e. **86.5% of the cap**, leaving only ~15% headroom
+  in body size. Since devices pick different defaults (and Safari falls back to
+  mp4/AAC rather than Opus), a slightly higher-bitrate device would have blown the
+  cap and had its socket closed with 1009 — surfacing as "voice doesn't work on my
+  phone" with nothing in the UI explaining it. An unbounded input against a hard
+  limit is the wrong shape, so the input is now bounded. Calls:
+  (1) **32 kbps**, a normal voice bitrate — re-measured at **415,255 bytes = 19.8%**
+  of the cap for a full-length clip, a ~5× margin. Bandwidth improves too.
+  (2) **Pin the client rather than raise the relay's `maxPayload`.** Raising the cap
+  would keep fidelity but widens a production DoS surface, and the cap is doing real
+  work; bounding what the client can produce is the safer half of the trade.
+  (3) **Passed unconditionally** — a browser that doesn't honour
+  `audioBitsPerSecond` clamps or ignores it rather than throwing, so there's no
+  fallback path to write. The cost is some fidelity, most noticeable on the AAC
+  path; it's one constant if it ever needs raising.
+  (Decided by: Jay (approved the trade) + Claude (found it, picked the value))
+
 - **2026-07-28 — Voice messages cannot be verified by headless Playwright in this
   environment; verify the voice *crypto* path with a real-module test instead.**
   Worth recording so nobody re-chases it. `--use-fake-device-for-media-stream` gives
