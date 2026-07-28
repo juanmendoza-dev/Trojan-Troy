@@ -877,3 +877,45 @@ and `decisions.md` for why things were done a certain way.
   chain already re-seeding with fresh ML-KEM secrets every ~30s, E reduces to re-running
   the *classical* handshake for a fresh ephemeral X25519 identity, a fresh transcript, and
   a new safety number. Re-scope it before building rather than building it as sketched.
+
+- **2026-07-28** — **PR #15 merged to `main`** (`1dcb5b4`, GitHub merge commit, verified) —
+  the hardened handshake + traffic-analysis cover traffic + at-rest vault are now on
+  `main` at `PROTOCOL_VERSION` 4. PRs #13/#14 auto-closed as merged (their commits are
+  ancestors of `main` via the integration branch). PR #16 (A+B) retargeted from the
+  integration branch to `main`; still clean, and its diff is now just A+B.
+
+- **2026-07-28** — **Second, deeper verification pass on PR #16**, prompted by a real gap
+  in the first one: **static-channel failures are silent by design** (a dropped presence
+  beat or receipt produces no bubble and no console error), so the original 18/18 run
+  could not distinguish "receipts working" from "receipts silently broken" — and #16
+  *changed* that path by adding per-channel counters and a replay window. A second
+  two-browser script therefore asserted on the UI effects those channels produce, which
+  is the only way a silent drop surfaces. **12/13**, at the **shipped 30s rekey interval**
+  (not a shortened one):
+  - **presence channel** — the peer's typing indicator appears *and* clears again, so
+    state transitions flow, not just a single frame;
+  - **ack channel** — the sender's own bubble advances to `message-status--read`, which
+    only happens if the peer's receipt decrypted;
+  - **PQ fold at production cadence** — `pqFold` 0 → **2** during a 50s soak, both sides
+    agreeing, nothing left pending; text and receipts both still working *after* the folds;
+  - **leave/rejoin** — returns to the entry screen and a fresh session starts cleanly
+    (the zeroize path now wipes header keys and pending PQ secrets);
+  - no decryption-error bubbles and no console errors anywhere in the run.
+  **The one failure was voice, and it is NOT a v5 regression** — established by a
+  controlled re-run of the same script against `main` (v4), where it fails identically.
+  Headless Chromium's fake audio device (`--use-fake-device-for-media-stream`) never
+  settles `MediaRecorder`'s stop, so the preview step never appears; `audio/recorder.ts`
+  and `VoiceRecorder.tsx` are untouched by #16 in any case. (The first attempt also had a
+  genuine test bug — `.composer__stop` / `.composer__send` carry no `aria-label`, so the
+  original selectors matched the *text* composer's Send.)
+  Since the browser can't reach voice, the part of it that #16 *does* own — the crypto
+  path — was verified with a throwaway real-module test (written, run, deleted): a 700 KB
+  clip round-trips **byte-for-byte** with its mimeType, a voice clip interleaves with text
+  without desyncing the ratchet across a chain flip, and — the check worth having —
+  **a worst-case 60s clip's envelope is 1,813,355 bytes, 86.5% of the relay's 2 MiB
+  `maxPayload`**, so v5's extra 84-byte header per message has not pushed voice over the
+  cap. **Still unverified by automation:** a real browser voice send (needs a human, and
+  is equally unverifiable on `main`), and the `profile` static channel in a browser —
+  marginal, since it shares one code path with presence/ack and differs only in key
+  derivation, which is unit-tested (round-trip, cross-class rejection, independent
+  counters).

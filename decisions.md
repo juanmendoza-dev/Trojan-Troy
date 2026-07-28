@@ -8,6 +8,32 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-28 — Voice messages cannot be verified by headless Playwright in this
+  environment; verify the voice *crypto* path with a real-module test instead.**
+  Worth recording so nobody re-chases it. `--use-fake-device-for-media-stream` gives
+  Chromium a synthetic mic and recording *starts* fine (the peer even sees the
+  "recording" presence state), but `MediaRecorder`'s stop never settles, so
+  `handle.result` never resolves and the preview step never appears. Confirmed to be
+  an environment limitation, not a code regression, by running the identical script
+  against `main` (v4) — it fails the same way there. So: for anything touching the
+  voice path, drive the crypto with a throwaway real-module test (frame → sealContent
+  → openMsg at realistic clip sizes) and leave the capture/playback UI to a human
+  eyeball. Two selector traps if anyone retries: `.composer__stop` and
+  `.composer__send` have **no** `aria-label`, and `[aria-label="Send"]` matches the
+  *text* composer's button instead. (Decided by: Claude, during PR #16 verification.)
+
+- **2026-07-28 — Assert on UI effects, not absence of errors, when testing the static
+  channels.** A dropped presence beat / receipt / profile card produces **no** error
+  bubble and **no** console message — that silence is deliberate (a malicious relay
+  must not get a decrypt oracle), and `isSilentContentDrop` covers exactly those
+  cases. The consequence for testing is that "0 errors, 2 clean bubbles" looks
+  identical whether receipts work or are completely broken, which made PR #16's first
+  18/18 run unable to prove the very path #16 changed (static channels gained
+  counters + a replay window). Any future static-channel test must assert on the
+  visible effect — `.presence-indicator` appearing *and* clearing,
+  `.message-status--delivered/--read` on the sender's own bubble — not on the absence
+  of errors. (Decided by: Claude, after noticing the gap in the first pass.)
+
 - **2026-07-28 — Round-2 A+B built as one wire revision: post-quantum ratchet +
   sealed ratchet headers. `PROTOCOL_VERSION` 4 → 5. PQ folds are periodic (~30s),
   not per-step — Jay's call.** The two features were co-designed because they fight
