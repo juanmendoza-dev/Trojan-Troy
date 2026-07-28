@@ -1,5 +1,7 @@
 # Trojan Troy
 
+[![CI](https://github.com/juanmendoza-dev/Trojan-Troy/actions/workflows/ci.yml/badge.svg)](https://github.com/juanmendoza-dev/Trojan-Troy/actions/workflows/ci.yml)
+
 **Trojan Troy smuggles your conversations past everyone but the person you're talking to.**
 
 Text and voice messages encrypted end-to-end. A safety-number handshake so you know it's really them. A relay server that is *architecturally incapable* of reading a single word — not "promises not to," can't.
