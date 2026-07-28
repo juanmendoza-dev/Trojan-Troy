@@ -18,7 +18,7 @@ import sodium from "libsodium-wrappers-sumo";
 
 export const HEADER_LEN = 44;
 export const SEALED_HEADER_LEN = 84;
-export const HEADER_VERSION = 5;
+export const HEADER_VERSION = 6;
 
 // Cleartext-equivalent key classes. 0 is ratcheted content; 1-3 are the static
 // per-channel classes (presence/ack/profile), which are not ratcheted and so

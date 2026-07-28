@@ -29,6 +29,28 @@ export type Channel =
   | "pqoffer"
   | "pqaccept";
 
+// Every channel `unframe` will accept. Post-authentication this is peer-only
+// data, but the routing field still gets an allowlist rather than whatever the
+// JSON happened to hold. Must stay in sync with the Channel union above — and
+// note "pqoffer"/"pqaccept" are the easy ones to forget: they carry the
+// post-quantum rekey and are dropped after decryption, so omitting them degrades
+// PQ healing SILENTLY instead of visibly.
+const CHANNELS: readonly Channel[] = [
+  "text",
+  "voice",
+  "presence",
+  "ack",
+  "profile",
+  "primer",
+  "cover",
+  "pqoffer",
+  "pqaccept",
+];
+
+function isChannel(v: unknown): v is Channel {
+  return typeof v === "string" && (CHANNELS as readonly string[]).includes(v);
+}
+
 export interface Frame {
   channel: Channel;
   id: string;
@@ -80,6 +102,7 @@ export function unframe(bytes: Uint8Array): Frame {
   if (2 + metaLen > inner.length) throw new Error("bad meta length");
 
   const meta = JSON.parse(utf8d.decode(inner.subarray(2, 2 + metaLen)));
+  if (!isChannel(meta.ch)) throw new Error("unknown frame channel");
   const body = inner.subarray(2 + metaLen);
   return {
     channel: meta.ch,

@@ -11,6 +11,7 @@ import {
   deriveChannelSubkey,
   deriveHeaderKeys,
   deriveHeaderSubkey,
+  bindDirKey,
 } from "../crypto/kdf";
 import { aeadEncrypt, aeadDecrypt } from "../crypto/aead";
 import {
@@ -130,12 +131,18 @@ export async function initSession(
     role === "initiator"
       ? await initAlice(rk0, peerPublicKey, i2r, r2i)
       : await initBob(rk0, ownKeypair, i2r, r2i);
+  // v6: bind each direction to RK0 before deriving the static subkeys, so
+  // presence/ack/profile inherit the hybrid-PQ + transcript binding instead of
+  // resting on X25519 alone. Bound independently per direction — never sorted —
+  // so tx and rx stay distinct and a reflected frame still can't open.
+  const txDir = await bindDirKey(sessionKeys.tx, rk0);
+  const rxDir = await bindDirKey(sessionKeys.rx, rk0);
   return {
     ratchet,
-    txSub: await deriveSubkeys(sessionKeys.tx),
-    rxSub: await deriveSubkeys(sessionKeys.rx),
-    txHdr: await deriveHdrSubkeys(sessionKeys.tx),
-    rxHdr: await deriveHdrSubkeys(sessionKeys.rx),
+    txSub: await deriveSubkeys(txDir),
+    rxSub: await deriveSubkeys(rxDir),
+    txHdr: await deriveHdrSubkeys(txDir),
+    rxHdr: await deriveHdrSubkeys(rxDir),
     txCounter: freshCounters(),
     rxGuard: freshGuards(),
     rootKey: rk0,
@@ -215,10 +222,14 @@ export async function openMsg(sc: SessionCrypto, env: Envelope): Promise<Frame> 
     if (header.cls !== CLASS_BY_CHANNEL[channel]) {
       throw new Error("static header class does not match its key");
     }
+    // Authenticate the body BEFORE consuming the counter (v6). The other order
+    // let a relay that kept an authentic header but mangled the body burn that
+    // counter, permanently rejecting the genuine frame as a replay. Costs one
+    // extra AEAD open on a replay — negligible, opening the header was already one.
+    const plain = await aeadDecrypt(sc.rxSub[channel], bodyB64, encHeader);
     if (!acceptStaticCounter(sc.rxGuard[channel], header.n)) {
       throw new Error("replayed or stale static frame");
     }
-    const plain = await aeadDecrypt(sc.rxSub[channel], bodyB64, encHeader);
     return unframe(plain);
   }
   throw new Error("no key opened this msg");
