@@ -13,7 +13,21 @@
 // gains a sending chain (see the Double Ratchet init); it renders nothing.
 // "cover" is decoy traffic (see traffic-analysis spec) — also decrypted then
 // dropped, byte-indistinguishable from real content on the wire.
-export type Channel = "text" | "voice" | "presence" | "ack" | "profile" | "primer" | "cover";
+// "pqoffer"/"pqaccept" carry the post-quantum ratchet's ML-KEM public key and
+// ciphertext. They ride the ordinary ratcheted content path — rather than the
+// ratchet header — precisely so their ~1.1KB bodies get padded into the same size
+// buckets as text and cover, instead of making every chain flip visibly larger.
+// Both are decrypted then dropped, like "primer" and "cover".
+export type Channel =
+  | "text"
+  | "voice"
+  | "presence"
+  | "ack"
+  | "profile"
+  | "primer"
+  | "cover"
+  | "pqoffer"
+  | "pqaccept";
 
 export interface Frame {
   channel: Channel;

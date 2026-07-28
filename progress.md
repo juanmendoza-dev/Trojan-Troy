@@ -28,6 +28,7 @@ and `decisions.md` for why things were done a certain way.
 | Round 2 — D: Hardened handshake (commit-then-reveal + transcript binding) | Built on `feat/hardened-handshake`, now folded into `feat/crypto-round-integration` — new opaque `commit` round (keys committed before either side reveals) + full-transcript binding into `RK₀`, `PROTOCOL_VERSION` 3→4, no server change, no new dep. typecheck / **185** tests / build green (transcript ×5 + kdf/ratchetSession binding cases). First of the round-2 four (A/B/D/E; see `decisions.md` 2026-07-26) — A+B and E still to build. |
 | PQ hardening ④ — at-rest Argon2id profile vault | Built on `feat/at-rest-profile-vault`, now folded into `feat/crypto-round-integration` — PIN derives a real Argon2id key (`crypto_pwhash`, sumo build) sealing the avatar with `crypto_secretbox`; fast-hash access check removed, legacy cleartext records purged on load, reload reverts to Anonymous. typecheck/**183** tests/build green; real-browser Playwright run 17/17 (IndexedDB holds `cipher`/`kdf`/`pinSalt` and no avatar bytes). |
 | **Crypto round integration** — D + ③ + ④ merged onto one branch | **Built + verified on `feat/crypto-round-integration`** — all three unmerged crypto branches folded together (no code conflicts; ledger conflicts resolved), the split-libsodium defect fixed, `libsodium-wrappers` dropped for sumo-only. typecheck clean / **201** tests / build green (1,610 kB, no double wasm) + **two-browser Playwright run 19/19** — matching safety numbers on both sides, commit-before-pubkey on the wire, one `kemct`, cover traffic on both sides with no stray bubbles, joiner-first send at 88 ms, no console errors. **PR open against `main`, not merged** (merging deploys). |
+| Round 2 — A+B: post-quantum ratchet + sealed ratchet headers | **Built + verified on `feat/pq-ratchet-header-encryption`** (off the integration branch) — one wire revision, `PROTOCOL_VERSION` 4→5. The `msg` envelope is now `{type, payload}` and nothing else: the key class, ratchet public key and chain counters live in a fixed 84-byte sealed header. Fresh ML-KEM secrets fold into the root chain every ~30s via two new in-band channels, so post-compromise healing is post-quantum too. Static channels gained replay protection. typecheck / **243** tests / build green + **two-browser Playwright run 18/18** — 7 folds, both sides in sync, messages still decrypting after them. No server change. **Not merged.** Remaining in round 2: **E** (periodic rekey), which A largely subsumes — re-scope before building. |
 
 ## Log
 
@@ -821,3 +822,100 @@ and `decisions.md` for why things were done a certain way.
   are superseded by this one. Remaining in round 2: **A+B** (PQ ratchet + ratchet header
   encryption, co-designed as one wire revision) then **E** (periodic rekey) — still
   unspecced.
+
+- **2026-07-28** — Round-2 **A+B built** on `feat/pq-ratchet-header-encryption`, off the
+  integration branch (not `main` — they revise the same `msg` format PR #15 just
+  consolidated). One wire revision, `PROTOCOL_VERSION` 4 → 5, no server change, no new
+  dependency. Spec + plan dated 2026-07-28; rationale in `decisions.md`.
+  **B — sealed ratchet headers.** The `msg` envelope is now `{type, payload}` and nothing
+  else. Previously the relay read every sender's current ratchet public key, how many
+  messages each chain held (`pn`), the position within the chain (`n`), and a cleartext
+  class selector separating content from presence from receipts — a precise map of the
+  conversation's structure even though it couldn't read a word. Now `payload` is
+  `sealed header (84 bytes) ‖ body`, the header is XChaCha-sealed under a per-chain
+  header key (Signal's header-encryption variant: HKs/HKr + NHKs/NHKr, with `kdfRoot`
+  emitting the next header key one chain early), and the body's AEAD takes the sealed
+  header as AAD so headers can't be swapped between messages. Receiving is trial
+  decryption — HKr, then NHKr (which *is* how a new chain is detected), then the header
+  keys stored alongside skipped message keys (capped at the 8 most recent chains), then
+  the three static header keys.
+  **A — post-quantum ratchet.** Fresh ML-KEM-768 secrets now fold into the ratchet's root
+  chain every ~30s (jittered, or after 200 content sends), so post-compromise healing
+  re-secures with post-quantum material instead of resting on X25519 alone. The initiator
+  offers a fresh public key on a new sealed `pqoffer` channel, the responder encapsulates
+  and replies on `pqaccept`, and both fold the secret at the next DH ratchet step — the
+  only point where `RK` is consumed, and therefore the one place the two sides are already
+  synchronised. **The sender decides when to fold and announces it in the header's `fold`
+  counter; the receiver mirrors it**, so the fold point is deterministic rather than
+  dependent on when a secret happened to arrive.
+  **The key design call:** the ML-KEM blobs deliberately do *not* ride the header. B wants
+  a fixed-size header and A wants ~2.3 KB on every chain flip — and with ③'s cover traffic
+  both sides flip ~1/sec forever, so per-flip KEM material would have meant ~3 KB extra per
+  message per side *and* made flips visible by size. Putting the blobs on ordinary content
+  channels instead lets ③'s existing padding hide them and keeps the header **fixed at 84
+  bytes, always**. Two smaller wins came with it: static channels (presence/ack/profile)
+  gained a monotonic counter + 64-wide replay window, closing a documented residual; and
+  `coverBodyLen` gained a ~3% 4096-byte tail so a PQ rekey isn't identifiable as the only
+  frame of that size.
+  **Verified:** `npm run typecheck` clean, **243** client tests (12 header, 8 pqRekey, 18
+  ratchet incl. PQ folds, expanded ratchetSession/framing/kdf), `npm run build` green, and
+  a **throwaway two-browser Playwright run: 18/18** (written, run, deleted; driven from a
+  scratch dir with the rekey interval temporarily shortened to 4s, then restored and
+  re-verified). It proved: both sides reach a matching safety number at v5; **no `c` or
+  `header` field on ANY `msg` frame** — only `{type, payload}`; every payload is an 84-byte
+  sealed header plus a body landing on a padding bucket (64/256/4096 observed); **both
+  sides folded 7 post-quantum secrets and stayed exactly in sync** (`pqFold` 7/7, nothing
+  left pending); a message sent *after* those folds still decrypted, in 64 ms; cover
+  traffic still flowed with zero stray bubbles; no decryption-error bubbles; no console
+  errors. A **DEV-only read-only counter hook** (`window.__ttRatchetCounters`, counters not
+  keys, stripped from production builds) is what made the folds observable at all — the
+  offer/accept frames are encrypted, so without it the run could only have assumed A
+  worked. Two deliberate deviations from the plan text (BLAKE2b's 64-byte output cap means
+  the root KDF takes two keyed calls, and only two header-key seeds are needed rather than
+  four) are recorded in the plan's build-status block. **Not merged.**
+  **Remaining in round 2: E (periodic rekey) — and A largely subsumes it.** With the root
+  chain already re-seeding with fresh ML-KEM secrets every ~30s, E reduces to re-running
+  the *classical* handshake for a fresh ephemeral X25519 identity, a fresh transcript, and
+  a new safety number. Re-scope it before building rather than building it as sketched.
+
+- **2026-07-28** — **PR #15 merged to `main`** (`1dcb5b4`, GitHub merge commit, verified) —
+  the hardened handshake + traffic-analysis cover traffic + at-rest vault are now on
+  `main` at `PROTOCOL_VERSION` 4. PRs #13/#14 auto-closed as merged (their commits are
+  ancestors of `main` via the integration branch). PR #16 (A+B) retargeted from the
+  integration branch to `main`; still clean, and its diff is now just A+B.
+
+- **2026-07-28** — **Second, deeper verification pass on PR #16**, prompted by a real gap
+  in the first one: **static-channel failures are silent by design** (a dropped presence
+  beat or receipt produces no bubble and no console error), so the original 18/18 run
+  could not distinguish "receipts working" from "receipts silently broken" — and #16
+  *changed* that path by adding per-channel counters and a replay window. A second
+  two-browser script therefore asserted on the UI effects those channels produce, which
+  is the only way a silent drop surfaces. **12/13**, at the **shipped 30s rekey interval**
+  (not a shortened one):
+  - **presence channel** — the peer's typing indicator appears *and* clears again, so
+    state transitions flow, not just a single frame;
+  - **ack channel** — the sender's own bubble advances to `message-status--read`, which
+    only happens if the peer's receipt decrypted;
+  - **PQ fold at production cadence** — `pqFold` 0 → **2** during a 50s soak, both sides
+    agreeing, nothing left pending; text and receipts both still working *after* the folds;
+  - **leave/rejoin** — returns to the entry screen and a fresh session starts cleanly
+    (the zeroize path now wipes header keys and pending PQ secrets);
+  - no decryption-error bubbles and no console errors anywhere in the run.
+  **The one failure was voice, and it is NOT a v5 regression** — established by a
+  controlled re-run of the same script against `main` (v4), where it fails identically.
+  Headless Chromium's fake audio device (`--use-fake-device-for-media-stream`) never
+  settles `MediaRecorder`'s stop, so the preview step never appears; `audio/recorder.ts`
+  and `VoiceRecorder.tsx` are untouched by #16 in any case. (The first attempt also had a
+  genuine test bug — `.composer__stop` / `.composer__send` carry no `aria-label`, so the
+  original selectors matched the *text* composer's Send.)
+  Since the browser can't reach voice, the part of it that #16 *does* own — the crypto
+  path — was verified with a throwaway real-module test (written, run, deleted): a 700 KB
+  clip round-trips **byte-for-byte** with its mimeType, a voice clip interleaves with text
+  without desyncing the ratchet across a chain flip, and — the check worth having —
+  **a worst-case 60s clip's envelope is 1,813,355 bytes, 86.5% of the relay's 2 MiB
+  `maxPayload`**, so v5's extra 84-byte header per message has not pushed voice over the
+  cap. **Still unverified by automation:** a real browser voice send (needs a human, and
+  is equally unverifiable on `main`), and the `profile` static channel in a browser —
+  marginal, since it shares one code path with presence/ack and differs only in key
+  derivation, which is unit-tested (round-trip, cross-class rejection, independent
+  counters).

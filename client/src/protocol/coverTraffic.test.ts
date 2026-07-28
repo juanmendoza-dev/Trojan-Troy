@@ -39,14 +39,20 @@ describe("jitteredInterval", () => {
 
 describe("coverBodyLen", () => {
   it("lands only in buckets real content uses (>=256, never the 64 primer bucket)", () => {
-    const seen = new Set<number>();
-    for (let i = 0; i < 2000; i++) {
+    const counts = new Map<number, number>();
+    for (let i = 0; i < 5000; i++) {
       const len = frame({ channel: "cover", id: "", body: new Uint8Array(coverBodyLen(Math.random)) }).length;
-      // Real c:0 text is always >=256 (its 36-char UUID id overflows the 64
-      // bucket), so cover must never land in 64 or it's size-classified as decoy.
-      expect([256, 1024]).toContain(len);
-      seen.add(len);
+      // Real content is always >=256 (a text frame's 36-char UUID id overflows the
+      // 64 bucket), so cover must never land in 64 or it's size-classified as decoy.
+      expect([256, 1024, 4096]).toContain(len);
+      counts.set(len, (counts.get(len) ?? 0) + 1);
     }
-    expect(seen.size).toBeGreaterThanOrEqual(2); // varied, not pinned to one size
+    // All three buckets get used — in particular 4096, so the post-quantum rekey
+    // frames aren't the only traffic at that size.
+    expect(counts.get(256)).toBeGreaterThan(0);
+    expect(counts.get(1024)).toBeGreaterThan(0);
+    expect(counts.get(4096)).toBeGreaterThan(0);
+    // 4096 stays a thin tail — it costs real bandwidth.
+    expect(counts.get(4096)! / 5000).toBeLessThan(0.1);
   });
 });

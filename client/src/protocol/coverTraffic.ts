@@ -32,13 +32,19 @@ export function jitteredInterval(base: number, jitterFrac: number, rand: () => n
 }
 
 // Pick a cover-body byte length so the padded frame lands in a bucket real
-// content actually uses. Real c:0 text is ALWAYS >= 256: its id is a 36-char
-// UUID, so meta alone (~63B) overflows the 64 bucket. Only the once-per-session
-// primer lands in 64 — so cover must NEVER use 64, or a size-aware relay flags
-// the steady 64-bucket stream as decoy on sight. Modal 256 (like a typical
-// short text), occasional 1024 (a longer one). Ranges are overhead-aware for
-// the "cover" channel's ~34B frame header so bucketFor lands where intended.
+// content actually uses. Real content is ALWAYS >= 256: a text frame's id is a
+// 36-char UUID, so meta alone (~63B) overflows the 64 bucket. Only the
+// once-per-session primer lands in 64 — so cover must NEVER use 64, or a
+// size-aware relay flags the steady 64-bucket stream as decoy on sight. Modal 256
+// (like a typical short text), a 1024 tail (a longer one), and a thin 4096 tail so
+// the post-quantum rekey frames — ML-KEM keys are ~1.1KB, which lands at 4096 —
+// aren't the only traffic that size. Without that last slice, a 4096-byte frame
+// every ~30s would read as "PQ rekey" on sight, handing back a periodic beat to
+// fingerprint the session by. Ranges are overhead-aware for the frame header so
+// bucketFor lands where intended.
 export function coverBodyLen(rand: () => number): number {
-  if (rand() < 0.8) return 31 + Math.floor(rand() * 192); // 31..222 -> 256 bucket
-  return 223 + Math.floor(rand() * 768); // 223..990 -> 1024 bucket
+  const roll = rand();
+  if (roll < 0.8) return 31 + Math.floor(rand() * 192); // 31..222 -> 256 bucket
+  if (roll < 0.97) return 223 + Math.floor(rand() * 768); // 223..990 -> 1024 bucket
+  return 991 + Math.floor(rand() * 3040); // 991..4030 -> 4096 bucket
 }

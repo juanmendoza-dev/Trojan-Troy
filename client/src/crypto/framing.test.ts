@@ -74,4 +74,23 @@ describe("framing", () => {
     expect(out.id).toBe("");
     expect(Array.from(out.body)).toEqual([1, 2, 3, 4]);
   });
+
+  it("round-trips the post-quantum rekey channels at ML-KEM sizes", () => {
+    // ML-KEM-768: public key 1184, ciphertext 1088, both prefixed with a u16
+    // offer id. Both must land in the 4096 bucket — that is the size cover
+    // traffic has to be able to produce too, or a 4096 frame means "PQ rekey".
+    const offer = new Uint8Array(2 + 1184).fill(7);
+    const accept = new Uint8Array(2 + 1088).fill(9);
+    const offerFrame = frame({ channel: "pqoffer", id: "", body: offer });
+    const acceptFrame = frame({ channel: "pqaccept", id: "", body: accept });
+    expect(offerFrame.length).toBe(4096);
+    expect(acceptFrame.length).toBe(4096);
+    const outOffer = unframe(offerFrame);
+    expect(outOffer.channel).toBe("pqoffer");
+    expect(outOffer.body.length).toBe(2 + 1184);
+    expect(outOffer.body[0]).toBe(7);
+    const outAccept = unframe(acceptFrame);
+    expect(outAccept.channel).toBe("pqaccept");
+    expect(outAccept.body.length).toBe(2 + 1088);
+  });
 });
