@@ -6,3 +6,9 @@ services:
     rootDir: server
     buildCommand: npm install && npm run build
     startCommand: npm start
+    envVars:
+      # Cross-site WebSocket hijack guard (server.ts). The relay fails OPEN
+      # without this, so it must also be set on the live service's dashboard
+      # if the service wasn't created from this blueprint.
+      - key: ALLOWED_ORIGINS
+        value: https://trojan-troy.vercel.app
