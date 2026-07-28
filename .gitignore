@@ -3,3 +3,5 @@ dist
 .claude/settings.local.json
 .worktrees/
 .superpowers/
+client/playwright-report/
+client/test-results/
