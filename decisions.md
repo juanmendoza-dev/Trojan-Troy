@@ -8,6 +8,39 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-28 — Bound the static channels to the hybrid root key (v6), and accepted
+  that the version bump changes the safety-number digits.** An external review found
+  that `presence`/`ack`/`profile` derived their body and sealed-header subkeys straight
+  from the raw `crypto_kx` outputs, so those three channels were protected by **X25519
+  alone** — no ML-KEM, no transcript binding — while the ratchet correctly took both
+  from `RK₀`. Since the `profile` channel carries the display name and avatar, a
+  harvest-now-decrypt-later adversary who broke X25519 would have recovered names,
+  avatars, presence rhythm and every read receipt, which contradicted the README's
+  blanket post-quantum claim. Reproduced before fixing (same classical handshake,
+  different PQ secret → byte-identical static keys), then closed by hashing each
+  directional key under `RK₀` (`bindDirKey`). Calls:
+  (1) **Bind each direction independently, never sorted.** `deriveRootKey` sorts its
+  pair to produce one shared value; doing that here would collapse tx and rx into one
+  key and destroy reflection protection. Verified the guard has teeth by deliberately
+  introducing the collapse — exactly one test caught it and the other 19 still passed,
+  which is why that test exists.
+  (2) **`PROTOCOL_VERSION` 5→6, accepting a changed root key.** The spec asked for the
+  root key to stay byte-identical, but `PROTOCOL_VERSION` is folded into the transcript
+  hash (`App.tsx:770`), which feeds `deriveRootKey` — so the two requirements are
+  mutually exclusive. Took the bump: it costs nothing (the safety number is ephemeral,
+  never persisted, and the 60-digit format is unchanged) and it buys a **clean, early
+  failure** — a stale tab paired against a fresh one now hits the existing
+  `handshake_failed` screen instead of desynchronising silently and dying later on the
+  first presence frame.
+  (3) **Authenticate the static body before consuming its replay counter.** The old
+  order let a relay keep an authentic header, mangle the body, and permanently lock out
+  the genuine frame behind that burnt counter. Costs one extra AEAD open per replay.
+  (4) **Declined** PIN attempt backoff (user-facing by definition) and origin
+  fail-closed (`render.yaml` sets no `ALLOWED_ORIGINS`, so it would reject every
+  production connection).
+  (Decided by: external review (found it) + Claude (reproduced, implemented, and flagged
+  the §0/§4 contradiction))
+
 - **2026-07-28 — Pinned the voice recording bitrate (`audioBitsPerSecond = 32_000`)
   rather than leaving it to the browser.** Found while confirming Jay's successful
   real 60s voice send. `audio/recorder.ts` passed only a mimeType to

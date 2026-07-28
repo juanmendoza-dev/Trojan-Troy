@@ -49,7 +49,7 @@ sequenceDiagram
     Note over A,B: safety number = f(both pubkeys, RK₀)
 ```
 
-- **Hybrid post-quantum.** X25519 **and** ML-KEM-768 (NIST FIPS 203) secrets are both folded into the root key. The session stays safe unless *both* are broken — so traffic recorded today can't be decrypted by a future quantum computer ("harvest now, decrypt later").
+- **Hybrid post-quantum.** X25519 **and** ML-KEM-768 (NIST FIPS 203) secrets are both folded into the root key. The session stays safe unless *both* are broken — so traffic recorded today can't be decrypted by a future quantum computer ("harvest now, decrypt later"). This covers **everything on the wire**: as of v6 the non-ratcheted channels (presence, read receipts, shared profile) bind the root key too, rather than resting on X25519 alone.
 - **Commit-then-reveal (ZRTP-style).** Each side publishes a hash commitment to its ephemeral keys and reveals only after holding the peer's commitment. Neither side — nor a MITM relay — can choose its keys as a *function* of the other's.
 - **Transcript binding.** A canonical hash of the entire handshake (version, both public keys, KEM key and ciphertext) is folded into the root key. Tamper with any framing byte and the root key changes: the session fails closed *and* the safety-number digits change.
 - **Fails closed.** Strip the post-quantum material and the handshake aborts. There is no classical fallback path to downgrade into.
@@ -60,8 +60,9 @@ sequenceDiagram
 - **Per-message keys.** Every message gets a fresh key, discarded immediately (Signal's Double Ratchet). A stolen key unlocks nothing before or after it.
 - **Post-quantum healing.** Fresh ML-KEM secrets are negotiated *in band* and folded into the ratchet's root chain roughly every 30 seconds — so recovery from a compromise doesn't rest on X25519 alone.
 - **Encrypted ratchet headers.** The key class, the sender's ratchet public key and the chain counters live in a fixed **84-byte sealed header**. The relay can't map the conversation's structure — who spoke in what bursts, how long each run was, which frames were receipts.
-- **Sealed framing + padding.** Routing metadata is inside the ciphertext; payloads pad to fixed buckets (64 / 256 / 1024 / 4096 / 16384 bytes).
-- **Replay-proof, tamper-proof, and transactional.** A forged, replayed or corrupted frame is dropped and *cannot* corrupt the live session — decryption runs on a clone and commits only on success.
+- **Sealed framing + padding.** Routing metadata is inside the ciphertext; payloads pad to fixed buckets (64 / 256 / 1024 / 4096 / 16384 bytes). The channel is checked against an allowlist on the way out, not trusted from the decrypted JSON.
+- **The signalling channels are bound too.** Presence, read receipts and the shared profile aren't ratcheted (ratcheting a 2.5s heartbeat would just churn the chain), but each direction's keys are bound to the hybrid root key, so they inherit the same post-quantum and transcript guarantees as message content.
+- **Replay-proof, tamper-proof, and transactional.** A forged, replayed or corrupted frame is dropped and *cannot* corrupt the live session — decryption runs on a clone and commits only on success. A frame whose body fails to authenticate doesn't consume its replay counter either, so a relay can't mangle a body to lock out the genuine frame behind it.
 
 ### 3. Metadata resistance
 
@@ -98,9 +99,14 @@ If you find something we've mis-stated, that's a bug — file it.
 
 ## How it's verified
 
-- **243 client tests + 31 server tests**, all on real modules — no mocked crypto.
-- Tests assert the *adversarial* cases, not just happy paths: a one-sided post-quantum fold **diverges** the session (proving the fold is load-bearing), a relabelled frame fails, a replayed frame drops, a tampered header leaves the session usable.
-- **Two-browser Playwright runs** against a live relay confirmed the things unit tests can't: both browsers derive an identical safety number, `commit` precedes `pubkey` on the wire, no `msg` frame carries any cleartext field, both sides fold post-quantum secrets in lockstep, cover traffic flows with zero stray messages, and a real message still lands in 64 ms.
+- **248 client tests + 31 server tests**, all on real modules — no mocked crypto.
+- Tests assert the *adversarial* cases, not just happy paths: a one-sided post-quantum fold **diverges** the session (proving the fold is load-bearing), a relabelled frame fails, a replayed frame drops, a tampered header leaves the session usable. Where a wrong-but-plausible implementation would pass, there's a test for that specifically — the v6 binding ships with a direction-separation test that fails if the two directions are ever collapsed into one key.
+- **A committed two-browser Playwright test** (`client/e2e/handshake.spec.ts`) drives two real browser contexts against a live relay and asserts what unit tests can't reach: both browsers derive an identical 60-digit safety number, `commit` precedes `pubkey` on the wire, the handshake advertises the current `PROTOCOL_VERSION`, every `msg` frame carries nothing but `type` and `payload`, and cover traffic keeps flowing while both sides sit idle.
+
+```bash
+cd server && npm run dev          # the test needs a live relay
+cd client && npm run test:e2e
+```
 
 ---
 
@@ -111,7 +117,7 @@ If you find something we've mis-stated, that's a bug — file it.
 | Client | React + TypeScript + Vite |
 | Crypto | libsodium-wrappers-sumo, @noble/post-quantum |
 | Relay | Node + `ws`, in-memory only, **no database** |
-| Wire | JSON over WebSocket, `PROTOCOL_VERSION 5` |
+| Wire | JSON over WebSocket, `PROTOCOL_VERSION 6` |
 
 No accounts, no passwords, no user database. Pairing is a room code or an invite link; session keys are ephemeral and die with the tab.
 
