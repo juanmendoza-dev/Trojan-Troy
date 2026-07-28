@@ -97,7 +97,10 @@ export class RelayClient {
     return () => this.listeners.delete(listener);
   }
 
-  waitForOpen(): Promise<void> {
+  // The relay's free tier sleeps when idle and a cold start can take up to
+  // ~60s — but a socket that never opens must not hang the UI forever, so
+  // callers pass a timeout ceiling above the worst realistic cold start.
+  waitForOpen(timeoutMs?: number): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.state === "open") {
         resolve();
@@ -107,7 +110,25 @@ export class RelayClient {
         reject(new Error("Relay connection closed."));
         return;
       }
-      this.pendingOpen = { resolve, reject };
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const entry = {
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (error: Error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      };
+      if (timeoutMs !== undefined) {
+        timer = setTimeout(() => {
+          if (this.pendingOpen !== entry) return;
+          this.pendingOpen = null;
+          reject(new Error("Relay connection timed out."));
+        }, timeoutMs);
+      }
+      this.pendingOpen = entry;
     });
   }
 

@@ -70,7 +70,15 @@ import type { ProfileSecrets } from "./profiles/vault";
 import { detectDevice } from "./profiles/device";
 import { parseScreenOverride } from "./dev/screenOverride";
 
+// Dev-only fallback: vite.config.ts refuses a production build without
+// VITE_RELAY_URL, so a deployed client can never silently point at localhost.
 const RELAY_URL = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8080";
+// After this long stuck connecting, the free-tier relay's cold start is the
+// likely cause — surface it under the bar instead of looking frozen.
+const WAKE_HINT_MS = 5000;
+// Hard ceiling, comfortably above the worst observed cold start (~60s): a
+// socket that never opens rejects instead of hanging the home screen forever.
+const CONNECT_TIMEOUT_MS = 90_000;
 const GHOST_MODE_STORAGE_KEY = "trojan-troy-ghost-mode";
 
 const textEncoder = new TextEncoder();
@@ -826,17 +834,36 @@ export default function App() {
     client.send({ type: "commit", v: PROTOCOL_VERSION, commit: await toBase64(ownCommit) });
   }
 
-  async function handleStart() {
-    setConnectStatus("connecting");
-    const own = await generateKeypair();
+  // Open a socket to the relay with the cold-start UX: after WAKE_HINT_MS the
+  // bar grows a "waking the relay" hint, and waitForOpen gives up at
+  // CONNECT_TIMEOUT_MS. Returns null (with status reset) on failure — the
+  // caller picks the error screen since it knows the retry shape.
+  async function connectRelay(): Promise<RelayClient | null> {
     const client = new RelayClient(RELAY_URL);
     clientRef.current = client;
+    const wakeTimer = window.setTimeout(
+      () => setConnectStatus((s) => (s === "connecting" ? "waking" : s)),
+      WAKE_HINT_MS
+    );
     try {
-      await client.waitForOpen();
+      await client.waitForOpen(CONNECT_TIMEOUT_MS);
+      setConnectStatus((s) => (s === "waking" ? "connecting" : s));
+      return client;
     } catch {
       client.close();
       clientRef.current = null;
       setConnectStatus("idle");
+      return null;
+    } finally {
+      window.clearTimeout(wakeTimer);
+    }
+  }
+
+  async function handleStart() {
+    setConnectStatus("connecting");
+    const own = await generateKeypair();
+    const client = await connectRelay();
+    if (!client) {
       setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "start" } });
       return;
     }
@@ -871,14 +898,8 @@ export default function App() {
   async function handleJoin(roomCode: string) {
     setConnectStatus("connecting");
     const own = await generateKeypair();
-    const client = new RelayClient(RELAY_URL);
-    clientRef.current = client;
-    try {
-      await client.waitForOpen();
-    } catch {
-      client.close();
-      clientRef.current = null;
-      setConnectStatus("idle");
+    const client = await connectRelay();
+    if (!client) {
       setScreen({ name: "error", scenario: "server_unreachable", retry: { kind: "join", roomCode } });
       return;
     }

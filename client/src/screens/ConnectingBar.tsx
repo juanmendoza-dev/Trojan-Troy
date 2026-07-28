@@ -10,7 +10,9 @@ import {
 } from "./barPhases";
 import "./ConnectingBar.css";
 
-export type ConnectStatus = "idle" | "connecting" | "connected";
+// "waking" is still connecting — it just means it's taken long enough that the
+// relay's free-tier cold start is the likely cause, so the bar shows a hint.
+export type ConnectStatus = "idle" | "connecting" | "waking" | "connected";
 
 interface ConnectingBarProps {
   status: ConnectStatus;
@@ -29,6 +31,11 @@ export function ConnectingBar({ status, variant = "thin" }: ConnectingBarProps) 
   const [phase, setPhase] = useState<BarPhase>("idle");
   const timers = useRef<number[]>([]);
 
+  // The bar's lifecycle collapses "waking" into "connecting" so the
+  // connecting → waking flip doesn't clear the timers and replay the surge —
+  // only the hint text below the track cares about the difference.
+  const lifecycle = status === "waking" ? "connecting" : status;
+
   useEffect(() => {
     const clear = () => {
       timers.current.forEach((t) => clearTimeout(t));
@@ -39,11 +46,11 @@ export function ConnectingBar({ status, variant = "thin" }: ConnectingBarProps) 
     };
 
     clear();
-    if (status === "connecting") {
+    if (lifecycle === "connecting") {
       setPhase("surge");
       // Once the fast surge lands, hold "alive" near the top until the real event.
       after(SURGE_MS + 50, () => setPhase((p) => (p === "surge" ? "hold" : p)));
-    } else if (status === "connected") {
+    } else if (lifecycle === "connected") {
       setPhase("complete");
       after(COMPLETE_MS, () => setPhase("settle"));
       after(COMPLETE_MS + SETTLE_MS, () => setPhase("exit"));
@@ -51,7 +58,7 @@ export function ConnectingBar({ status, variant = "thin" }: ConnectingBarProps) 
       setPhase("idle");
     }
     return clear;
-  }, [status]);
+  }, [lifecycle]);
 
   const v = barVisual(phase);
   const busy = status !== "idle";
@@ -79,6 +86,12 @@ export function ConnectingBar({ status, variant = "thin" }: ConnectingBarProps) 
         >
           {v.sheen && <span className="connecting-bar__sheen" />}
         </div>
+      </div>
+      <div
+        className={`connecting-bar__hint${status === "waking" ? " connecting-bar__hint--visible" : ""}`}
+        aria-live="polite"
+      >
+        Waking the relay — a cold start can take up to a minute.
       </div>
     </div>
   );
