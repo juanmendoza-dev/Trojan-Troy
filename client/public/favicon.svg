@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Iris-theme tile: geometric "T" + the wordmark's period, drawn as paths so
+       the icon never depends on a webfont at 16px. -->
+  <rect width="64" height="64" rx="14" fill="#0D0F18"/>
+  <rect x="13" y="15" width="30" height="8" rx="2.5" fill="#F4F6FF"/>
+  <rect x="24" y="15" width="8" height="34" rx="2.5" fill="#F4F6FF"/>
+  <circle cx="47" cy="44.5" r="5" fill="#8FA6FF"/>
+</svg>
