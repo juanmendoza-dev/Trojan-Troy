@@ -1,0 +1,37 @@
+/* Global foundation for mobile / responsive support — see
+   docs/superpowers/specs/2026-07-23-mobile-web-support-design.md (WP0).
+   Imported first in main.tsx so component CSS overrides it.
+
+   Mobile breakpoint convention (CSS can't read a custom property inside a media
+   query condition, so this is documented, not a token):
+       @media (max-width: 640px) { ... }   // "mobile"
+*/
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* Stop iOS/mobile from auto-inflating text on orientation change. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+:root {
+  /* Notch / home-indicator insets (0 on non-notched devices). Consumed by any
+     fixed top/bottom chrome or absolutely-positioned corner element. Requires
+     viewport-fit=cover in index.html to resolve to non-zero values. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}

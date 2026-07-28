@@ -171,3 +171,21 @@
   background: #8FA6FF;
   transition: width 0.1s linear;
 }
+
+/* ── Mobile (≤640px) ─────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .loading-screen {
+    height: var(--app-height, 100dvh);
+    padding: 48px 20px 64px;
+  }
+
+  .loading-screen__percent {
+    font-size: 72px;
+  }
+
+  .loading-screen__bottom-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+}

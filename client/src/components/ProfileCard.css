@@ -65,3 +65,14 @@
     transition: opacity 0.18s ease;
   }
 }
+
+/* ── Mobile (≤640px) ──────────────────────────────────── */
+@media (max-width: 640px) {
+  .profile-card {
+    /* Never wider than the viewport minus 16px on each side */
+    width: min(220px, calc(100vw - 32px)) !important;
+    /* Guard against the card being taller than the viewport */
+    max-height: calc(100vh - 16px - var(--safe-top, 0px) - var(--safe-bottom, 0px));
+    overflow-y: auto;
+  }
+}

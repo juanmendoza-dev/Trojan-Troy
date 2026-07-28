@@ -114,3 +114,12 @@
   animation: pulseGlow 0.4s ease-out both;
   pointer-events: none;
 }
+
+/* ── Mobile (≤640px) ─────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Expand play button tap target from 34×34px to ≥44×44px */
+  .voice-bubble__play {
+    width: 44px;
+    height: 44px;
+  }
+}

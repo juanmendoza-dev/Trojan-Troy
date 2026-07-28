@@ -54,3 +54,14 @@
     transition: none;
   }
 }
+
+/* ── Mobile (≤640px) ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  .profile-button {
+    /* Push below the status-bar / notch. */
+    top: calc(24px + var(--safe-top, 0px));
+    /* Ensure the full button is at least 44×44 px tap target. The existing
+       padding gives enough height; this guarantees it on any font-size. */
+    min-height: 44px;
+  }
+}

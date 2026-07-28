@@ -25,3 +25,17 @@
     transition: none;
   }
 }
+
+/* ── Mobile (≤640px) ─────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Keep 28×28px visual; expand tap target to ≥44×44px via ::before overlay */
+  .message-avatar {
+    position: relative;
+  }
+  .message-avatar::before {
+    content: '';
+    position: absolute;
+    /* inset -8px each side: 28 + 8 + 8 = 44px in both axes */
+    inset: -8px;
+  }
+}

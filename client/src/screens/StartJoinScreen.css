@@ -297,3 +297,16 @@
     animation: none;
   }
 }
+
+/* ── Mobile (≤640px) ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  .start-join-screen {
+    height: var(--app-height, 100dvh);
+  }
+
+  /* Offset absolutely-positioned chrome by safe-area so notch/status-bar
+     doesn't clip either the badge (top-left) or the ProfileButton (top-right). */
+  .start-join-screen__badge {
+    top: calc(28px + var(--safe-top, 0px));
+  }
+}

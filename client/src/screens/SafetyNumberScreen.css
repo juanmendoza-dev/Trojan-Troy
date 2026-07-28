@@ -414,3 +414,47 @@
     display: none;
   }
 }
+
+/* ---- Mobile layout (<= 640px) — ADDITIVE ONLY, desktop rules unchanged ---- */
+@media (max-width: 640px) {
+  /* Reduce outer horizontal padding so the screen doesn't feel cramped. */
+  .confirm-key {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  /* Switch the 4-column safety-number grid to 2 columns and tighten the gap. */
+  .confirm-key__grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 12px;
+  }
+
+  /* Reduce card horizontal padding from 40px to 20px. The card's width
+     (min(680px, 90vw)) and centering are already correct — leave untouched. */
+  .confirm-key__card {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  /* The track is already 56px tall (≥44px). The knob is 44×44px. Both fine. */
+
+  /* "the numbers don't match →" — small inline link; expand tap target via
+     vertical padding so the hit area reaches 44px without changing visual size. */
+  .confirm-key__mismatch-link {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  /* "← I mistyped, compare again" — same treatment. */
+  .confirm-key__back {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  /* "Close this connection" abort button — already has padding; ensure 44px min. */
+  .confirm-key__abort {
+    min-height: 44px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}

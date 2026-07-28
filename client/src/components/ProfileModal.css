@@ -312,3 +312,57 @@
     animation: none;
   }
 }
+
+/* ── Mobile (≤640px) + coarse pointer (touch devices) ── */
+
+/* Delete button: hover never fires on touch — always show it and give it a
+   proper tap target.                                                         */
+@media (max-width: 640px), (pointer: coarse) {
+  .profile-tile__delete {
+    opacity: 1;
+    width: 44px;
+    height: 44px;
+    /* Keep the button visually anchored to the tile corner while the hit
+       area is larger — shift it so the icon stays in the top-right quadrant */
+    top: 0;
+    right: 0;
+    border-radius: 0 16px 0 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-modal__backdrop {
+    /* Reduce side padding on narrow screens; panel is already max-width bounded */
+    padding: 16px;
+    padding-top: calc(16px + var(--safe-top, 0px));
+    padding-bottom: calc(16px + var(--safe-bottom, 0px));
+  }
+
+  .profile-modal__back,
+  .profile-modal__close {
+    /* Expand from 28×28 to a ≥44×44 tap target */
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+  }
+
+  .profile-modal__header-spacer {
+    /* Mirror the new button size so the title stays centred */
+    width: 44px;
+  }
+
+  .profile-form__input {
+    /* Prevent iOS from zooming in on focus (requires ≥16px) */
+    font-size: 16px;
+  }
+
+  .profile-form__input--pin {
+    font-size: 20px;
+  }
+
+  .profile-modal__btn {
+    /* Comfortable tap height for action buttons */
+    min-height: 44px;
+    padding: 12px 20px;
+  }
+}
