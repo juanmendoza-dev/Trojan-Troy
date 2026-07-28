@@ -14,13 +14,13 @@ function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
 
 // RK0: the ratchet's initial root key, derived from the crypto_kx session keys,
 // the ML-KEM-768 shared secret (hybrid post-quantum), AND a hash of the full
-// handshake transcript (hardened handshake, v4). The classical pair is sorted so
+// handshake transcript (hardened handshake). The classical pair is sorted so
 // the initiator (rx=Ri,tx=Ti) and responder (rx=Ti,tx=Ri) compute the identical
 // value; the same pqSecret reaches both sides from the KEM; the transcript hash
 // is canonical (see crypto/transcript.ts) so both sides also match on it. Keying
 // with all three means the root key is safe unless BOTH X25519 and ML-KEM break,
 // and any framing tamper (version downgrade, swapped KEM ciphertext) changes it.
-// Domain tags bumped v3 -> v4 for the transcript-binding round.
+// Domain tags bumped v4 -> v5 alongside the sealed-header / PQ-ratchet revision.
 export async function deriveRootKey(
   rx: Uint8Array,
   tx: Uint8Array,
@@ -36,30 +36,84 @@ export async function deriveRootKey(
   // step 2 keys that with the ML-KEM secret; step 3 binds the transcript hash.
   const classical = sodium.crypto_generichash(
     32,
-    sodium.from_string("TTr:root:kx:v4"),
+    sodium.from_string("TTr:root:kx:v5"),
     concat(first, second)
   );
   const withPq = sodium.crypto_generichash(
     32,
-    sodium.from_string("TTr:root:pq:v4"),
+    sodium.from_string("TTr:root:pq:v5"),
     concat(classical, pqSecret)
   );
   return sodium.crypto_generichash(
     32,
-    sodium.from_string("TTr:root:tr:v4"),
+    sodium.from_string("TTr:root:tr:v5"),
     concat(withPq, transcriptHash)
   );
 }
 
-// Root KDF: mix a fresh DH output into the root key, yielding a new root key
-// and a new chain key. Used on every DH ratchet step.
+// Root KDF: mix a fresh DH output into the root key, yielding a new root key, a
+// new chain key, and the NEXT header key for the chain this call creates (v5's
+// header encryption needs a header key one chain ahead — see crypto/header.ts).
+//
+// `pqSecret` is the post-quantum ratchet step (round-2 feature A): when a fresh
+// ML-KEM secret has been agreed in-band, it is folded into the root chain here,
+// so post-compromise healing re-secures with post-quantum material and not just
+// X25519. Omitting it must stay byte-identical to a no-PQ step — both sides walk
+// the same root chain, and only one of them decides when a fold happens (the
+// sender, announced via the header's fold counter), so this has to be one code
+// path with no "did we pass undefined" divergence.
+//
+// Two keyed calls rather than one: BLAKE2b's output caps at 64 bytes, so 96 bytes
+// of key material needs a second domain-separated call under the same key.
+//
+// A folded step uses a DIFFERENT domain than an unfolded one, so the two can
+// never collide — not even if a caller bug passes a zero-length secret. Folding
+// is the one place where the two sides could silently disagree, so it fails loudly
+// (chains diverge, messages don't open) rather than quietly agreeing by accident.
 export async function kdfRoot(
   rk: Uint8Array,
-  dh: Uint8Array
-): Promise<{ rk: Uint8Array; ck: Uint8Array }> {
+  dh: Uint8Array,
+  pqSecret?: Uint8Array
+): Promise<{ rk: Uint8Array; ck: Uint8Array; nhk: Uint8Array }> {
   await sodium.ready;
-  const okm = sodium.crypto_generichash(64, concat(sodium.from_string("TTr:rk:v2"), dh), rk);
-  return { rk: okm.slice(0, 32), ck: okm.slice(32, 64) };
+  const input = pqSecret ? concat(dh, pqSecret) : dh;
+  const rkDomain = pqSecret ? "TTr:rk:pq:v5" : "TTr:rk:v5";
+  const nhkDomain = pqSecret ? "TTr:nhk:pq:v5" : "TTr:nhk:v5";
+  const okm = sodium.crypto_generichash(64, concat(sodium.from_string(rkDomain), input), rk);
+  const nhk = sodium.crypto_generichash(32, concat(sodium.from_string(nhkDomain), input), rk);
+  return { rk: okm.slice(0, 32), ck: okm.slice(32, 64), nhk };
+}
+
+// The four header keys seeded from RK0 (v5). Each direction gets a current and a
+// next header key; from there they advance off kdfRoot's `nhk` on every DH
+// ratchet step. Derived from RK0 rather than the directional crypto_kx keys so
+// they inherit the hybrid-PQ + transcript binding the root key already carries.
+export async function deriveHeaderKeys(rk0: Uint8Array): Promise<{
+  i2r: Uint8Array;
+  r2i: Uint8Array;
+  nhI2r: Uint8Array;
+  nhR2i: Uint8Array;
+}> {
+  await sodium.ready;
+  const one = (domain: string) =>
+    sodium.crypto_generichash(32, sodium.from_string(domain), rk0);
+  return {
+    i2r: one("TTr:hdr:i2r:v5"),
+    r2i: one("TTr:hdr:r2i:v5"),
+    nhI2r: one("TTr:nhdr:i2r:v5"),
+    nhR2i: one("TTr:nhdr:r2i:v5"),
+  };
+}
+
+// Header key for a static (non-ratcheted) class. Direction-separated like
+// deriveChannelSubkey — derive from tx to send, rx to receive — so a reflected
+// frame won't open under our own receive header key.
+export async function deriveHeaderSubkey(
+  dirKey: Uint8Array,
+  cls: number
+): Promise<Uint8Array> {
+  await sodium.ready;
+  return sodium.crypto_generichash(32, sodium.from_string("TTr:hdrsub:" + cls + ":v5"), dirKey);
 }
 
 // Chain KDF: advance a chain key one step, deriving the message key for this
