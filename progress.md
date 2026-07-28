@@ -26,6 +26,8 @@ and `decisions.md` for why things were done a certain way.
 | PQ hardening ①+② — hybrid post-quantum handshake (X25519 + ML-KEM-768) + safety-number binding | Merged to `main` — typecheck/163 tests/build green; full handshake choreography verified via a throwaway real-module test (root-key agreement, session-bound safety number, joiner-first via primer, corrupt-`kemct` fails). |
 | PQ hardening ③ — traffic-analysis resistance (cover traffic + cadence jitter) | Built on `feat/traffic-analysis-cover`, now folded into `feat/crypto-round-integration` — typecheck/**189** tests/build green; two-browser Playwright eyeball 10/10 (steady ~1/sec jittered cover stream, byte-indistinguishable, zero added latency, no stray bubbles, stops on leave). Zero-latency "minimum frame rate" cadence + ±30% heartbeat jitter; honest metadata copy. |
 | Round 2 — D: Hardened handshake (commit-then-reveal + transcript binding) | Built on `feat/hardened-handshake`, now folded into `feat/crypto-round-integration` — new opaque `commit` round (keys committed before either side reveals) + full-transcript binding into `RK₀`, `PROTOCOL_VERSION` 3→4, no server change, no new dep. typecheck / **185** tests / build green (transcript ×5 + kdf/ratchetSession binding cases). First of the round-2 four (A/B/D/E; see `decisions.md` 2026-07-26) — A+B and E still to build. |
+| PQ hardening ④ — at-rest Argon2id profile vault | Built on `feat/at-rest-profile-vault`, now folded into `feat/crypto-round-integration` — PIN derives a real Argon2id key (`crypto_pwhash`, sumo build) sealing the avatar with `crypto_secretbox`; fast-hash access check removed, legacy cleartext records purged on load, reload reverts to Anonymous. typecheck/**183** tests/build green; real-browser Playwright run 17/17 (IndexedDB holds `cipher`/`kdf`/`pinSalt` and no avatar bytes). |
+| **Crypto round integration** — D + ③ + ④ merged onto one branch | **Built + verified on `feat/crypto-round-integration`** — all three unmerged crypto branches folded together (no code conflicts; ledger conflicts resolved), the split-libsodium defect fixed, `libsodium-wrappers` dropped for sumo-only. typecheck clean / **201** tests / build green (1,610 kB, no double wasm) + **two-browser Playwright run 19/19** — matching safety numbers on both sides, commit-before-pubkey on the wire, one `kemct`, cover traffic on both sides with no stray bubbles, joiner-first send at 88 ms, no console errors. **PR open against `main`, not merged** (merging deploys). |
 
 ## Log
 
@@ -781,3 +783,41 @@ and `decisions.md` for why things were done a certain way.
   `docs/superpowers/plans/2026-07-26-hardened-handshake.md`. Remaining in round 2: A+B
   (PQ ratchet + header encryption, co-designed as one wire revision) then E (periodic
   rekey).
+
+- **2026-07-28** — **Crypto round integration**: the three finished-but-unmerged crypto
+  branches folded onto one branch, `feat/crypto-round-integration` (off `main` @
+  `4f43a56`), and verified together. Nothing new was designed here — this closes the gap
+  where three completed features (D hardened handshake, ③ traffic-analysis cover traffic,
+  ④ at-rest Argon2id vault) were each green on their own branch but had never met.
+  Merged in order D → ③ → ④; **no code conflicts at all** (git auto-merged even
+  `App.tsx`, where D restructured `exchangeKeys` while ③ added the cover scheduler and
+  ④ moved the profile state), only the `decisions.md` / `progress.md` ledgers, resolved
+  by keeping every entry in date order. Also fixed on the way:
+  - **The split-libsodium defect** — ④ swapped all ~10 sodium imports to
+    `libsodium-wrappers-sumo` (for Argon2id), but D's *new* `crypto/transcript.ts`
+    imported plain `libsodium-wrappers`. Textually clean, semantically wrong: the merged
+    app would have shipped two libsodium wasm builds with two independent `ready` gates.
+    Pointed `transcript.ts` (+ its test) at sumo and **dropped `libsodium-wrappers` from
+    `package.json`** so the wrong import can't resolve again — the same mistake is now a
+    build error instead of a silent 2× wasm payload. Bundle confirmed at 1,610 kB (gzip
+    500 kB), i.e. one wasm, matching ④'s own measurement.
+  - The duplicated, mid-sentence-truncated ③ log entry in `progress.md`.
+  - Stopped tracking `client/playwright-report/` + `client/test-results/` (730 KB of
+    report artifacts an earlier auto-commit had swept in); both are now gitignored.
+  **Verified:** `npm run typecheck` clean, **201** client tests (exactly the union:
+  178 base + 7 D + 11 ③ + 8 ④ − 3 deleted), `npm run build` green, and a **throwaway
+  two-browser Playwright run: 19/19** (written, run, deleted — driven from a scratch
+  dir so no harness landed in the repo). What it proves, beyond the unit suites: both
+  browsers derive the **same safety number** (so transcript binding + the hybrid root
+  key agree across two real clients — the manual eyeball D was still waiting on);
+  `commit` precedes `pubkey` on the wire on both sides and exactly one `kemct` is sent;
+  cover traffic flows from both sides as `c:0` frames with ratchet headers while idle,
+  rendering **zero** bubbles; the joiner can send first (primer) and it lands in 88 ms;
+  exactly 2 bubbles per side after a round-trip; no decryption-error bubbles; no console
+  errors. Observed `c:0` payload sizes 140 / 396 / 1420 — the once-per-session 64-bucket
+  primer, real text *and* cover both at the 256 bucket, cover tail at 1024, which is ③'s
+  size-indistinguishability fix holding in the merged build. **PR open against `main`,
+  not merged** — a merge redeploys the client (Vercel), so it waits on Jay. PRs #13/#14
+  are superseded by this one. Remaining in round 2: **A+B** (PQ ratchet + ratchet header
+  encryption, co-designed as one wire revision) then **E** (periodic rekey) — still
+  unspecced.

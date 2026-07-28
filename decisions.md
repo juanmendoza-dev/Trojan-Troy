@@ -8,6 +8,40 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
 
 ---
 
+- **2026-07-28 — Landed the three finished crypto branches on one integration branch
+  rather than merging three PRs into `main` separately; dropped
+  `libsodium-wrappers` so only the sumo build can be imported.** Three completed,
+  individually-green crypto features (D hardened handshake, ③ traffic-analysis cover
+  traffic, ④ at-rest Argon2id vault) had never been merged or even met each other —
+  all three branched off `main` @ `4f43a56`. Calls:
+  (1) **One integration branch (`feat/crypto-round-integration`), one PR.** Merging the
+  three PRs into `main` independently would hit the same `decisions.md`/`progress.md`
+  conflict three times and, worse, would leave `main` transiently holding ④'s sumo
+  import swap without D's new file following it (see (2)). Merging them together off
+  `main` first means the combination is what gets tested and reviewed. PRs #13/#14 are
+  superseded, not abandoned.
+  (2) **`libsodium-wrappers` removed from `client/package.json`; sumo is the only sodium.**
+  ④ swapped every sodium import to `libsodium-wrappers-sumo` for `crypto_pwhash`, but D
+  added a *new* file (`crypto/transcript.ts`) importing plain `libsodium-wrappers`. Git
+  merged both cleanly — nothing textually conflicts — and the result would have bundled
+  **two libsodium wasm builds with two independent `ready` gates**. This is the failure
+  mode a clean merge hides, so the fix is structural rather than a one-line edit: point
+  `transcript.ts` at sumo *and* delete the base dependency, so any future
+  `from "libsodium-wrappers"` fails to resolve at build time instead of silently doubling
+  the payload. `@types/libsodium-wrappers` **stays** — `@types/libsodium-wrappers-sumo`
+  declares it as a dependency (the sumo typings are an augmentation of the base module),
+  which is also why ④'s config-alias approach couldn't typecheck.
+  (3) **Verification is a throwaway script run from a scratch dir, not a committed
+  harness.** The Playwright setup lives on `feat/mobile-web-support` and isn't on this
+  line; installing it here would drag an unrelated dependency into a crypto PR. Wrote
+  the two-browser check outside the repo, ran it (19/19), deleted it — the pattern prior
+  phases used. Its most valuable assertion is that **both browsers show the same safety
+  number**, which is the cross-client proof of transcript binding that D's own tests
+  (single-process) can't give.
+  (4) **Not merged to `main`.** The relay is unchanged, but a `main` merge redeploys the
+  client, so it waits on Jay — consistent with how Track B's relay merge was held.
+  (Decided by: Claude, under Jay's standing constraints; merge-to-`main` left to Jay.)
+
 - **2026-07-26 — Round-2 crypto hardening (A/B/D/E green-lit); shipped feature D
   first: hardened handshake = commit-then-reveal + transcript binding.
   `PROTOCOL_VERSION` 3 → 4.** With the app ship-ready, Jay green-lit a *second*
