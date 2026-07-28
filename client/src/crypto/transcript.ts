@@ -1,4 +1,4 @@
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 
 // Domain-separated BLAKE2b hashes for the hardened handshake (round-2 feature D:
 // commit-then-reveal + transcript binding). Both pass the domain string as the
