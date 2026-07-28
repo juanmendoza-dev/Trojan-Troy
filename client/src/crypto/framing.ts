@@ -11,7 +11,9 @@
 
 // "primer" is a hidden bootstrap message the initiator sends so the responder
 // gains a sending chain (see the Double Ratchet init); it renders nothing.
-export type Channel = "text" | "voice" | "presence" | "ack" | "profile" | "primer";
+// "cover" is decoy traffic (see traffic-analysis spec) — also decrypted then
+// dropped, byte-indistinguishable from real content on the wire.
+export type Channel = "text" | "voice" | "presence" | "ack" | "profile" | "primer" | "cover";
 
 export interface Frame {
   channel: Channel;

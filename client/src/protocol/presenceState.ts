@@ -14,12 +14,24 @@ export const PRESENCE_HEARTBEAT_MS = 2500;
 // auto-clearing it — a safety net for a dropped "idle"/stop event.
 export const PRESENCE_EXPIRY_MS = 5000;
 
+// +/- jitter on the heartbeat so presence resends don't tick like a metronome
+// (a weak timing fingerprint). Bounded so the max stays below
+// PRESENCE_EXPIRY_MS — the peer's indicator must never flicker off between beats.
+export const PRESENCE_HEARTBEAT_JITTER_FRAC = 0.3;
+
+export function jitteredHeartbeatMs(rand: () => number): number {
+  const delta = (rand() * 2 - 1) * PRESENCE_HEARTBEAT_JITTER_FRAC;
+  return Math.round(PRESENCE_HEARTBEAT_MS * (1 + delta));
+}
+
 export interface PresenceSendInput {
   nextState: PresenceState;
   lastSentState: PresenceState;
   lastSentAt: number;
   now: number;
   ghostMode: boolean;
+  /** Overrides PRESENCE_HEARTBEAT_MS for this check (caller passes a jittered value). */
+  heartbeatMs?: number;
 }
 
 // Whether the sender should emit a presence event right now. Ghost Mode
@@ -29,7 +41,7 @@ export function shouldSendPresence(input: PresenceSendInput): boolean {
   if (input.ghostMode) return false;
   if (input.nextState !== input.lastSentState) return true;
   if (input.nextState === "idle") return false;
-  return input.now - input.lastSentAt >= PRESENCE_HEARTBEAT_MS;
+  return input.now - input.lastSentAt >= (input.heartbeatMs ?? PRESENCE_HEARTBEAT_MS);
 }
 
 // Defensive parse of a decrypted presence payload's state field — anything

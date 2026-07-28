@@ -23,8 +23,9 @@ and `decisions.md` for why things were done a certain way.
 | 5.1 + 5.1a — Persistent identity + contacts privacy settings | Rolled back (`main` @ `1ee0e35`); superseded by Local Profiles below (Jay's call, see `decisions.md`) |
 | 5.1 — Local Profiles (Layer A): PIN-gated device-local profiles + encrypted opt-in sharing | Built on `feat/profiles` — typecheck/108 tests/build green; manual eyeball (`?screen=profiles`) + live round-trip pending |
 | 5.2 — Forward-secrecy ratchet (Double Ratchet) + sealed framing + padding | Ratchet track (Tasks 0-7) shipped to `main` (`683d3a3`, fast-forward) — Double Ratchet + sealed `msg` framing + padding + host-primer, plus honest about/security copy. typecheck/156 tests/build green; two-browser smoke (text both ways + joiner-first) confirmed live. Track B (relay DoS/lifecycle hardening — H3/M1/M5/L5) built + green on `fix/relay-dos-limits` (server 30/30, build clean, probe-verified), **pending Jay's go-ahead to fast-forward merge** (deploys the relay to Render). Remaining after that: a fuller voice/receipts/presence eyeball. |
-| PQ hardening ①+② — hybrid post-quantum handshake (X25519 + ML-KEM-768) + safety-number binding | Built on `feat/pq-hybrid-handshake` — typecheck/163 tests/build green; full handshake choreography verified via a throwaway real-module test (root-key agreement, session-bound safety number, joiner-first via primer, corrupt-`kemct` fails). Manual two-browser eyeball pending. ③ traffic-analysis + ④ at-rest specced, not built. |
-| Round 2 — D: Hardened handshake (commit-then-reveal + transcript binding) | Built on `feat/hardened-handshake` off `main` — new opaque `commit` round (keys committed before either side reveals) + full-transcript binding into `RK₀`, `PROTOCOL_VERSION` 3→4, no server change, no new dep. typecheck / **185** tests / build green (transcript ×5 + kdf/ratchetSession binding cases). Manual two-browser eyeball pending. First of the round-2 four (A/B/D/E; see `decisions.md` 2026-07-26) — A+B and E still to build. |
+| PQ hardening ①+② — hybrid post-quantum handshake (X25519 + ML-KEM-768) + safety-number binding | Merged to `main` — typecheck/163 tests/build green; full handshake choreography verified via a throwaway real-module test (root-key agreement, session-bound safety number, joiner-first via primer, corrupt-`kemct` fails). |
+| PQ hardening ③ — traffic-analysis resistance (cover traffic + cadence jitter) | Built on `feat/traffic-analysis-cover`, now folded into `feat/crypto-round-integration` — typecheck/**189** tests/build green; two-browser Playwright eyeball 10/10 (steady ~1/sec jittered cover stream, byte-indistinguishable, zero added latency, no stray bubbles, stops on leave). Zero-latency "minimum frame rate" cadence + ±30% heartbeat jitter; honest metadata copy. |
+| Round 2 — D: Hardened handshake (commit-then-reveal + transcript binding) | Built on `feat/hardened-handshake`, now folded into `feat/crypto-round-integration` — new opaque `commit` round (keys committed before either side reveals) + full-transcript binding into `RK₀`, `PROTOCOL_VERSION` 3→4, no server change, no new dep. typecheck / **185** tests / build green (transcript ×5 + kdf/ratchetSession binding cases). First of the round-2 four (A/B/D/E; see `decisions.md` 2026-07-26) — A+B and E still to build. |
 
 ## Log
 
@@ -664,6 +665,47 @@ and `decisions.md` for why things were done a certain way.
   `…-safety-number-binding-design.md`; plan:
   `docs/superpowers/plans/2026-07-23-pq-hybrid-handshake.md`.
 
+- **2026-07-25** — Traffic-analysis resistance (spec ③) built on
+  `feat/traffic-analysis-cover` (5 tasks). The relay now sees a **steady, jittered
+  stream of decoy `msg` frames** whether or not anyone is talking, so it can no longer
+  read the conversation's rhythm (idle / typing / pausing). A cover frame is a real
+  ratcheted `c:0` content message — `frame({ channel: "cover", ... })` → `sealContent`
+  — decrypted-then-dropped on receipt exactly like the `"primer"`, so it is
+  **byte-indistinguishable** from real text/voice on the wire (same class, ratchet
+  header, size buckets) and spins the ratchet for free. Cadence is the **zero-latency
+  "minimum frame rate"** model (Jay's no-latency filter): real sends go out immediately
+  through one `sendContentFrame` choke point that all three `c:0` send sites route
+  through; a background timer emits cover only when the content line has been idle ≥ a
+  jittered interval (`COVER_INTERVAL_MS = 1500` ±40%, ~1/sec, `500` ms floor, far under
+  Track B's 30/sec cap). The strict constant-rate model is supported by the pure
+  `nextAction` `flush-real` branch but left **unwired / opt-in**. The presence heartbeat
+  now jitters ±30% (`jitteredHeartbeatMs`, max 3250 ms < 5000 ms expiry, so the online
+  dot never flickers off). Files: `crypto/framing.ts` (+`"cover"` channel), new pure
+  `protocol/coverTraffic.ts` (`nextAction`/`jitteredInterval`/`coverBodyLen`),
+  `protocol/presenceState.ts` (heartbeat jitter), `App.tsx` (cover scheduler + drop
+  case + teardown), and honest `Settings.tsx` copy (claims only that rhythm is hidden;
+  burst intensity / voice size / session existence remain documented residuals).
+  Verified: `npm run typecheck` clean, **189** client tests (11 new: framing cover
+  round-trip, coverTraffic ×7, presence jitter/override ×3), `npm run build` green.
+  **Two-browser Playwright eyeball (run then deleted): 10/10** — idle emits a steady
+  ~1/1.3s cover stream, each frame carrying a ratchet header, **no** stray bubbles on
+  either side, a real message goes out within 1s (zero added latency) and shows exactly
+  one bubble per side, and the stream stops on leave.
+  **Final whole-branch review (opus) found one Important efficacy defect, now fixed:**
+  the original `coverBodyLen` put ~70% of cover in the 64-byte bucket, but real `c:0`
+  text always lands in ≥256 (its 36-char UUID `id` overflows 64), so a size-aware relay
+  could classify the 64-bucket stream as decoy on sight — breaking the
+  byte-indistinguishability constraint. Fixed `coverBodyLen` to 256-modal (~80%) /
+  1024-tail (~20%), never 64, and updated its test; re-verified live that a real "hi"
+  send and idle cover both land at the 256 bucket (identical 396-byte wire payload).
+  See `decisions.md` point (7) — a deliberate, verified deviation from the plan text.
+  (Note: Playwright browser automation **is** available in this env — drive with
+  `page.wait_for_timeout`, not Python `time.sleep`, which blocks event delivery and
+  reads stale zeros.) Spec:
+  `docs/superpowers/specs/2026-07-23-traffic-analysis-resistance-design.md`; plan:
+  `docs/superpowers/plans/2026-07-25-traffic-analysis-cover.md`. Folded into
+  `feat/crypto-round-integration` on 2026-07-28 (see that entry).
+
 - **2026-07-26** — Round-2 crypto hardening kicked off (A/B/D/E green-lit by Jay —
   backend-only, UX-invisible; see `decisions.md` 2026-07-26). **Feature D — hardened
   handshake — built** on `feat/hardened-handshake` off `main`, first in the round
@@ -684,8 +726,7 @@ and `decisions.md` for why things were done a certain way.
   (BLAKE2b). One extra relay round-trip, hidden by the existing ≥2600 ms handshake
   screen — UX identical. Verified: `npm run typecheck` clean, **185** client tests pass
   (7 new: transcript ×5, kdf transcript-binding, ratchetSession per-side-transcript-
-  mismatch), `npm run build` green. Manual two-browser eyeball pending (Playwright is now
-  set up — the recurring "no browser-automation tool" caveat is obsolete). Spec:
+  mismatch), `npm run build` green. Spec:
   `docs/superpowers/specs/2026-07-26-hardened-handshake-design.md`; plan:
   `docs/superpowers/plans/2026-07-26-hardened-handshake.md`. Remaining in round 2: A+B
   (PQ ratchet + header encryption, co-designed as one wire revision) then E (periodic

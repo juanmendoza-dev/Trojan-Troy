@@ -35,6 +35,65 @@ Format: **Date — Decision.** Rationale. (Decided by: who)
   eyeball pending (Playwright now available). Spec/plan dated 2026-07-26.
   (Decided by: Jay; architecture by Claude)
 
+- **2026-07-25 — Traffic-analysis resistance (③): cover traffic rides the `c:0`
+  content channel; zero-latency "minimum frame rate" cadence chosen as the default;
+  presence heartbeat jittered.** Implemented spec ③
+  (`docs/superpowers/specs/2026-07-23-traffic-analysis-resistance-design.md`) on
+  `feat/traffic-analysis-cover`. Key calls:
+  (1) **Cover frames are real ratcheted content (`c:0`), not a static channel.** A
+  cover frame is `frame({ channel: "cover", ... })` → `sealContent` → a normal `msg`
+  envelope, decrypted-then-dropped on receipt exactly like `"primer"`. This makes it
+  **byte-indistinguishable** from real text/voice (same class, same ratchet header,
+  same size buckets) so the relay can't filter cover out; bonus, it spins the ratchet
+  for extra key rotation. No new crypto, no new dependency — reuses the audited path.
+  (2) **Zero-latency "minimum frame rate" model is the wired default, per Jay's
+  no-latency filter.** Real messages send **immediately** (route through one
+  `sendContentFrame` choke point that stamps `lastContentSentRef`); a background timer
+  emits a cover frame only when the `c:0` line has been idle ≥ a jittered interval, so
+  the relay never sees idle gaps but real sends incur **no delay**. The strict
+  constant-rate model (which would add up to one interval of latency and also mask
+  burst intensity) is **supported by the pure `nextAction` `flush-real` branch but
+  left off-by-default / unwired** — an opt-in Jay can flip on if he relaxes the UX bar.
+  (3) **`COVER_INTERVAL_MS = 1500` ± 40% jitter (~1 frame/sec) with a
+  `COVER_INTERVAL_FLOOR_MS = 500` floor.** The floor guards against a misconfigured
+  tiny interval approaching the relay's abuse cap; ~1/sec sits far under Track B's
+  30 msg/sec sustained throttle, so it's safe with or without Track B
+  (`fix/relay-dos-limits`) merged. Cover body length varies across the common 64/256
+  buckets (occasionally 1024) so cover isn't pinned to one size.
+  (4) **Presence heartbeat jittered ±30% (`PRESENCE_HEARTBEAT_JITTER_FRAC = 0.3`),
+  bounded < `PRESENCE_EXPIRY_MS`.** Max beat = 2500×1.3 = 3250 ms < 5000 ms expiry, so
+  the peer's online indicator can never flicker off between beats. Kills the
+  fixed-period heartbeat fingerprint without a new channel.
+  (5) **Honest residuals (do not oversell).** Zero-latency cover masks the *rhythm of
+  silence* (idle / typing / pausing), NOT: burst intensity of an active back-and-forth
+  (needs the strict model), voice-clip size (large frames still read as "probably
+  voice"; bucket variety only helps), or session existence/duration (inherent to any
+  relay). The about/security copy was updated to claim only that rhythm is hidden.
+  (6) **Sodium import note.** The plan's constraint said "every sodium import is
+  `libsodium-wrappers-sumo`", but the live repo actually imports `"libsodium-wrappers"`
+  everywhere (App.tsx + all `crypto/*`). Cover body bytes reuse App.tsx's existing
+  `sodium.randombytes_buf` import unchanged — no new sodium import added, so the
+  sumo-vs-not question never arises.
+  (7) **Corrected `coverBodyLen` buckets to 256-modal / 1024-tail, never 64 —
+  deviation from the plan/spec, forced by the byte-indistinguishability hard
+  constraint (final-review finding).** The plan and spec both assumed 64 was a
+  "common text bucket" and put ~70% of cover there. Empirically wrong: a real `c:0`
+  text frame's `id` is a 36-char UUID, so its meta alone (~63B) overflows the 64
+  bucket — **all** real text lands in ≥256 (verified: empty-body text = 256; only
+  the once-per-session primer is 64). A steady stream of 64-bucket cover would
+  therefore be trivially size-classified as decoy by the relay, defeating the
+  feature. Fixed `coverBodyLen` to draw bodies of 31–222B (→256, ~80%) and 223–990B
+  (→1024, ~20%), matching real text's actual bucket distribution; updated its unit
+  test to assert cover **never** lands in 64 (only {256, 1024}). Re-verified with a
+  two-browser eyeball: a real "hi" send and idle cover frames both land at the 256
+  bucket (identical 396-byte wire payload), cover tail at 1024 — size-indistinguishable.
+  This overrides the plan's literal `coverBodyLen` code because the plan's own
+  hard constraint ("byte-indistinguishable from content on the wire") takes
+  precedence over its mistaken bucket assumption. (Decided by: implementing agent
+  under Jay's standing constraints — conservative choice satisfying the hard
+  constraint while Jay was away; cadence/jitter defaults from spec ③. Flag for Jay:
+  this is a deliberate, verified deviation from the approved plan text.)
+
 - **2026-07-23 — Backend-only "post-quantum hardening" security round (4 specs) to
   deepen the crypto for the hackathon submission; building ①+② first. New crypto
   dependency accepted.** With the app ship-ready, Jay chose to make the encryption

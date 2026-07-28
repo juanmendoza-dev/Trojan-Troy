@@ -23,7 +23,15 @@ import {
   parsePresenceState,
   PRESENCE_EXPIRY_MS,
   type PresenceState,
+  jitteredHeartbeatMs,
 } from "./protocol/presenceState";
+import {
+  nextAction,
+  jitteredInterval,
+  coverBodyLen,
+  COVER_INTERVAL_MS,
+  COVER_JITTER_FRAC,
+} from "./protocol/coverTraffic";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
 import { type ConnectStatus } from "./screens/ConnectingBar";
 import { CONNECT_COMPLETE_HOLD_MS } from "./screens/barPhases";
@@ -143,6 +151,10 @@ export default function App() {
   // (i.e. before receiving the initiator's primer/first message) — flushed the
   // moment a content receive establishes the chain.
   const outboxRef = useRef<Uint8Array[]>([]);
+  // Last time a real-or-cover c:0 content frame went to the wire — the cover
+  // scheduler backs off whenever this is recent (see protocol/coverTraffic.ts).
+  const lastContentSentRef = useRef(0);
+  const coverTimerRef = useRef<number | null>(null);
   const clientRef = useRef<RelayClient | null>(null);
   const listenerCleanupsRef = useRef<Array<() => void>>([]);
   const messagesRef = useRef<ChatMessage[]>(messages);
@@ -236,6 +248,7 @@ export default function App() {
         lastSentAt: last.at,
         now,
         ghostMode: ghostModeRef.current,
+        heartbeatMs: jitteredHeartbeatMs(Math.random),
       })
     ) {
       return;
@@ -272,6 +285,44 @@ export default function App() {
       if (presenceExpiryRef.current !== null) clearTimeout(presenceExpiryRef.current);
     };
   }, []);
+
+  // Cover traffic: while in chat with an established sending chain, keep the
+  // outbound c:0 frame rate at/above a jittered baseline so the relay can't see
+  // idle gaps or typing pauses. Real sends reset lastContentSentRef, so cover
+  // only fills genuine silence — real messages incur zero added latency.
+  useEffect(() => {
+    if (screen.name !== "chat") return;
+    let cancelled = false;
+    function scheduleCover() {
+      if (cancelled) return;
+      const interval = jitteredInterval(COVER_INTERVAL_MS, COVER_JITTER_FRAC, Math.random);
+      coverTimerRef.current = window.setTimeout(async () => {
+        const sc = sessionCryptoRef.current;
+        const client = clientRef.current;
+        if (sc && client && sc.ratchet.CKs) {
+          const action = nextAction({
+            now: performance.now(),
+            lastContentSentAt: lastContentSentRef.current,
+            hasQueuedReal: false,
+            interval,
+          });
+          if (action === "cover") {
+            const body = sodium.randombytes_buf(coverBodyLen(Math.random));
+            await sendContentFrame(sc, client, frame({ channel: "cover", id: "", body }));
+          }
+        }
+        scheduleCover();
+      }, interval);
+    }
+    scheduleCover();
+    return () => {
+      cancelled = true;
+      if (coverTimerRef.current !== null) {
+        clearTimeout(coverTimerRef.current);
+        coverTimerRef.current = null;
+      }
+    };
+  }, [screen.name]);
 
   useEffect(() => {
     if (devOverride?.theme) setTheme(devOverride.theme);
@@ -333,7 +384,7 @@ export default function App() {
       // now. The responder decrypts it (gaining a sending chain) and drops it —
       // invisible, but it lets either side type first.
       if (role === "initiator") {
-        client.send(await sealContent(sc, frame({ channel: "primer", id: "", body: EMPTY_BODY })));
+        await sendContentFrame(sc, client, frame({ channel: "primer", id: "", body: EMPTY_BODY }));
       }
       // The safety number now binds the derived hybrid root key (not just the
       // relayed pubkeys), so a key swap or a PQ downgrade changes the digits.
@@ -373,6 +424,9 @@ export default function App() {
       switch (received.channel) {
         case "primer":
           // Hidden bootstrap message: its only job was to advance the ratchet.
+          break;
+        case "cover":
+          // Decoy traffic: its only job was to advance the ratchet. Drop it.
           break;
         case "text": {
           const text = textDecoder.decode(received.body);
@@ -662,6 +716,14 @@ export default function App() {
     client.send({ type: "join", roomCode });
   }
 
+  // One choke point for every real ratcheted content send, so the cover timer
+  // sees real traffic and backs off. Static signals (presence/ack/profile) do
+  // NOT go through here — only c:0 content counts toward the cover baseline.
+  async function sendContentFrame(sc: SessionCrypto, client: RelayClient, frameBytes: Uint8Array) {
+    lastContentSentRef.current = performance.now();
+    client.send(await sealContent(sc, frameBytes));
+  }
+
   // Send ratcheted content, or — if we're the responder and haven't received
   // the initiator's primer yet — queue it until our sending chain exists.
   async function sendContent(frameBytes: Uint8Array) {
@@ -672,7 +734,7 @@ export default function App() {
       outboxRef.current.push(frameBytes);
       return;
     }
-    client.send(await sealContent(sc, frameBytes));
+    await sendContentFrame(sc, client, frameBytes);
   }
 
   async function flushOutbox() {
@@ -682,7 +744,7 @@ export default function App() {
     const pending = outboxRef.current;
     outboxRef.current = [];
     for (const frameBytes of pending) {
-      client.send(await sealContent(sc, frameBytes));
+      await sendContentFrame(sc, client, frameBytes);
     }
   }
 
@@ -725,6 +787,10 @@ export default function App() {
     if (presenceExpiryRef.current !== null) {
       clearTimeout(presenceExpiryRef.current);
       presenceExpiryRef.current = null;
+    }
+    if (coverTimerRef.current !== null) {
+      clearTimeout(coverTimerRef.current);
+      coverTimerRef.current = null;
     }
     presenceSentRef.current = { state: "idle", at: 0 };
     setPeerPresence("idle");
