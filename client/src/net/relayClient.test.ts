@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { RelayClient, type Envelope, type MinimalWebSocket } from "./relayClient";
 
 function fakeSocket(): MinimalWebSocket & { sent: string[] } {
@@ -127,6 +127,49 @@ describe("RelayClient", () => {
     socket.onclose?.();
 
     await expect(opened).rejects.toThrow();
+  });
+
+  describe("waitForOpen timeout", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("rejects when the socket never opens within the timeout", async () => {
+      vi.useFakeTimers();
+      const socket = fakeSocket();
+      const client = new RelayClient("ws://test", () => socket);
+
+      const opened = client.waitForOpen(90_000);
+      vi.advanceTimersByTime(90_000);
+
+      await expect(opened).rejects.toThrow("Relay connection timed out.");
+    });
+
+    it("resolves and disarms the timer when the socket opens in time", async () => {
+      vi.useFakeTimers();
+      const socket = fakeSocket();
+      const client = new RelayClient("ws://test", () => socket);
+
+      const opened = client.waitForOpen(90_000);
+      socket.onopen?.();
+      await opened;
+
+      // The stale timer firing later must be a no-op.
+      vi.advanceTimersByTime(90_000);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("prefers the socket's own failure over the timeout", async () => {
+      vi.useFakeTimers();
+      const socket = fakeSocket();
+      const client = new RelayClient("ws://test", () => socket);
+
+      const opened = client.waitForOpen(90_000);
+      socket.onerror?.();
+
+      await expect(opened).rejects.toThrow("Relay connection error.");
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   it("notifies listeners with an error envelope when the socket closes after opening", async () => {
