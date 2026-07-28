@@ -32,6 +32,14 @@ import {
   COVER_INTERVAL_MS,
   COVER_JITTER_FRAC,
 } from "./protocol/coverTraffic";
+import {
+  shouldOffer,
+  jitteredRekeyInterval,
+  nextOfferId,
+  PQ_REKEY_INTERVAL_MS,
+  PQ_REKEY_JITTER_FRAC,
+} from "./protocol/pqRekey";
+import { queuePqSecret, isPqFoldPending } from "./crypto/ratchet";
 import { StartJoinScreen } from "./screens/StartJoinScreen";
 import { type ConnectStatus } from "./screens/ConnectingBar";
 import { CONNECT_COMPLETE_HOLD_MS } from "./screens/barPhases";
@@ -102,16 +110,37 @@ async function maybeSendReadAck(
   pendingReadIdsRef.current.clear();
 }
 
+// Which channels ride the ratchet (as opposed to a static subkey). v5 takes the
+// key class off the envelope, so "was that a content frame?" is answered from the
+// sealed frame instead — it gates the outbox flush, since only a content receive
+// can establish the responder's sending chain.
+const CONTENT_CHANNELS = new Set<Frame["channel"]>([
+  "text",
+  "voice",
+  "primer",
+  "cover",
+  "pqoffer",
+  "pqaccept",
+]);
+
+function isContentChannel(channel: Frame["channel"]): boolean {
+  return CONTENT_CHANNELS.has(channel);
+}
+
 // Content that fails to open is shown as a "couldn't decrypt" bubble — but a
 // replayed / stale / over-skipped packet (which a malicious relay could spam)
-// is dropped silently, matching the ratchet's own drop semantics.
+// is dropped silently, matching the ratchet's own drop semantics. A frame no key
+// opens is silent too: under v5's sealed headers that is what a foreign or
+// reflected frame looks like, and it must not paint an error bubble.
 function isSilentContentDrop(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : "";
   return (
     msg.includes("replayed") ||
     msg.includes("stale") ||
     msg.includes("too many skipped") ||
-    msg.includes("no receiving chain")
+    msg.includes("no receiving chain") ||
+    msg.includes("no key opened") ||
+    msg.includes("static header class")
   );
 }
 
@@ -125,10 +154,16 @@ function zeroizeSession(sc: SessionCrypto | null) {
   if (r.CKs) sodium.memzero(r.CKs);
   if (r.CKr) sodium.memzero(r.CKr);
   sodium.memzero(r.DHs.privateKey);
-  for (const mk of r.MKSKIPPED.values()) sodium.memzero(mk);
+  for (const { mk } of r.MKSKIPPED.values()) sodium.memzero(mk);
   r.MKSKIPPED.clear();
+  // v5: header keys and unfolded post-quantum secrets are live key material too.
+  for (const hk of [r.HKs, r.HKr, r.NHKs, r.NHKr]) if (hk) sodium.memzero(hk);
+  for (const pending of r.pqPending) sodium.memzero(pending.secret);
+  r.pqPending.length = 0;
   for (const key of Object.values(sc.txSub)) sodium.memzero(key);
   for (const key of Object.values(sc.rxSub)) sodium.memzero(key);
+  for (const key of Object.values(sc.txHdr)) sodium.memzero(key);
+  for (const key of Object.values(sc.rxHdr)) sodium.memzero(key);
   sodium.memzero(sc.rootKey);
 }
 
@@ -156,10 +191,21 @@ export default function App() {
   // (i.e. before receiving the initiator's primer/first message) — flushed the
   // moment a content receive establishes the chain.
   const outboxRef = useRef<Uint8Array[]>([]);
-  // Last time a real-or-cover c:0 content frame went to the wire — the cover
+  // Last time a real-or-cover content frame went to the wire — the cover
   // scheduler backs off whenever this is recent (see protocol/coverTraffic.ts).
   const lastContentSentRef = useRef(0);
   const coverTimerRef = useRef<number | null>(null);
+  // Post-quantum rekey (round-2 feature A). Only the initiator offers, so there is
+  // one offer-id sequence and no ambiguity about the order two secrets fold in.
+  // The live offer's ML-KEM secret key is held until the peer's accept arrives,
+  // then zeroized — each keypair is single-use.
+  const pqOfferRef = useRef<{ offerId: number; secretKey: Uint8Array } | null>(null);
+  const pqLastOfferAtRef = useRef(0);
+  const pqSentSinceOfferRef = useRef(0);
+  const pqTimerRef = useRef<number | null>(null);
+  const pqLastOfferIdRef = useRef(0);
+  // Which side of the handshake we are — the rekey offerer is always the initiator.
+  const roleRef = useRef<"initiator" | "responder" | null>(null);
   const clientRef = useRef<RelayClient | null>(null);
   const listenerCleanupsRef = useRef<Array<() => void>>([]);
   const messagesRef = useRef<ChatMessage[]>(messages);
@@ -338,6 +384,56 @@ export default function App() {
     };
   }, [screen.name]);
 
+  // Post-quantum rekey (A): the initiator periodically offers a fresh ML-KEM
+  // public key; the responder encapsulates to it, and both sides fold the
+  // resulting secret into the ratchet's root chain at the next DH step. So
+  // post-compromise healing re-secures with post-quantum material, not just
+  // X25519. The offer rides the ordinary content path, which means it is padded
+  // and bucketed exactly like text — the reason the ML-KEM blobs are NOT carried
+  // in the (now sealed, fixed-size) ratchet header.
+  useEffect(() => {
+    if (screen.name !== "chat" || roleRef.current !== "initiator") return;
+    let cancelled = false;
+    // Treat entering chat as the last rekey: RK0 already contains the handshake's
+    // ML-KEM secret, so the clock starts from a post-quantum root.
+    pqLastOfferAtRef.current = performance.now();
+    pqSentSinceOfferRef.current = 0;
+    function scheduleRekey() {
+      if (cancelled) return;
+      const interval = jitteredRekeyInterval(
+        PQ_REKEY_INTERVAL_MS,
+        PQ_REKEY_JITTER_FRAC,
+        Math.random
+      );
+      pqTimerRef.current = window.setTimeout(async () => {
+        const sc = sessionCryptoRef.current;
+        const client = clientRef.current;
+        if (
+          sc &&
+          client &&
+          sc.ratchet.CKs &&
+          shouldOffer({
+            now: performance.now(),
+            lastOfferAt: pqLastOfferAtRef.current,
+            contentSentSinceOffer: pqSentSinceOfferRef.current,
+            interval,
+          })
+        ) {
+          await sendPqOffer(sc, client);
+        }
+        scheduleRekey();
+      }, interval);
+    }
+    scheduleRekey();
+    return () => {
+      cancelled = true;
+      if (pqTimerRef.current !== null) {
+        clearTimeout(pqTimerRef.current);
+        pqTimerRef.current = null;
+      }
+    };
+  }, [screen.name]);
+
   useEffect(() => {
     if (devOverride?.theme) setTheme(devOverride.theme);
   }, []);
@@ -360,6 +456,7 @@ export default function App() {
   ) {
     const handshakeStart = performance.now();
     let disconnected = false;
+    roleRef.current = role;
     // Hybrid post-quantum handshake state. The responder holds the ML-KEM
     // keypair (published on its `pubkey`); the initiator encapsulates to it and
     // returns the ciphertext (`kemct`). Each side stashes its classical
@@ -409,6 +506,14 @@ export default function App() {
       }
       if (disconnected) return;
       setScreen({ name: "safety-number", roomCode, safetyNumber });
+      await drainInbound();
+    }
+
+    // Replay whatever arrived before we could open it — either before RK₀ existed
+    // (responder, pre-kemct) or while a post-quantum fold was still in flight.
+    // Anything that still can't be opened is re-buffered by handleMsg, so this is
+    // safe to call repeatedly.
+    async function drainInbound() {
       const queued = inbound.splice(0);
       for (const env of queued) await handleMsg(env);
     }
@@ -421,9 +526,17 @@ export default function App() {
       try {
         received = await openMsg(sc, envelope);
       } catch (err) {
+        // The peer folded a post-quantum secret we haven't received yet (its
+        // accept is still in flight). Retryable, not corrupt — buffer and drain
+        // once the accept lands. The relay is FIFO per sender so this shouldn't
+        // happen; the buffer means a reordering bug degrades to a delay.
+        if (isPqFoldPending(err)) {
+          inbound.push(envelope);
+          return;
+        }
         // A content packet that genuinely won't decrypt gets a bubble; a bad
-        // static signal (or a replay) is dropped silently, as before.
-        if (envelope.c === 0 && !isSilentContentDrop(err)) {
+        // static signal, a replay, or a frame no key opens is dropped silently.
+        if (!isSilentContentDrop(err)) {
           setMessages((prev) => [
             ...prev,
             { id: crypto.randomUUID(), timestamp: Date.now(), kind: "decryption-error" },
@@ -432,8 +545,9 @@ export default function App() {
         return;
       }
       // A content receive advances the receiving ratchet and may have just
-      // established our sending chain (responder) — flush anything queued.
-      if (envelope.c === 0) void flushOutbox();
+      // established our sending chain (responder) — flush anything queued. The
+      // class is no longer on the envelope, so it comes from the sealed frame.
+      if (isContentChannel(received.channel)) void flushOutbox();
 
       switch (received.channel) {
         case "primer":
@@ -442,6 +556,49 @@ export default function App() {
         case "cover":
           // Decoy traffic: its only job was to advance the ratchet. Drop it.
           break;
+        case "pqoffer": {
+          // The initiator offered a fresh ML-KEM public key: encapsulate to it,
+          // queue the secret for the next ratchet step, and return the ciphertext.
+          if (roleRef.current !== "responder") break; // only the initiator offers
+          if (received.body.length < 2) break;
+          const view = new DataView(received.body.buffer, received.body.byteOffset);
+          const offerId = view.getUint16(0, true);
+          const kemPub = received.body.slice(2);
+          try {
+            const { cipherText, sharedSecret } = kemEncapsulate(kemPub);
+            queuePqSecret(sc.ratchet, offerId, sharedSecret);
+            const body = new Uint8Array(2 + cipherText.length);
+            new DataView(body.buffer).setUint16(0, offerId, true);
+            body.set(cipherText, 2);
+            await sendContentFrame(sc, client, frame({ channel: "pqaccept", id: "", body }));
+          } catch {
+            // A malformed public key just means no fold this round — the session
+            // carries on under the existing root key.
+          }
+          break;
+        }
+        case "pqaccept": {
+          // Our offer was accepted: decapsulate, queue the secret, and retire the
+          // single-use ML-KEM secret key.
+          const offer = pqOfferRef.current;
+          if (roleRef.current !== "initiator" || !offer) break;
+          if (received.body.length < 2) break;
+          const view = new DataView(received.body.buffer, received.body.byteOffset);
+          const offerId = view.getUint16(0, true);
+          if (offerId !== offer.offerId) break; // stale or unknown offer
+          const cipherText = received.body.slice(2);
+          try {
+            const secret = kemDecapsulate(cipherText, offer.secretKey);
+            queuePqSecret(sc.ratchet, offerId, secret);
+          } catch {
+            // Nothing to fold; the next offer will try again.
+          }
+          sodium.memzero(offer.secretKey);
+          pqOfferRef.current = null;
+          // A buffered message may have been waiting on exactly this secret.
+          void drainInbound();
+          break;
+        }
         case "text": {
           const text = textDecoder.decode(received.body);
           showPeerPresence("idle");
@@ -730,12 +887,33 @@ export default function App() {
     client.send({ type: "join", roomCode });
   }
 
-  // One choke point for every real ratcheted content send, so the cover timer
-  // sees real traffic and backs off. Static signals (presence/ack/profile) do
-  // NOT go through here — only c:0 content counts toward the cover baseline.
+  // One choke point for every ratcheted content send, so the cover timer sees real
+  // traffic and backs off. Static signals (presence/ack/profile) do NOT go through
+  // here — only ratcheted content counts toward the cover baseline.
   async function sendContentFrame(sc: SessionCrypto, client: RelayClient, frameBytes: Uint8Array) {
     lastContentSentRef.current = performance.now();
+    pqSentSinceOfferRef.current += 1;
     client.send(await sealContent(sc, frameBytes));
+  }
+
+  // Offer a fresh ML-KEM public key for the next root-chain fold (A). The keypair
+  // is single-use: the secret key is held only until the peer's accept arrives.
+  // Sent as ordinary ratcheted content, so it is padded into the same buckets as
+  // text — cover traffic reaches the 4096 bucket too, so a rekey isn't visible as
+  // a periodic large frame.
+  async function sendPqOffer(sc: SessionCrypto, client: RelayClient) {
+    const offerId = nextOfferId(pqLastOfferIdRef.current);
+    pqLastOfferIdRef.current = offerId;
+    const kem = generateKemKeypair();
+    // Retire any offer the peer never answered — one live offer at a time.
+    if (pqOfferRef.current) sodium.memzero(pqOfferRef.current.secretKey);
+    pqOfferRef.current = { offerId, secretKey: kem.secretKey };
+    pqLastOfferAtRef.current = performance.now();
+    pqSentSinceOfferRef.current = 0;
+    const body = new Uint8Array(2 + kem.publicKey.length);
+    new DataView(body.buffer).setUint16(0, offerId, true);
+    body.set(kem.publicKey, 2);
+    await sendContentFrame(sc, client, frame({ channel: "pqoffer", id: "", body }));
   }
 
   // Send ratcheted content, or — if we're the responder and haven't received
@@ -806,6 +984,19 @@ export default function App() {
       clearTimeout(coverTimerRef.current);
       coverTimerRef.current = null;
     }
+    if (pqTimerRef.current !== null) {
+      clearTimeout(pqTimerRef.current);
+      pqTimerRef.current = null;
+    }
+    // The live offer's ML-KEM secret key outlives the session object, so wipe it
+    // here rather than in zeroizeSession.
+    if (pqOfferRef.current) {
+      sodium.memzero(pqOfferRef.current.secretKey);
+      pqOfferRef.current = null;
+    }
+    pqLastOfferIdRef.current = 0;
+    pqSentSinceOfferRef.current = 0;
+    roleRef.current = null;
     presenceSentRef.current = { state: "idle", at: 0 };
     setPeerPresence("idle");
     setPeerProfile(null);

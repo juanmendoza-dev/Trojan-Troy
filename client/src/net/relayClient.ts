@@ -1,19 +1,17 @@
-import type { RatchetHeader } from "../crypto/ratchet";
-
 // Bumped whenever the handshake / post-handshake wire format changes. Sent on
 // `commit`/`pubkey` and checked by the peer, so a stale client hits an error
 // screen instead of deriving keys against a format it can't speak. v3 added the
 // hybrid post-quantum handshake (KEM public key on `pubkey` + the `kemct`
-// envelope); v4 adds the commit-then-reveal `commit` round + transcript binding.
-export const PROTOCOL_VERSION = 4;
-
-export type { RatchetHeader };
+// envelope); v4 added the commit-then-reveal `commit` round + transcript binding;
+// v5 seals the ratchet header (so the key class and chain counters leave the wire)
+// and folds post-quantum secrets into the ratchet's root chain.
+export const PROTOCOL_VERSION = 5;
 
 // After the handshake, every content/signal envelope collapses into one opaque
-// `msg` so the relay can't tell text from voice from a receipt. `c` selects the
-// key class: 0 = ratcheted content (carries a RatchetHeader), 1 = presence,
-// 2 = ack, 3 = profile (each sealed under a static per-channel subkey). The
-// channel, id, mimeType, ack kind, and exact size all live sealed in `payload`.
+// `msg` so the relay can't tell text from voice from a receipt. As of v5 there is
+// nothing else on it: `payload` is base64 of `sealed header (84 bytes) ‖ body
+// ciphertext`, and the key class, ratchet public key, chain counters, channel, id,
+// mimeType, ack kind and exact size are all inside the encryption.
 export type Envelope =
   | { type: "create" }
   | { type: "created"; roomCode: string }
@@ -30,7 +28,7 @@ export type Envelope =
   // ML-KEM ciphertext (base64), sent by the initiator after encapsulating to the
   // responder's `kem` key. Forwarded opaquely by the relay, like `pubkey`/`msg`.
   | { type: "kemct"; payload: string }
-  | { type: "msg"; c: 0 | 1 | 2 | 3; header?: RatchetHeader; payload: string }
+  | { type: "msg"; payload: string }
   | { type: "error"; message: string };
 
 export interface MinimalWebSocket {

@@ -24,19 +24,17 @@ describe("RelayClient", () => {
     expect(socket.sent).toEqual([JSON.stringify({ type: "create" })]);
   });
 
-  it("sends a content msg envelope with its ratchet header", () => {
+  it("sends an opaque msg envelope with nothing but a payload", () => {
     const socket = fakeSocket();
     const client = new RelayClient("ws://test", () => socket);
 
-    const env: Envelope = {
-      type: "msg",
-      c: 0,
-      header: { dh: "Zm9v", pn: 0, n: 3 },
-      payload: "sealed",
-    };
+    // v5: the sealed header rides inside `payload`, so there is no cleartext class
+    // selector and no cleartext ratchet header for the relay to read.
+    const env: Envelope = { type: "msg", payload: "sealed-header-and-body" };
     client.send(env);
 
     expect(socket.sent).toEqual([JSON.stringify(env)]);
+    expect(Object.keys(JSON.parse(socket.sent[0])).sort()).toEqual(["payload", "type"]);
   });
 
   it("passes msg envelopes through to listeners", () => {
@@ -45,13 +43,8 @@ describe("RelayClient", () => {
     const received: unknown[] = [];
     client.onMessage((envelope) => received.push(envelope));
 
-    const content: Envelope = {
-      type: "msg",
-      c: 0,
-      header: { dh: "Zm9v", pn: 0, n: 0 },
-      payload: "one",
-    };
-    const ack: Envelope = { type: "msg", c: 2, payload: "two" };
+    const content: Envelope = { type: "msg", payload: "one" };
+    const ack: Envelope = { type: "msg", payload: "two" };
     socket.onmessage?.({ data: JSON.stringify(content) });
     socket.onmessage?.({ data: JSON.stringify(ack) });
 
@@ -64,7 +57,7 @@ describe("RelayClient", () => {
     const received: unknown[] = [];
     client.onMessage((envelope) => received.push(envelope));
 
-    const card: Envelope = { type: "msg", c: 3, payload: "sealed-card" };
+    const card: Envelope = { type: "msg", payload: "sealed-card" };
     client.send(card);
     socket.onmessage?.({ data: JSON.stringify(card) });
 

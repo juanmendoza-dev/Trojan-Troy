@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
+import sodium from "libsodium-wrappers-sumo";
 import { generateKeypair, deriveSessionKeys } from "../crypto/keys";
 import { generateKemKeypair, kemEncapsulate, kemDecapsulate } from "../crypto/pqkem";
 import { frame } from "../crypto/framing";
 import { computeTranscriptHash } from "../crypto/transcript";
+import { sealHeader, staticHeader, SEALED_HEADER_LEN } from "../crypto/header";
+import { toBase64, fromBase64 } from "../crypto/encoding";
 import type { Envelope } from "../net/relayClient";
 import { initSession, sealContent, sealStatic, openMsg, type SessionCrypto } from "./ratchetSession";
 
@@ -15,7 +18,7 @@ function asMsg(env: Envelope): Msg {
   return env;
 }
 
-// Pair two sessions the way App.tsx will: a real crypto_kx handshake plus a real
+// Pair two sessions the way App.tsx does: a real crypto_kx handshake plus a real
 // ML-KEM-768 exchange (the responder holds the KEM keypair; the initiator
 // encapsulates to it), then the initiator seeds against the responder's handshake
 // pubkey while the responder reuses his handshake keypair as his initial ratchet
@@ -33,7 +36,7 @@ async function pair(): Promise<{ a: SessionCrypto; b: SessionCrypto }> {
     bob.publicKey,
     bobKem.publicKey,
     cipherText,
-    4
+    5
   );
   const a = await initSession(aliceKeys, "initiator", alice, bob.publicKey, pqAlice, transcript);
   const b = await initSession(bobKeys, "responder", bob, alice.publicKey, pqBob, transcript);
@@ -56,9 +59,9 @@ describe("ratchetSession", () => {
     const { cipherText, sharedSecret: pqAlice } = kemEncapsulate(bobKem.publicKey);
     const pqBob = kemDecapsulate(cipherText, bobKem.secretKey);
     // Alice binds the true transcript; Bob's was tampered (version downgraded to
-    // 3), as a relay stripping the v4 framing would produce. They must not agree.
-    const trA = await computeTranscriptHash(alice.publicKey, bob.publicKey, bobKem.publicKey, cipherText, 4);
-    const trB = await computeTranscriptHash(alice.publicKey, bob.publicKey, bobKem.publicKey, cipherText, 3);
+    // 4), as a relay stripping the v5 framing would produce. They must not agree.
+    const trA = await computeTranscriptHash(alice.publicKey, bob.publicKey, bobKem.publicKey, cipherText, 5);
+    const trB = await computeTranscriptHash(alice.publicKey, bob.publicKey, bobKem.publicKey, cipherText, 4);
     const a = await initSession(aliceKeys, "initiator", alice, bob.publicKey, pqAlice, trA);
     const b = await initSession(bobKeys, "responder", bob, alice.publicKey, pqBob, trB);
     expect(Array.from(a.rootKey)).not.toEqual(Array.from(b.rootKey));
@@ -68,9 +71,6 @@ describe("ratchetSession", () => {
     const { a, b } = await pair();
 
     const env = asMsg(await sealContent(a, frame({ channel: "text", id: "m1", body: enc("hello") })));
-    expect(env.c).toBe(0);
-    expect(env.header).toBeDefined();
-
     const f1 = await openMsg(b, env);
     expect(f1.channel).toBe("text");
     expect(f1.id).toBe("m1");
@@ -94,62 +94,166 @@ describe("ratchetSession", () => {
     expect(Array.from(f.body)).toEqual(Array.from(body));
   });
 
-  it("round-trips each static channel under its own class", async () => {
+  it("round-trips each static channel", async () => {
     const { a, b } = await pair();
 
-    const presence = asMsg(
-      await sealStatic(a, "presence", frame({ channel: "presence", id: "p1", body: enc('{"state":"typing"}') }))
+    const presence = await sealStatic(
+      a,
+      "presence",
+      frame({ channel: "presence", id: "p1", body: enc('{"state":"typing"}') })
     );
-    expect(presence.c).toBe(1);
-    expect(presence.header).toBeUndefined();
     expect((await openMsg(b, presence)).channel).toBe("presence");
 
-    const ack = asMsg(
-      await sealStatic(a, "ack", frame({ channel: "ack", id: "m1", kind: "read", body: new Uint8Array() }))
+    const ack = await sealStatic(
+      a,
+      "ack",
+      frame({ channel: "ack", id: "m1", kind: "read", body: new Uint8Array() })
     );
-    expect(ack.c).toBe(2);
     const ackFrame = await openMsg(b, ack);
     expect(ackFrame.channel).toBe("ack");
     expect(ackFrame.kind).toBe("read");
     expect(ackFrame.id).toBe("m1");
 
-    const profile = asMsg(
-      await sealStatic(a, "profile", frame({ channel: "profile", id: "c1", body: enc('{"name":"Jay"}') }))
+    const profile = await sealStatic(
+      a,
+      "profile",
+      frame({ channel: "profile", id: "c1", body: enc('{"name":"Jay"}') })
     );
-    expect(profile.c).toBe(3);
     expect((await openMsg(b, profile)).channel).toBe("profile");
   });
 
-  it("drops a content message relabeled as a static class", async () => {
+  it("round-trips the post-quantum rekey channels as ordinary content", async () => {
     const { a, b } = await pair();
-    const env = asMsg(await sealContent(a, frame({ channel: "text", id: "m1", body: enc("secret") })));
+    const kem = generateKemKeypair();
+    const body = new Uint8Array(2 + kem.publicKey.length);
+    new DataView(body.buffer).setUint16(0, 7, true);
+    body.set(kem.publicKey, 2);
 
-    const relabeled: Envelope = { type: "msg", c: 1, payload: env.payload };
-    await expect(openMsg(b, relabeled)).rejects.toThrow();
+    const env = await sealContent(a, frame({ channel: "pqoffer", id: "", body }));
+    const f = await openMsg(b, env);
+    expect(f.channel).toBe("pqoffer");
+    expect(new DataView(f.body.buffer, f.body.byteOffset).getUint16(0, true)).toBe(7);
+    expect(Array.from(f.body.subarray(2))).toEqual(Array.from(kem.publicKey));
   });
 
-  it("drops a presence message relabeled as another static class (wrong subkey)", async () => {
-    const { a, b } = await pair();
-    const env = asMsg(
-      await sealStatic(a, "presence", frame({ channel: "presence", id: "p1", body: enc("x") }))
-    );
+  describe("wire opacity (v5)", () => {
+    it("puts nothing but type and payload on the envelope", async () => {
+      const { a } = await pair();
+      const content = asMsg(await sealContent(a, frame({ channel: "text", id: "m1", body: enc("hi") })));
+      const presence = asMsg(
+        await sealStatic(a, "presence", frame({ channel: "presence", id: "p1", body: enc("x") }))
+      );
+      // No cleartext class selector, no cleartext ratchet header — the relay sees
+      // one opaque field and nothing else.
+      expect(Object.keys(content).sort()).toEqual(["payload", "type"]);
+      expect(Object.keys(presence).sort()).toEqual(["payload", "type"]);
+      expect("c" in content).toBe(false);
+      expect("header" in content).toBe(false);
+    });
 
-    const relabeled: Envelope = { type: "msg", c: 2, payload: env.payload };
-    await expect(openMsg(b, relabeled)).rejects.toThrow();
+    it("makes content and static frames structurally identical", async () => {
+      const { a } = await pair();
+      const content = asMsg(await sealContent(a, frame({ channel: "text", id: "m1", body: enc("hi") })));
+      const presence = asMsg(
+        await sealStatic(a, "presence", frame({ channel: "presence", id: "m1", body: enc("hi") }))
+      );
+      const cBlob = await fromBase64(content.payload);
+      const pBlob = await fromBase64(presence.payload);
+      // Same fixed-size sealed header on both, and both bodies pad to the same
+      // bucket — so class isn't inferable from shape.
+      expect(cBlob.length).toBe(pBlob.length);
+      expect(sodium.to_hex(cBlob.subarray(0, SEALED_HEADER_LEN))).not.toBe(
+        sodium.to_hex(pBlob.subarray(0, SEALED_HEADER_LEN))
+      );
+    });
+  });
+
+  describe("class binding and replay", () => {
+    it("drops a static frame whose header class does not match its body key", async () => {
+      const { a, b } = await pair();
+      const env = asMsg(
+        await sealStatic(a, "presence", frame({ channel: "presence", id: "p1", body: enc("x") }))
+      );
+      // Re-seal the header as the ack class under the ack header key, keeping the
+      // presence-sealed body: the header now opens on the ack key, so only the
+      // body's own subkey stops it.
+      const blob = await fromBase64(env.payload);
+      const forgedHeader = await sealHeader(a.txHdr.ack, staticHeader(2, 0));
+      const forged = new Uint8Array(blob.length);
+      forged.set(forgedHeader, 0);
+      forged.set(blob.subarray(SEALED_HEADER_LEN), SEALED_HEADER_LEN);
+      await expect(openMsg(b, { type: "msg", payload: await toBase64(forged) })).rejects.toThrow();
+    });
+
+    it("drops a content blob that no key can open", async () => {
+      const { a, b } = await pair();
+      const env = asMsg(await sealContent(a, frame({ channel: "text", id: "m1", body: enc("secret") })));
+      // Reflect it back at the sender: none of Alice's own receive candidates —
+      // ratchet or static — can open her own outgoing frame.
+      await expect(openMsg(a, env)).rejects.toThrow(/no key opened/);
+      // Bob, the real recipient, still opens it.
+      expect(dec((await openMsg(b, env)).body)).toBe("secret");
+    });
+
+    it("drops a replayed static frame", async () => {
+      const { a, b } = await pair();
+      const env = await sealStatic(
+        a,
+        "presence",
+        frame({ channel: "presence", id: "p1", body: enc('{"state":"typing"}') })
+      );
+      expect((await openMsg(b, env)).channel).toBe("presence");
+      // The same captured frame a second time is a replay, not a new heartbeat.
+      await expect(openMsg(b, env)).rejects.toThrow(/replayed|stale/);
+      // A genuine follow-up still works.
+      const next = await sealStatic(
+        a,
+        "presence",
+        frame({ channel: "presence", id: "p2", body: enc('{"state":"idle"}') })
+      );
+      expect((await openMsg(b, next)).channel).toBe("presence");
+    });
+
+    it("accepts static frames arriving out of order, but only once each", async () => {
+      const { a, b } = await pair();
+      const one = await sealStatic(a, "ack", frame({ channel: "ack", id: "m1", kind: "delivered", body: new Uint8Array() }));
+      const two = await sealStatic(a, "ack", frame({ channel: "ack", id: "m2", kind: "delivered", body: new Uint8Array() }));
+      const three = await sealStatic(a, "ack", frame({ channel: "ack", id: "m3", kind: "read", body: new Uint8Array() }));
+      expect((await openMsg(b, three)).id).toBe("m3"); // newest first
+      expect((await openMsg(b, one)).id).toBe("m1"); // older, still inside the window
+      expect((await openMsg(b, two)).id).toBe("m2");
+      await expect(openMsg(b, one)).rejects.toThrow(); // but not twice
+    });
+
+    it("keeps each static channel's counter independent", async () => {
+      const { a, b } = await pair();
+      // Both channels start at counter 0; a shared window would reject the second.
+      const presence = await sealStatic(a, "presence", frame({ channel: "presence", id: "p", body: enc("x") }));
+      const ack = await sealStatic(a, "ack", frame({ channel: "ack", id: "m", kind: "read", body: new Uint8Array() }));
+      expect((await openMsg(b, presence)).channel).toBe("presence");
+      expect((await openMsg(b, ack)).channel).toBe("ack");
+    });
   });
 
   it("throws on a corrupt payload without corrupting the live session", async () => {
     const { a, b } = await pair();
     const env = asMsg(await sealContent(a, frame({ channel: "text", id: "m1", body: enc("hello") })));
 
-    // Flip one base64 char in the middle: same length + charset, broken tag.
-    const chars = env.payload.split("");
-    const i = Math.floor(chars.length / 2);
-    chars[i] = chars[i] === "A" ? "B" : "A";
-    const corrupt: Envelope = { type: "msg", c: 0, header: env.header, payload: chars.join("") };
+    // Flip a byte in the body (past the sealed header) so the header still opens
+    // and only the body tag fails.
+    const blob = await fromBase64(env.payload);
+    const corruptBlob = blob.slice();
+    corruptBlob[corruptBlob.length - 1] ^= 0x01;
+    const corrupt: Envelope = { type: "msg", payload: await toBase64(corruptBlob) };
     await expect(openMsg(b, corrupt)).rejects.toThrow();
 
     // The real message still opens — ratchetDecrypt only commits on success.
     expect(dec((await openMsg(b, env)).body)).toBe("hello");
+  });
+
+  it("rejects a msg with no room for a sealed header", async () => {
+    const { b } = await pair();
+    const tooShort = await toBase64(new Uint8Array(SEALED_HEADER_LEN));
+    await expect(openMsg(b, { type: "msg", payload: tooShort })).rejects.toThrow(/too short/);
   });
 });
