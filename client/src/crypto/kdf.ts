@@ -84,24 +84,20 @@ export async function kdfRoot(
   return { rk: okm.slice(0, 32), ck: okm.slice(32, 64), nhk };
 }
 
-// The four header keys seeded from RK0 (v5). Each direction gets a current and a
-// next header key; from there they advance off kdfRoot's `nhk` on every DH
-// ratchet step. Derived from RK0 rather than the directional crypto_kx keys so
-// they inherit the hybrid-PQ + transcript binding the root key already carries.
+// The two seed header keys, from RK0 (v5) — Signal's `shared_hka` / `shared_nhkb`
+// for the header-encryption variant. Each side's FIRST sending chain needs a
+// header key agreed out of band (there's no kdfRoot output to take one from yet);
+// every later chain gets its header key from kdfRoot's `nhk`, one chain early.
+// Derived from RK0 rather than the directional crypto_kx keys so they inherit the
+// hybrid-PQ + transcript binding the root key already carries.
 export async function deriveHeaderKeys(rk0: Uint8Array): Promise<{
   i2r: Uint8Array;
   r2i: Uint8Array;
-  nhI2r: Uint8Array;
-  nhR2i: Uint8Array;
 }> {
   await sodium.ready;
-  const one = (domain: string) =>
-    sodium.crypto_generichash(32, sodium.from_string(domain), rk0);
   return {
-    i2r: one("TTr:hdr:i2r:v5"),
-    r2i: one("TTr:hdr:r2i:v5"),
-    nhI2r: one("TTr:nhdr:i2r:v5"),
-    nhR2i: one("TTr:nhdr:r2i:v5"),
+    i2r: sodium.crypto_generichash(32, sodium.from_string("TTr:hdr:i2r:v5"), rk0),
+    r2i: sodium.crypto_generichash(32, sodium.from_string("TTr:hdr:r2i:v5"), rk0),
   };
 }
 

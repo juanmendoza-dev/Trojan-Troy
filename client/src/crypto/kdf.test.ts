@@ -103,17 +103,16 @@ describe("kdf", () => {
     expect(same(omitted.rk, (await kdfRoot(rk, dh, new Uint8Array(0))).rk)).toBe(false);
   });
 
-  it("deriveHeaderKeys gives four distinct 32-byte keys, deterministically", async () => {
+  it("deriveHeaderKeys gives two distinct 32-byte seeds, deterministically", async () => {
     await sodium.ready;
     const rk0 = rand();
     const a = await deriveHeaderKeys(rk0);
     const b = await deriveHeaderKeys(rk0);
     expect(same(a.i2r, b.i2r)).toBe(true);
-    expect(same(a.nhR2i, b.nhR2i)).toBe(true);
-    const all = [a.i2r, a.r2i, a.nhI2r, a.nhR2i];
-    const hexes = new Set(all.map((k) => sodium.to_hex(k)));
-    expect(hexes.size).toBe(4);
-    for (const k of all) expect(k.length).toBe(32);
+    expect(same(a.r2i, b.r2i)).toBe(true);
+    expect(same(a.i2r, a.r2i)).toBe(false);
+    expect(a.i2r.length).toBe(32);
+    expect(a.r2i.length).toBe(32);
     // A different root key gives entirely different header keys.
     expect(same(a.i2r, (await deriveHeaderKeys(rand())).i2r)).toBe(false);
   });
