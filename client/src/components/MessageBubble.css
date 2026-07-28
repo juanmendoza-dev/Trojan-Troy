@@ -75,9 +75,23 @@
   animation: sheen 0.9s ease-in-out both;
   pointer-events: none;
 }
+:root[data-theme="apple"] .message-bubble {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
 :root[data-theme="pulse"] .message-bubble {
+  position: relative;
   animation-name: bubbleInPulse;
   animation-duration: 0.4s;
+}
+:root[data-theme="pulse"] .message-bubble::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  box-shadow: 0 0 16px 2px rgba(167, 139, 250, 0.35);
+  opacity: 0;
+  animation: pulseGlow 0.4s ease-out both;
+  pointer-events: none;
 }
 .message-status {
   font-size: 11px;
