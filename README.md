@@ -23,6 +23,31 @@ Most "encrypted" chat apps ask you to trust their server. This one is built so t
 > [!NOTE]
 > The relay sleeps when idle so the first connection after a nap can take like 30–60 seconds, sorry about that :( thats Renders free tier being slow, not the handshake
 
+## the beautiful gallery
+
+<table>
+<tr>
+<td width="50%" valign="top">
+  <img src="docs/assets/gallery-safety.png" width="100%" alt="the shared safety number screen">
+  <p align="center"><sub>the safety number, compare the digits with ur friend then drag to seal the channel</sub></p>
+</td>
+<td width="50%" valign="top">
+  <img src="docs/assets/gallery-loading.png" width="100%" alt="the kinetic cipher handshake screen">
+  <p align="center"><sub>the handshake doing its post quantum thing</sub></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+  <img src="docs/assets/gallery-waiting.png" width="100%" alt="the waiting screen with QR invite">
+  <p align="center"><sub>waiting for ur friend, send the code or let them scan it</sub></p>
+</td>
+<td width="50%" valign="top">
+  <img src="docs/assets/gallery-error.png" width="100%" alt="the peer disconnected error screen">
+  <p align="center"><sub>even getting disconnected is kinda nice here</sub></p>
+</td>
+</tr>
+</table>
+
 ## See it work!!!!
 
 <!-- TODO: replace with the GitHub attachment URL after uploading the .mp4,
