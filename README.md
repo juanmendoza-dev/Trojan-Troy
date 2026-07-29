@@ -30,7 +30,7 @@
 
 ---
 
-Most "encrypted" chat apps ask you to trust their server. This one is built so that the server's honesty is irrelevant: it forwards opaque blobs it has no key for, and every design decision assumes it is actively hostile. So basically chatting, but with security at the forefront of the whole design. Text and voice, end to end encrypted, with a safety number handshake so you know its really them that you're talking to.
+Most "encrypted" chat apps ask you to trust their server. This one is built so the server's honesty is irrelevant: it forwards opaque blobs it has no key for, and every design decision assumes its actively hostile. So basically chatting, but with security at the forefront of the whole design. Text and voice, end to end encrypted, with a safety number handshake so you know its really them that you're talking to.
 
 > [!NOTE]
 > The relay sleeps when idle, so the first connection after a nap can take like 30–60 seconds, sorry about that :( thats Render's free tier being slow, not the handshake.
@@ -67,7 +67,7 @@ After the handshake, every single message: text, voice note, typing indicator, r
 { "type": "msg", "payload": "3q2+7wAAAAB...base64..." }
 ```
 
-No message type. No sender key. No counter. No length. No id. All of it — the channel, the message id, the voice `mimeType`, the receipt kind, the ratchet position, the sender's current ratchet key — lives *inside* the encryption. Even the size is quantised into fixed buckets, and a steady stream of indistinguishable decoy frames keeps flowing whether or not anyone is typing.
+No message type. No sender key. No counter. No length. No id. All of it — the channel, the message id, the voice `mimeType`, the receipt kind, the ratchet position, the sender's current ratchet key — lives *inside* the encryption. Even the size gets quantised into fixed buckets, and theres a steady stream of indistinguishable decoy frames flowing whether or not anyone is typing.
 
 A hostile relay learns three things: two clients are connected, roughly how long, and how many frames crossed. Thats the entire list.
 
@@ -75,7 +75,7 @@ A hostile relay learns three things: two clients are connected, roughly how long
 
 ## How the security works
 
-Every primitive comes from an audited library: [libsodium](https://doc.libsodium.org/) (sumo build) and [@noble/post-quantum](https://github.com/paulmillr/noble-post-quantum) (Cure53-audited ML-KEM). **Zero hand-rolled cryptography.** Composition of audited primitives, never new ones.
+Every primitive comes from an audited library: [libsodium](https://doc.libsodium.org/) (sumo build) and [@noble/post-quantum](https://github.com/paulmillr/noble-post-quantum) (Cure53-audited ML-KEM). **Zero hand-rolled cryptography.** I compose audited primitives, I don't invent new ones (rule number one of this whole project).
 
 ### 1. Pairing: a handshake that can't be steered
 
@@ -83,16 +83,16 @@ Every primitive comes from an audited library: [libsodium](https://doc.libsodium
 
 <img src="docs/assets/handshake-steps.svg" width="100%" alt="the handshake in four steps">
 
-X25519 **and** ML-KEM-768 secrets are both folded into the root key, so the session stays safe unless *both* are broken — meaning traffic recorded today can't be decrypted by a future quantum computer (uh oh). Strip the post-quantum material and the handshake just aborts: there is no classical fallback to downgrade into. As of v6 this covers everything on the wire, including the non-ratcheted channels.
+X25519 **and** ML-KEM-768 secrets are both folded into the root key, so the session stays safe unless *both* are broken — meaning traffic recorded today can't be decrypted by a future quantum computer (uh oh). Strip the post-quantum material and the handshake just aborts, there is no classical fallback to downgrade into. As of v6 this covers everything on the wire, including the non ratcheted channels.
 
 ### 2. Messaging: a Double Ratchet with nothing in the clear
 
-Every message gets a fresh key, discarded immediately. Fresh ML-KEM secrets are negotiated *in band* and folded into the ratchet's root chain roughly every 30 seconds, so recovery from a compromise doesn't rest on X25519 alone.
+Every message gets a fresh key that gets thrown away immediately. Fresh ML-KEM secrets are negotiated *in band* and folded into the ratchet's root chain like every 30 seconds, so recovery from a compromise doesn't rest on X25519 alone.
 
 <details>
 <summary>The 84-byte sealed header, field by field</summary>
 
-The key class, the sender's ratchet public key and both chain counters live in a fixed-size sealed header, so the relay can't map the conversation's structure — who spoke in what bursts, how long each run was, which frames were receipts.
+The key class, the sender's ratchet public key and both chain counters live in a fixed size sealed header, so the relay can't map the conversation's structure: who spoke in what bursts, how long each run was, which frames were receipts. It all looks the same.
 
 ```
 class    1 byte   — msg | presence | ack | profile | kem
@@ -110,19 +110,19 @@ tag     19 bytes  — Poly1305 authenticator
 <details>
 <summary>Why a forged frame can't corrupt a live session</summary>
 
-Decryption runs on a clone of the session state and commits only on success. A frame whose body fails to authenticate doesn't consume its replay counter either — so a relay can't mangle one body to lock out the genuine frame queued behind it. On receive, the channel is checked against an allowlist rather than trusted from the decrypted JSON.
+Decryption runs on a clone of the session state and only commits on success. A frame whose body fails to authenticate doesn't consume its replay counter either, so a relay can't mangle one body to lock out the genuine frame queued behind it. And on receive the channel is checked against an allowlist instead of being trusted from the decrypted JSON.
 
 </details>
 
 ### 3. Metadata resistance
 
-A jittered ~1/second stream of decoy frames, byte-indistinguishable from real content (same class, same header shape, same size bucket), so the relay can't read the *rhythm* of a conversation: typing, pausing, going idle. Real messages still send immediately: **zero added latency.** The presence heartbeat is jittered too, so "online" has no fixed-period fingerprint.
+A jittered ~1/second stream of decoy frames, byte-indistinguishable from real content (same class, same header shape, same size bucket), so the relay can't read the *rhythm* of a conversation: typing, pausing, going idle. Real messages still send immediately, **zero added latency.** The presence heartbeat is jittered too, so "online" has no fixed period fingerprint.
 
 ### 4. At rest, and at the edges
 
-Argon2id (`crypto_pwhash`) derives a vault key from ur profile PIN and seals your avatar on disk. No fast-hash fallback, legacy cleartext records are purged on load, and a page reload reverts to Anonymous.
+Argon2id (`crypto_pwhash`) derives a vault key from ur profile PIN and seals your avatar on disk. No fast-hash fallback, legacy cleartext records get purged on load, and a page reload reverts to Anonymous.
 
-The relay is hardened separately: 2 MiB payload cap, per-connection token-bucket rate limiting, per-IP and global connection caps, active-room caps, heartbeat reaping of half-open sockets, one-room-per-peer, and a dedicated join-rate bucket against room-code enumeration.
+The relay is hardened separately: 2 MiB payload cap, per-connection token-bucket rate limiting, per-IP and global connection caps, active-room caps, heartbeat reaping of half-open sockets, one room per peer, and a dedicated join-rate bucket against room code enumeration. Basically every way I could think of to abuse it, blocked.
 
 ---
 
@@ -132,7 +132,7 @@ The relay is hardened separately: 2 MiB payload cap, per-connection token-bucket
 <tr>
 <td width="33%" valign="top">
   <img src="docs/assets/feature-voice.svg" width="100%" alt="Voice notes">
-  <p><sub>60 seconds max, encrypted as raw bytes. The recording bitrate is pinned so a long clip can't exceed the relay's 2 MiB cap — a size rejection would itself leak something.</sub></p>
+  <p><sub>60 seconds max, encrypted as raw bytes. The recording bitrate is pinned so a long clip can't exceed the relay's 2 MiB cap, because a size rejection would itself leak something.</sub></p>
 </td>
 <td width="33%" valign="top">
   <img src="docs/assets/feature-typing.svg" width="100%" alt="Typing indicator">
@@ -140,7 +140,7 @@ The relay is hardened separately: 2 MiB payload cap, per-connection token-bucket
 </td>
 <td width="33%" valign="top">
   <img src="docs/assets/feature-ghost.svg" width="100%" alt="Ghost Mode">
-  <p><sub>Read receipts are opt-out. Turning them off stops the frame being sent at all rather than hiding it in the interface.</sub></p>
+  <p><sub>Read receipts are opt-out. Turning them off stops the frame being sent at all, instead of just hiding it in the interface.</sub></p>
 </td>
 </tr>
 </table>
@@ -156,7 +156,7 @@ Three chat themes (Apple, Iris Glass, Pulse Slate), a kinetic-cipher handshake s
      rule than anything else in the file, because no one can fake having
      found it. Keep it first person and keep the reproduction step. -->
 
-While auditing the v5 wire format I noticed the presence, read-receipt and shared-profile channels were derived from the raw `crypto_kx` output — which meant they were **X25519 only**. No ML-KEM, no transcript binding, while the message ratchet correctly took both. Every claim I'd written about post-quantum protection quietly did not apply to three of my own channels.
+While auditing the v5 wire format I noticed the presence, read-receipt and shared-profile channels were derived from the raw `crypto_kx` output — which meant they were **X25519 only**. No ML-KEM, no transcript binding, while the message ratchet correctly took both. Every claim I'd written about post-quantum protection quietly did not apply to three of my own channels (ouch).
 
 I reproduced it before fixing it: same classical handshake, different PQ secret, and the static keys came out byte-identical — proof the post-quantum material wasn't reaching them. The fix binds each direction to the hybrid root key, which took `PROTOCOL_VERSION` to 6 and shipped with a direction-separation test that fails if the two directions are ever collapsed into one key.
 
@@ -187,7 +187,7 @@ Security claims are only worth anything alongside their limits, so here are ours
 </td>
 <td valign="top">
   <b>The per-step DH inside the ratchet is still X25519</b><br>
-  <sub>Post-quantum material folds in every ~30 seconds, not per message. Per-step ML-KEM needs chunked key transmission — Signal's SPQR direction.</sub>
+  <sub>Post-quantum material folds in every ~30 seconds, not per message. Per-step ML-KEM needs chunked key transmission — thats Signal's SPQR direction.</sub>
 </td>
 </tr>
 </table>
@@ -199,7 +199,7 @@ Security claims are only worth anything alongside their limits, so here are ours
 </td>
 <td valign="top">
   <b>Profile names are stored in the clear</b><br>
-  <sub>Only avatars are sealed with Argon2id. Names have to be readable to draw the profile picker before a PIN is entered, so they sit unencrypted in IndexedDB. There is also no PIN attempt backoff, and a numeric PIN is low-entropy — a passphrase is the real fix.</sub>
+  <sub>Only avatars are sealed with Argon2id. Names have to be readable to draw the profile picker before a PIN is entered, so they sit unencrypted in IndexedDB. Theres also no PIN attempt backoff, and a numeric PIN is low entropy — a passphrase is the real fix.</sub>
 </td>
 </tr>
 </table>
@@ -211,7 +211,7 @@ Security claims are only worth anything alongside their limits, so here are ours
 </td>
 <td valign="top">
   <b>A compromised endpoint sees everything</b><br>
-  <sub>No cryptography fixes a compromised device. The relay also still learns that a session exists, its duration and its frame count — inherent to any forwarding relay.</sub>
+  <sub>No cryptography fixes a compromised device, sorry. The relay also still learns that a session exists, its duration and its frame count — thats inherent to any forwarding relay.</sub>
 </td>
 </tr>
 </table>
@@ -222,9 +222,9 @@ If you find something I've missed or mis-stated, please reach out to me! I'm gen
 
 ## How its verified
 
-**251 client tests + 31 server tests**, all on real modules, no mocked crypto. They assert the *adversarial* cases, not just happy paths: a one-sided post-quantum fold **diverges** the session, proving the fold is load-bearing; a relabelled frame fails; a replayed frame drops; a tampered header leaves the session usable.
+**251 client tests + 31 server tests**, all on real modules, no mocked crypto. They assert the *adversarial* cases, not just the happy paths: a one sided post-quantum fold **diverges** the session, proving the fold is load bearing; a relabelled frame fails; a replayed frame drops; a tampered header leaves the session usable.
 
-A committed two-browser Playwright test (`client/e2e/handshake.spec.ts`) drives two real browser contexts against a live relay and asserts what unit tests can't reach: both browsers derive an identical 60-digit safety number, `commit` precedes `pubkey` on the wire, the handshake advertises the current `PROTOCOL_VERSION`, every `msg` frame carries nothing but `type` and `payload`, and cover traffic keeps flowing while both sides sit idle.
+Theres also a committed two-browser Playwright test (`client/e2e/handshake.spec.ts`) that drives two real browser contexts against a live relay and asserts what unit tests can't reach: both browsers derive an identical 60-digit safety number, `commit` precedes `pubkey` on the wire, the handshake advertises the current `PROTOCOL_VERSION`, every `msg` frame carries nothing but `type` and `payload`, and cover traffic keeps flowing while both sides just sit there idle.
 
 ```bash
 cd server && npm run dev          # the test needs a live relay
@@ -255,7 +255,7 @@ cd client && npm run test:e2e
      own it. The strongest version points at decisions.md as evidence of your
      calls — especially the ones where you rolled back working code. -->
 
-I used Claude Code as an implementation partner throughout, and this repo keeps the paper trail rather than hiding it: [docs/devlog/decisions.md](docs/devlog/decisions.md) records every non-obvious call and why I made it — including the ones where I rolled back working code, like retiring the persistent-identity branch in favour of device-local profiles. The architecture decisions, the security direction and every scope call were mine.
+I used Claude Code as an implementation partner throughout, and this repo keeps the paper trail instead of hiding it (its right there in the tree, `.claude/` and everything): [docs/devlog/decisions.md](docs/devlog/decisions.md) records every non-obvious call and why I made it — including the ones where I rolled back working code, like retiring the persistent-identity branch in favour of device-local profiles. The architecture decisions, the security direction and every scope call were mine.
 
 ## Run it yourself
 
@@ -278,7 +278,7 @@ Dev-only URL overrides jump straight to a screen: `?screen=chat`, `?screen=safet
 <details>
 <summary>Deploying your own</summary>
 
-The relay is a stateful WebSocket server (in-memory room state), which doesn't fit Vercel's serverless model — so the two halves deploy separately.
+The relay is a stateful WebSocket server (in-memory room state), which doesn't fit Vercel's serverless model, so the two halves deploy separately.
 
 **Relay (Render):** "New" → "Blueprint" → point at this repo. `render.yaml` configures the `trojan-troy-relay` service automatically.
 
@@ -290,7 +290,7 @@ Optionally set `ALLOWED_ORIGINS` on the relay (comma-separated) to restrict whic
 
 ## Where the reasoning lives
 
-This repo keeps its reasoning, not just its code — [docs/](docs/) has the full index.
+This repo keeps its reasoning, not just its code — [docs/](docs/) has the full index. I wrote everything down as I went, so you don't have to trust me, you can just check.
 
 | Path | What's in it |
 |---|---|
@@ -313,7 +313,7 @@ This repo keeps its reasoning, not just its code — [docs/](docs/) has the full
 
 1. **Never implement custom cryptographic primitives.** Audited libraries only.
 2. **The relay must be architecturally incapable of reading message content.** It inspects only `create` / `join`; everything else is forwarded verbatim.
-3. Live calling and true peer-to-peer are out of scope for this version.
+3. Live calling and true peer-to-peer are out of scope for this version (next time!).
 
 <sub>The name: a trojan gets past the wall by not looking like a threat. So does every frame this thing sends.</sub>
 
