@@ -84,6 +84,7 @@ and it all works on ur phone too:
 </a>
 
 Or just open the [live demo](https://trojan-troy.vercel.app) yourself, invite ur friends or open it in two browsers (if you have no friends). "Start a chat" in one, join with the code in the other, thats it.
+Just in case the video doesnt load you can also use this link!!: [video demo](https://youtu.be/qM1x9cbcnYE)
 
 ## What the relay actually sees
 
