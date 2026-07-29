@@ -1,9 +1,8 @@
 <!--
   ─────────────────────────────────────────────────────────────────────────────
-  DRAFT — the prose in this file is placeholder, condensed from the previous
-  README, SECURITY.md and docs/devlog/. Rewrite it in your own voice before
-  merging. Three sections are marked "WRITE THIS" and have no source to
-  condense from — they have to be written from scratch.
+  DRAFT — the prose has had its voice pass (mixed casual/formal, per Juan).
+  Three sections are still marked "WRITE THIS" and have no source to condense
+  from — they need the real first-person stories before merging.
 
   Editing notes, because GitHub fails silently on both of these:
     • Do not touch the <table>, <td>, <img> or <details> lines. One unclosed
@@ -31,12 +30,12 @@
 
 ---
 
-Most "encrypted" chat apps ask you to trust their server. This one is built so that the server's honesty is irrelevant: it forwards opaque blobs it has no key for, and every design decision assumes it is actively hostile. Text and voice, end-to-end encrypted, with a safety-number handshake so you know it's really them.
+Most "encrypted" chat apps ask you to trust their server. This one is built so that the server's honesty is irrelevant: it forwards opaque blobs it has no key for, and every design decision assumes it is actively hostile. So basically chatting, but with security at the forefront of the whole design. Text and voice, end to end encrypted, with a safety number handshake so you know its really them that you're talking to.
 
 > [!NOTE]
-> The relay sleeps when idle — the first connection after a nap can take 30–60 seconds to wake it. That's Render's free tier, not the handshake.
+> The relay sleeps when idle, so the first connection after a nap can take like 30–60 seconds, sorry about that :( thats Render's free tier being slow, not the handshake.
 
-## See it work
+## See it work!!!!
 
 <!-- TODO: replace with the GitHub attachment URL after uploading the .mp4,
      pasted bare on its own line so it renders as an inline player -->
@@ -44,6 +43,8 @@ Most "encrypted" chat apps ask you to trust their server. This one is built so t
 <a href="https://trojan-troy.vercel.app">
   <img src="docs/assets/placeholder-video.svg" width="100%" alt="Watch the 90-second demo">
 </a>
+
+Or just open the [live demo](https://trojan-troy.vercel.app) yourself — invite ur friends, or open it in two browsers (if you have no friends). "Start a chat" in one, join with the code in the other.
 
 ## What the relay actually sees
 
@@ -60,31 +61,31 @@ Most "encrypted" chat apps ask you to trust their server. This one is built so t
 </tr>
 </table>
 
-After the handshake, every single message — text, voice note, typing indicator, read receipt, shared profile — looks like **exactly one shape** on the wire:
+After the handshake, every single message: text, voice note, typing indicator, read receipt, shared profile — looks like **exactly one shape** on the wire:
 
 ```json
 { "type": "msg", "payload": "3q2+7wAAAAB...base64..." }
 ```
 
-No message type. No sender key. No counter. No length. No id. All of it — the channel, the message id, the voice `mimeType`, the receipt kind, the ratchet position, the sender's current ratchet key — lives *inside* the encryption. Even the size is quantised into fixed buckets, and a steady stream of indistinguishable decoy frames flows whether or not anyone is typing.
+No message type. No sender key. No counter. No length. No id. All of it — the channel, the message id, the voice `mimeType`, the receipt kind, the ratchet position, the sender's current ratchet key — lives *inside* the encryption. Even the size is quantised into fixed buckets, and a steady stream of indistinguishable decoy frames keeps flowing whether or not anyone is typing.
 
-A hostile relay learns three things: that two peers are connected, roughly how long, and how many frames crossed. That is the entire list.
+A hostile relay learns three things: two clients are connected, roughly how long, and how many frames crossed. Thats the entire list.
 
 ---
 
 ## How the security works
 
-Every primitive comes from an audited library — [libsodium](https://doc.libsodium.org/) (sumo build) and [@noble/post-quantum](https://github.com/paulmillr/noble-post-quantum) (Cure53-audited ML-KEM). **Zero hand-rolled cryptography.** Composition of audited primitives, never new ones.
+Every primitive comes from an audited library: [libsodium](https://doc.libsodium.org/) (sumo build) and [@noble/post-quantum](https://github.com/paulmillr/noble-post-quantum) (Cure53-audited ML-KEM). **Zero hand-rolled cryptography.** Composition of audited primitives, never new ones.
 
-### 1. Pairing — a handshake that can't be steered
+### 1. Pairing: a handshake that can't be steered
 
 <img src="docs/assets/handshake.svg" width="100%" alt="commit-then-reveal handshake">
 
 <img src="docs/assets/handshake-steps.svg" width="100%" alt="the handshake in four steps">
 
-X25519 **and** ML-KEM-768 secrets are both folded into the root key, so the session stays safe unless *both* are broken — traffic recorded today can't be decrypted by a future quantum computer. Strip the post-quantum material and the handshake aborts: there is no classical fallback to downgrade into. As of v6 this covers everything on the wire, including the non-ratcheted channels.
+X25519 **and** ML-KEM-768 secrets are both folded into the root key, so the session stays safe unless *both* are broken — meaning traffic recorded today can't be decrypted by a future quantum computer (uh oh). Strip the post-quantum material and the handshake just aborts: there is no classical fallback to downgrade into. As of v6 this covers everything on the wire, including the non-ratcheted channels.
 
-### 2. Messaging — a Double Ratchet with nothing in the clear
+### 2. Messaging: a Double Ratchet with nothing in the clear
 
 Every message gets a fresh key, discarded immediately. Fresh ML-KEM secrets are negotiated *in band* and folded into the ratchet's root chain roughly every 30 seconds, so recovery from a compromise doesn't rest on X25519 alone.
 
@@ -115,11 +116,11 @@ Decryption runs on a clone of the session state and commits only on success. A f
 
 ### 3. Metadata resistance
 
-A jittered ~1/second stream of decoy frames, byte-indistinguishable from real content — same class, same header shape, same size bucket — so the relay can't read the *rhythm* of a conversation: typing, pausing, going idle. Real messages still send immediately: **zero added latency.** The presence heartbeat is jittered too, so "online" has no fixed-period fingerprint.
+A jittered ~1/second stream of decoy frames, byte-indistinguishable from real content (same class, same header shape, same size bucket), so the relay can't read the *rhythm* of a conversation: typing, pausing, going idle. Real messages still send immediately: **zero added latency.** The presence heartbeat is jittered too, so "online" has no fixed-period fingerprint.
 
 ### 4. At rest, and at the edges
 
-Argon2id (`crypto_pwhash`) derives a vault key from your profile PIN and seals your avatar on disk. No fast-hash fallback; legacy cleartext records are purged on load; a page reload reverts to Anonymous.
+Argon2id (`crypto_pwhash`) derives a vault key from ur profile PIN and seals your avatar on disk. No fast-hash fallback, legacy cleartext records are purged on load, and a page reload reverts to Anonymous.
 
 The relay is hardened separately: 2 MiB payload cap, per-connection token-bucket rate limiting, per-IP and global connection caps, active-room caps, heartbeat reaping of half-open sockets, one-room-per-peer, and a dedicated join-rate bucket against room-code enumeration.
 
@@ -135,7 +136,7 @@ The relay is hardened separately: 2 MiB payload cap, per-connection token-bucket
 </td>
 <td width="33%" valign="top">
   <img src="docs/assets/feature-typing.svg" width="100%" alt="Typing indicator">
-  <p><sub>Almost every chat app sends this in the clear. Here it rides an encrypted channel bound to the same hybrid root key as message content.</sub></p>
+  <p><sub>Almost every chat app sends this in the clear (why!!). Here it rides an encrypted channel bound to the same hybrid root key as message content.</sub></p>
 </td>
 <td width="33%" valign="top">
   <img src="docs/assets/feature-ghost.svg" width="100%" alt="Ghost Mode">
@@ -144,7 +145,7 @@ The relay is hardened separately: 2 MiB payload cap, per-connection token-bucket
 </tr>
 </table>
 
-Three chat themes (Apple, Iris Glass, Pulse Slate), a kinetic-cipher handshake screen, and a mobile layout with an off-canvas drawer.
+Three chat themes (Apple, Iris Glass, Pulse Slate), a kinetic-cipher handshake screen, and a mobile layout with an off-canvas drawer. The sidebar will also vizualize ur data live if you let it — decoy frames and all.
 
 ---
 
@@ -165,7 +166,7 @@ I reproduced it before fixing it: same classical handshake, different PQ secret,
 
 ## What this does *not* protect you from
 
-Security claims are only worth anything alongside their limits, so here are ours, plainly.
+Security claims are only worth anything alongside their limits, so here are ours, plainly 😓😓😓
 
 <table>
 <tr>
@@ -173,8 +174,8 @@ Security claims are only worth anything alongside their limits, so here are ours
   <img src="docs/assets/icon-caution.svg" width="40" alt="">
 </td>
 <td valign="top">
-  <b>Safety-number verification is not enforced</b><br>
-  <sub>You can walk past the compare-digits screen without comparing anything. If you do, a hostile relay could have put itself in the middle and you would not know. It is the biggest real-world gap in this project — and it is a UX problem, not a crypto one.</sub>
+  <b>Safety number verification is not enforced</b><br>
+  <sub>You can walk right past the compare-digits screen without comparing anything. If you do, a hostile relay could have put itself in the middle and you would not know. Its the biggest real world gap in this project, and its a UX problem not a crypto one.</sub>
 </td>
 </tr>
 </table>
@@ -215,13 +216,13 @@ Security claims are only worth anything alongside their limits, so here are ours
 </tr>
 </table>
 
-If you find something here mis-stated, that's a bug — file it.
+If you find something I've missed or mis-stated, please reach out to me! I'm genuinely super interested in this type of stuff (encryption/crypto), which is a big part of why this project is opensource — I want others to also learnnn!
 
 ---
 
-## How it's verified
+## How its verified
 
-**251 client tests + 31 server tests**, all on real modules — no mocked crypto. They assert the *adversarial* cases, not just happy paths: a one-sided post-quantum fold **diverges** the session, proving the fold is load-bearing; a relabelled frame fails; a replayed frame drops; a tampered header leaves the session usable.
+**251 client tests + 31 server tests**, all on real modules, no mocked crypto. They assert the *adversarial* cases, not just happy paths: a one-sided post-quantum fold **diverges** the session, proving the fold is load-bearing; a relabelled frame fails; a replayed frame drops; a tampered header leaves the session usable.
 
 A committed two-browser Playwright test (`client/e2e/handshake.spec.ts`) drives two real browser contexts against a live relay and asserts what unit tests can't reach: both browsers derive an identical 60-digit safety number, `commit` precedes `pubkey` on the wire, the handshake advertises the current `PROTOCOL_VERSION`, every `msg` frame carries nothing but `type` and `payload`, and cover traffic keeps flowing while both sides sit idle.
 
@@ -246,7 +247,7 @@ cd client && npm run test:e2e
 | v6 | Static-channel PQ binding — the bug above |
 | Mobile | Responsive shell, hamburger drawer, phone-usable composer |
 
-<sub>Time tracked via Hackatime. Built for Hack Club Horizons Polaris, Toronto.</sub>
+<sub>Time tracked via Hackatime. Built for Hack Club Horizons Polaris, Toronto. IM EXCITED FOR TORONTO!!!!!!!!</sub>
 
 ## How I worked
 
@@ -265,7 +266,7 @@ cd server && npm install && npm run dev   # relay on ws://localhost:8080
 cd client && npm install && npm run dev   # web app, prints its own URL
 ```
 
-Open the client URL in two windows: "Start a chat" in one, join with the shown code in the other. No accounts, no passwords, no database — pairing is a room code or an invite link, and session keys die with the tab.
+Open the client URL in two windows: "Start a chat" in one, join with the shown code in the other. No accounts, no passwords, no database. Pairing is just a room code or an invite link, and session keys die with the tab.
 
 ```bash
 cd client && npm test && npm run typecheck && npm run build
