@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img">
+  <title>placeholder — demo video</title>
+  <defs>
+    <linearGradient id="vg" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#0D0F18"/><stop offset="1" stop-color="#101223"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" rx="10" fill="url(#vg)" stroke="rgba(255,255,255,.09)"/>
+  <circle cx="400" cy="205" r="46" fill="rgba(143,166,255,.14)" stroke="#8FA6FF" stroke-width="2"/>
+  <path d="M386 185 L418 205 L386 225 Z" fill="#8FA6FF"/>
+  <text x="400" y="292" fill="#E8EAF2" font-size="21" font-weight="650" text-anchor="middle"
+        font-family="Schibsted Grotesk, system-ui, sans-serif">The 90-second demo</text>
+  <text x="400" y="322" fill="#7C839A" font-size="15" text-anchor="middle"
+        font-family="system-ui, sans-serif">start a chat · join · compare digits · text · voice note · then the wire</text>
+  <text x="400" y="404" fill="#5E6478" font-size="12.5" text-anchor="middle"
+        font-family="ui-monospace, Menlo, monospace">[ not shot yet — placeholder ]</text>
+</svg>

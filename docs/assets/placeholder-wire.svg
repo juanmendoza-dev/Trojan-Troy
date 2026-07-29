@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520" role="img">
+  <title>placeholder — devtools frames</title>
+  <rect width="800" height="520" rx="10" fill="#1b1b1f"/>
+  <rect x="0" y="0" width="800" height="38" fill="#252529"/>
+  <text x="18" y="25" fill="#9BA1B5" font-family="system-ui, sans-serif" font-size="13">Network › ws://relay › Messages</text>
+  <g font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#8FA6FF">
+    <text x="18" y="70">↑ {"type":"msg","payload":"3q2+7wAAAAB9k2xQ4Hn1cTZ0aVYrLpO7sWfBmDgKQe8t…"}</text>
+    <text x="18" y="102">↓ {"type":"msg","payload":"tRk0eLpXmQ9vZ2sHbNcAyUoIfDgW7jT4rEaB1CxSnV6h…"}</text>
+    <text x="18" y="134">↑ {"type":"msg","payload":"9wFbQnLzRmT2yXcEuIoAdSgKpVhJ4t7NrB6xZaWqCyMl…"}</text>
+    <text x="18" y="166">↑ {"type":"msg","payload":"Lm4TqZbXnW9rEoIsAyCgKdVpHfJ7uNtB2xRaQwSyMlPe…"}</text>
+    <text x="18" y="198">↓ {"type":"msg","payload":"cQ8vNiHjCzL5oYaWpEdMgS2fBv6XnK3q2+7wAAAAB9k2…"}</text>
+    <text x="18" y="230">↑ {"type":"msg","payload":"XvZLKd9wFbQnLzRmT2yXcEuIoAdSgKpVhJ4t7NrB6xZa…"}</text>
+    <text x="18" y="262">↓ {"type":"msg","payload":"eD0fUvGjO6kHiT8sRbYnQAmXvZL3KRcLm4TqZbXnW9rE…"}</text>
+    <text x="18" y="294">↑ {"type":"msg","payload":"pVhJ4t7NrB6xZaWqCyMlP0eDfUvGjO8kHiT3sRbYnQAm…"}</text>
+    <text x="18" y="326">↓ {"type":"msg","payload":"AyCgKdVpHfJ7uNtB2xRaQwSyMlPeD0fUvGjO6kHiT8sR…"}</text>
+    <text x="18" y="358">↑ {"type":"msg","payload":"MlP0eDfUvGjO8kHiT3sRbYnQAmXvZLKd9wFbQnLzRmT2…"}</text>
+    <text x="18" y="390">↓ {"type":"msg","payload":"7uNtB2xRaQwSyMlPeD0fUvGjO6kHiT8sRbYnQAmXvZL3…"}</text>
+  </g>
+  <text x="18" y="440" fill="#5E6478" font-family="ui-monospace, Menlo, monospace" font-size="12">— no type, no sender, no counter, no length. text and voice notes are indistinguishable.</text>
+  <text x="18" y="492" fill="#5E6478" font-family="system-ui, sans-serif" font-size="12">[ screenshot placeholder ]</text>
+</svg>

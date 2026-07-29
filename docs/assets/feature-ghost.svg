@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 72" width="400" height="72" role="img">
+  <title>Ghost Mode</title>
+  <rect x=".5" y=".5" width="399" height="71" rx="11" fill="#12141F" stroke="rgba(255,255,255,.09)"/>
+  <rect x="18" y="18" width="3" height="36" rx="1.5" fill="#7ED9B7"/>
+  <rect x="34" y="20" width="32" height="32" rx="8" fill="#151827" stroke="rgba(255,255,255,.10)"/>
+  <g transform="translate(34,20) scale(.667)">
+    <path d="M11 24c4-6.5 8.2-9.8 13-9.8S33 17.5 37 24c-4 6.5-8.2 9.8-13 9.8S15 30.5 11 24z"
+          fill="none" stroke="#7ED9B7" stroke-width="2.6" stroke-linejoin="round"/>
+    <circle cx="24" cy="24" r="3.8" fill="#7ED9B7"/>
+    <line x1="13" y1="35" x2="35" y2="13" stroke="#151827" stroke-width="6" stroke-linecap="round"/>
+    <line x1="13" y1="35" x2="35" y2="13" stroke="#7ED9B7" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <text x="80" y="44" fill="#F4F6FF" font-size="21" font-weight="650" letter-spacing="-.2"
+        font-family="Schibsted Grotesk, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">Ghost Mode</text>
+</svg>
