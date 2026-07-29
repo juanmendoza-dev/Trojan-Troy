@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 72" width="400" height="72" role="img">
+  <title>Voice notes</title>
+  <rect x=".5" y=".5" width="399" height="71" rx="11" fill="#12141F" stroke="rgba(255,255,255,.09)"/>
+  <rect x="18" y="18" width="3" height="36" rx="1.5" fill="#8FA6FF"/>
+  <rect x="34" y="20" width="32" height="32" rx="8" fill="#151827" stroke="rgba(255,255,255,.10)"/>
+  <g fill="#8FA6FF">
+    <rect x="41" y="32" width="3" height="8" rx="1.5"/>
+    <rect x="45.5" y="29" width="3" height="14" rx="1.5"/>
+    <rect x="50" y="26" width="3" height="20" rx="1.5"/>
+    <rect x="54.5" y="29" width="3" height="14" rx="1.5"/>
+    <rect x="59" y="32" width="3" height="8" rx="1.5"/>
+  </g>
+  <text x="80" y="44" fill="#F4F6FF" font-size="21" font-weight="650" letter-spacing="-.2"
+        font-family="Schibsted Grotesk, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">Voice notes</text>
+</svg>

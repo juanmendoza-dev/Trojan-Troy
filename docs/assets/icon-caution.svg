@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img">
+  <title>caution</title>
+  <rect x=".5" y=".5" width="47" height="47" rx="11" fill="#1E1710" stroke="rgba(229,168,59,.28)"/>
+  <path d="M24 12.5 37.5 35.5H10.5z" fill="none" stroke="#E5A83B" stroke-width="2.2" stroke-linejoin="round"/>
+  <rect x="22.8" y="20" width="2.4" height="8.5" rx="1.2" fill="#E5A83B"/>
+  <circle cx="24" cy="32" r="1.6" fill="#E5A83B"/>
+</svg>

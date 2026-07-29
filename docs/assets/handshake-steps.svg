@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 230" width="1120" height="230" role="img">
+  <title>The handshake in four steps</title>
+  <defs>
+    <linearGradient id="fbg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#0D0F18"/><stop offset="1" stop-color="#101223"/>
+    </linearGradient>
+    <style>
+      .s { font-family:"Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+      .m { font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace; }
+      .ttl { font-size:19px; font-weight:700; fill:#F4F6FF; letter-spacing:-.2px; }
+      .bd  { font-size:13.5px; fill:#9BA1B5; }
+      .n   { font-size:13px; font-weight:700; fill:#8FA6FF; text-anchor:middle; }
+      .card { fill:#12141F; stroke:rgba(255,255,255,.09); }
+    </style>
+  </defs>
+
+  <rect x=".5" y=".5" width="1119" height="229" rx="16" fill="url(#fbg)" stroke="rgba(255,255,255,.09)"/>
+
+  <!-- 1 -->
+  <g transform="translate(19,20)">
+    <rect class="card" x=".5" y=".5" width="247" height="189" rx="12"/>
+    <circle cx="34" cy="38" r="13" fill="rgba(143,166,255,.14)" stroke="rgba(143,166,255,.36)"/>
+    <text class="m n" x="34" y="43">1</text>
+    <text class="s ttl" x="58" y="44">Commit</text>
+    <g class="s bd">
+      <text x="20" y="86">Each side publishes only a</text>
+      <text x="20" y="108">hash of its ephemeral keys.</text>
+      <text x="20" y="130">Neither has seen the other's</text>
+      <text x="20" y="152">yet, so neither can choose</text>
+      <text x="20" y="174">keys to suit it.</text>
+    </g>
+  </g>
+  <path d="M282 99 l7 6 -7 6" fill="none" stroke="#5E6478" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 2 -->
+  <g transform="translate(297,20)">
+    <rect class="card" x=".5" y=".5" width="247" height="189" rx="12"/>
+    <circle cx="34" cy="38" r="13" fill="rgba(143,166,255,.14)" stroke="rgba(143,166,255,.36)"/>
+    <text class="m n" x="34" y="43">2</text>
+    <text class="s ttl" x="58" y="44">Reveal</text>
+    <g class="s bd">
+      <text x="20" y="86">Now the real public keys</text>
+      <text x="20" y="108">cross — and each one is</text>
+      <text x="20" y="130">checked against the</text>
+      <text x="20" y="152">commitment already held.</text>
+      <text x="20" y="174">A mismatch aborts.</text>
+    </g>
+  </g>
+  <path d="M560 99 l7 6 -7 6" fill="none" stroke="#5E6478" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 3 -->
+  <g transform="translate(575,20)">
+    <rect class="card" x=".5" y=".5" width="247" height="189" rx="12"/>
+    <circle cx="34" cy="38" r="13" fill="rgba(143,166,255,.14)" stroke="rgba(143,166,255,.36)"/>
+    <text class="m n" x="34" y="43">3</text>
+    <text class="s ttl" x="58" y="44">Encapsulate</text>
+    <g class="s bd">
+      <text x="20" y="86">An ML-KEM-768 ciphertext</text>
+      <text x="20" y="108">seals a second secret that</text>
+      <text x="20" y="130">a quantum computer can't</text>
+      <text x="20" y="152">reach. Strip it and the</text>
+      <text x="20" y="174">handshake aborts.</text>
+    </g>
+  </g>
+  <path d="M838 99 l7 6 -7 6" fill="none" stroke="#5E6478" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 4 -->
+  <g transform="translate(853,20)">
+    <rect class="card" x=".5" y=".5" width="247" height="189" rx="12" fill="#12141F" stroke="rgba(126,217,183,.24)"/>
+    <circle cx="34" cy="38" r="13" fill="rgba(126,217,183,.14)" stroke="rgba(126,217,183,.4)"/>
+    <text class="m n" x="34" y="43" fill="#7ED9B7">4</text>
+    <text class="s ttl" x="58" y="44">Derive</text>
+    <g class="s bd">
+      <text x="20" y="86">Both secrets and a hash of</text>
+      <text x="20" y="108">the entire transcript fold</text>
+      <text x="20" y="130">into one root key — and the</text>
+      <text x="20" y="152">60 digits you compare fall</text>
+      <text x="20" y="174">out of that, not the keys.</text>
+    </g>
+  </g>
+</svg>

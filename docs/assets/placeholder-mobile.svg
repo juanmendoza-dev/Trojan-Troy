@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 700" width="360" height="700" role="img">
+  <title>placeholder — mobile</title>
+  <rect x="4" y="4" width="352" height="692" rx="34" fill="#0D0F18" stroke="#2A2F45" stroke-width="2"/>
+  <rect x="140" y="20" width="80" height="16" rx="8" fill="#1b1e2c"/>
+  <rect x="24" y="60" width="20" height="3" rx="1.5" fill="#9BA1B5"/>
+  <rect x="24" y="68" width="20" height="3" rx="1.5" fill="#9BA1B5"/>
+  <rect x="24" y="76" width="20" height="3" rx="1.5" fill="#9BA1B5"/>
+  <rect x="120" y="58" width="120" height="12" rx="6" fill="#2A2F45"/>
+  <rect x="24" y="120" width="220" height="46" rx="14" fill="rgba(255,255,255,.055)"/>
+  <rect x="110" y="182" width="226" height="46" rx="14" fill="rgba(143,166,255,.16)"/>
+  <rect x="24" y="244" width="180" height="38" rx="14" fill="rgba(255,255,255,.055)"/>
+  <rect x="90" y="298" width="246" height="60" rx="14" fill="rgba(143,166,255,.16)"/>
+  <rect x="24" y="620" width="256" height="44" rx="22" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.09)"/>
+  <circle cx="316" cy="642" r="21" fill="rgba(143,166,255,.2)"/>
+  <text x="120" y="450" fill="#5E6478" font-family="system-ui, sans-serif" font-size="12">[ placeholder ]</text>
+</svg>
