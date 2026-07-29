@@ -79,11 +79,8 @@ and it all works on ur phone too:
 
 ## See it work!!!!
 
-<!-- TODO: replace with the GitHub attachment URL after uploading the .mp4,
-     pasted bare on its own line so it renders as an inline player -->
-
-<a href="https://trojan-troy.vercel.app">
-  <img src="docs/assets/placeholder-video.svg" width="100%" alt="Watch the 90-second demo">
+<a href="https://youtu.be/qM1x9cbcnYE">
+  <img src="https://img.youtube.com/vi/qM1x9cbcnYE/maxresdefault.jpg" width="100%" alt="Watch the 90-second demo">
 </a>
 
 Or just open the [live demo](https://trojan-troy.vercel.app) yourself, invite ur friends or open it in two browsers (if you have no friends). "Start a chat" in one, join with the code in the other, thats it.
