@@ -1,5 +1,9 @@
 # Roadmap — Trojan Troy (Version A)
 
+> **Historical planning document.** This captures the phase order the project
+> was built in; it under-reports the later crypto rounds. For what actually
+> shipped, see [progress.md](progress.md).
+
 End-to-end encrypted chat app. The core promise: even the relay server
 should never be able to read plaintext. Built for Hack Club Horizons Polaris
 (Toronto), tracked via Hackatime.

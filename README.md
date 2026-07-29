@@ -101,7 +101,7 @@ If you find something we've mis-stated, that's a bug — file it.
 
 ## How it's verified
 
-- **248 client tests + 31 server tests**, all on real modules — no mocked crypto.
+- **251 client tests + 31 server tests**, all on real modules — no mocked crypto.
 - Tests assert the *adversarial* cases, not just happy paths: a one-sided post-quantum fold **diverges** the session (proving the fold is load-bearing), a relabelled frame fails, a replayed frame drops, a tampered header leaves the session usable. Where a wrong-but-plausible implementation would pass, there's a test for that specifically — the v6 binding ships with a direction-separation test that fails if the two directions are ever collapsed into one key.
 - **A committed two-browser Playwright test** (`client/e2e/handshake.spec.ts`) drives two real browser contexts against a live relay and asserts what unit tests can't reach: both browsers derive an identical 60-digit safety number, `commit` precedes `pubkey` on the wire, the handshake advertises the current `PROTOCOL_VERSION`, every `msg` frame carries nothing but `type` and `payload`, and cover traffic keeps flowing while both sides sit idle.
 
@@ -161,13 +161,13 @@ Optionally set `ALLOWED_ORIGINS` on the relay (comma-separated) to restrict whic
 
 ## Project docs
 
-This repo keeps its reasoning, not just its code:
+This repo keeps its reasoning, not just its code — [docs/](docs/) has the full index. Highlights:
 
-- **`decisions.md`** — every non-obvious call and *why*, newest first. Including the ones we declined and the trade-offs we accepted.
-- **`progress.md`** — what was actually built, verified how, and what was left pending.
-- **`roadmap.md`** — phase order, current status, and the honest backlog.
-- **`docs/superpowers/specs/`** — design specs per feature, each with its own residuals section.
-- **`docs/superpowers/reviews/`** — the security review that drove much of the hardening above.
+- **[`docs/protocol.md`](docs/protocol.md)** — the wire protocol on one page: handshake, ratchet, sealed frames, cover traffic.
+- **[`SECURITY.md`](SECURITY.md)** — the threat model and its honest limits, up front.
+- **[`docs/specs/`](docs/specs/)** — design specs per feature, each with its own residuals section.
+- **[`docs/reviews/`](docs/reviews/)** — the security review that drove much of the hardening above.
+- **[`docs/devlog/`](docs/devlog/)** — the build's paper trail: every non-obvious decision and why, what shipped and how it was verified, and the original phase roadmap.
 
 Built for Hack Club Horizons Polaris (Toronto). Time tracked via Hackatime.
 
