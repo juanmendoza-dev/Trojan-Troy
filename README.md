@@ -4,35 +4,35 @@
 
 **Trojan Troy smuggles your conversations past everyone but the person you're talking to.**
 
-Text and voice messages encrypted end-to-end. A safety-number handshake so you know it's really them. A relay server that is *architecturally incapable* of reading a single word — not "promises not to," can't.
+Text and voice messages encrypted end to end. A safety number handshake so you know it's really them that you are talking to. A relay server that is *architecturally incapable* of reading a single word.
 
-🔗 **Live demo:** [trojan-troy.vercel.app](https://trojan-troy.vercel.app) — open it in two browsers, "Start a chat" in one, join with the code in the other. (The relay sleeps when idle — the first connection can take up to a minute to wake it.)
+**Live demo!!!! :** [trojan-troy.vercel.app](https://trojan-troy.vercel.app) ~ Invite ur friends or open it in two browsers (if you have no friends), "Start a chat" in one join with the code in the other. The relay sleeps when idle so the first connection that you make might be like really slow sorry about that :(  
 
 ---
 
 ## The one-sentence version
 
-Most "encrypted" chat apps ask you to trust their server. This one is built so that the server's honesty is irrelevant: it forwards opaque blobs it has no key for, and every design decision assumes it is actively hostile.
+Most "encrypted" chat apps ask you to trust their server. This one is built so that the server's honesty is irrelevant: it forwards opaque blobs it has no key. So basically chatting, but security at the forefront of the whole design 
 
 ## What the relay actually sees
 
-After the handshake, every single message — text, voice note, typing indicator, read receipt, shared profile — looks like **exactly this** on the wire:
+After the handshake every single message: text, voice note, typing indicator, read receipt, shared profile looks like **exactly this**:
 
 ```json
 { "type": "msg", "payload": "3q2+7wAAAAB...base64..." }
 ```
 
-That's it. There is no message type, no sender key, no counter, no length, no id. All of it — the channel, the message id, the voice mimeType, the receipt kind, the ratchet position, the sender's current ratchet key — is *inside* the encryption. Even the size is quantised into fixed buckets, and a steady stream of indistinguishable decoy frames flows whether or not anyone is typing.
+no message type, no sender key, no counter, no length, no id. All of it the channel, the message id, the voice mimeType, the receipt kind, the ratchet position, the sender's current ratchet key is *inside* the encryption. Even the size is quantised into fixed buckets, and a steady stream of indistinguishable decoy frames flows whether or not anyone is typing.
 
-A hostile relay learns: two peers are connected, roughly how long, and how many frames crossed. Nothing else.
+A hostile relay learns: two clients/peers are connected, roughly how long, and how many frames crossed. Nothing else.
 
 ---
 
 ## Security architecture
 
-Every primitive comes from an audited library — [libsodium](https://doc.libsodium.org/) (sumo build) and [@noble/post-quantum](https://github.com/paulmillr/noble-post-quantum) (Cure53-audited ML-KEM). **Zero hand-rolled cryptography.** Composition of audited primitives, never new ones.
+Every primitive comes from an audited library: [libsodium](https://doc.libsodium.org/) (sumo build) and [@noble/post-quantum](https://github.com/paulmillr/noble-post-quantum) (Cure53-audited ML-KEM). **Zero hand-rolled cryptography.** Composition of audited primitives, never new ones.
 
-### 1. Pairing — a post-quantum handshake that can't be steered
+### 1. Pairing: post-quantum handshake
 
 ```mermaid
 sequenceDiagram
@@ -51,7 +51,7 @@ sequenceDiagram
     Note over A,B: safety number = f(both pubkeys, RK₀)
 ```
 
-- **Hybrid post-quantum.** X25519 **and** ML-KEM-768 (NIST FIPS 203) secrets are both folded into the root key. The session stays safe unless *both* are broken — so traffic recorded today can't be decrypted by a future quantum computer ("harvest now, decrypt later"). This covers **everything on the wire**: as of v6 the non-ratcheted channels (presence, read receipts, shared profile) bind the root key too, rather than resting on X25519 alone.
+- **Hybrid post quantum.** X25519 **and** ML-KEM-768 (NIST FIPS 203) secrets are folded into the root key. The session stays safe unless *both* are broken so traffic recorded today can't be decrypted by a future quantum computer ("harvest now, decrypt later"). This covers **everything on the wire**: as of v6 the non ratcheted channels (presence, read receipts, shared profile) bind the root key too, rather than resting on X25519 alone.
 - **Commit-then-reveal (ZRTP-style).** Each side publishes a hash commitment to its ephemeral keys and reveals only after holding the peer's commitment. Neither side — nor a MITM relay — can choose its keys as a *function* of the other's.
 - **Transcript binding.** A canonical hash of the entire handshake (version, both public keys, KEM key and ciphertext) is folded into the root key. Tamper with any framing byte and the root key changes: the session fails closed *and* the safety-number digits change.
 - **Fails closed.** Strip the post-quantum material and the handshake aborts. There is no classical fallback path to downgrade into.
@@ -78,32 +78,32 @@ sequenceDiagram
 
 ---
 
-## Threat model — and what this does *not* protect you from
+## Threat model: and what this does *not* protect you from
 
-Security claims are only worth anything alongside their limits, so here are ours, plainly.
+Security claims are only worth anything alongside their limits, so here are ours plainly 😓😓😓.
 
-**Assumed hostile:** the relay operator, anyone on the network path, anyone who later records and stores the traffic (including with a quantum computer).
+**Assumed hostile:** the relay operator anyone on the network path, anyone who later records and stores the traffic, even with a quantum computer (uh oh) 
 
 **Honest residuals:**
 
 | Gap | Status |
 |---|---|
-| Safety-number verification isn't *enforced* — a user can proceed without comparing digits | Known, deliberate; the biggest real-world gap |
+| Safety number verification isn't *enforced*:  a user can proceed without comparing digits | Known, deliberate. the biggest real world gap |
 | The relay still learns a session exists, its duration, and its frame count | Inherent to any forwarding relay |
-| The per-step DH inside the ratchet is still X25519; post-quantum material folds in every ~30s, not per message | Per-step ML-KEM needs chunked key transmission (Signal's SPQR direction) |
+| The per-step DH inside the ratchet is still X25519; post-quantum material folds in every 30s, not per message | Per-step ML-KEM needs chunked key transmission (Signal's SPQR direction) |
 | Profile *names* are stored in the clear for the picker UI | Only avatars are sealed |
-| No PIN attempt backoff; a numeric PIN is low-entropy | A passphrase is the real fix |
+| No PIN attempt backoff. a numeric PIN is low entropy | A passphrase is the real fix |
 | A compromised *endpoint* sees everything | No crypto fixes a compromised device |
 
-If you find something we've mis-stated, that's a bug — file it.
+If you find something I have missed, please reach out to me! I'm genuinely super interested in this type of stuff (encryption/crypto), which is why I'm applying to Horizon Polaris + making this project opensource I want others to also learnnn! 
 
 ---
 
-## How it's verified
+## How its verified
 
-- **251 client tests + 31 server tests**, all on real modules — no mocked crypto.
-- Tests assert the *adversarial* cases, not just happy paths: a one-sided post-quantum fold **diverges** the session (proving the fold is load-bearing), a relabelled frame fails, a replayed frame drops, a tampered header leaves the session usable. Where a wrong-but-plausible implementation would pass, there's a test for that specifically — the v6 binding ships with a direction-separation test that fails if the two directions are ever collapsed into one key.
-- **A committed two-browser Playwright test** (`client/e2e/handshake.spec.ts`) drives two real browser contexts against a live relay and asserts what unit tests can't reach: both browsers derive an identical 60-digit safety number, `commit` precedes `pubkey` on the wire, the handshake advertises the current `PROTOCOL_VERSION`, every `msg` frame carries nothing but `type` and `payload`, and cover traffic keeps flowing while both sides sit idle.
+- **251 client tests + 31 server tests**, all on actual modules. no mocked crypto.
+- Tests assert the *adversarial* cases, not just happy paths: a one sided post quantum fold **diverges** the session (proving the fold is load bearing) a relabelled frame fails a replayed frame drops a tampered header leaves the session usable. Where a wrong but-plausible implementation would pass, there's a test for that specifically — the v6 binding ships with a direction-separation test that fails if the two directions are ever collapsed into one key.
+- **A committed twobrowser Playwright test** (`client/e2e/handshake.spec.ts`) drives two real browser contexts against a live relay and asserts what unit tests can't reach: both browsers derive an identical 60-digit safety number, `commit` precedes `pubkey` on the wire, the handshake advertises the current `PROTOCOL_VERSION`, every `msg` frame carries nothing but `type` and `payload`, and cover traffic keeps flowing while both sides sit idle.
 
 ```bash
 cd server && npm run dev          # the test needs a live relay
@@ -169,10 +169,4 @@ This repo keeps its reasoning, not just its code — [docs/](docs/) has the full
 - **[`docs/reviews/`](docs/reviews/)** — the security review that drove much of the hardening above.
 - **[`docs/devlog/`](docs/devlog/)** — the build's paper trail: every non-obvious decision and why, what shipped and how it was verified, and the original phase roadmap.
 
-Built for Hack Club Horizons Polaris (Toronto). Time tracked via Hackatime.
-
-## Hard constraints (every phase, no exceptions)
-
-1. **Never implement custom cryptographic primitives.** Audited libraries only.
-2. **The relay must be architecturally incapable of reading message content.** It inspects only `create` / `join`; everything else is forwarded verbatim.
-3. Live calling / true peer-to-peer is out of scope for this version.
+Built for Hack Club Horizons Polaris (Toronto). Time tracked via Hackatime. IM EXCITED FOR TORONTO!!!!!!!!
