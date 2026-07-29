@@ -60,9 +60,8 @@ Repeat until no ready PRs remain:
   keep going, don't silently pick a side.
 - **Never commit directly to `main`.** The pre-commit hook enforces this;
   merges via `gh pr merge` are the only thing that lands on `main`.
-- **Respect repo rules** in `AGENTS.md` — human authorship, signed commits
-  (satisfied automatically by GitHub's server-side merge), short commit
-  messages.
+- **Signed commits** (satisfied automatically by GitHub's server-side merge)
+  and short, plain commit messages.
 - **Stop and report** if `main` itself won't build after a merge, or if the
   same PR fails twice — don't loop forever.
 
