@@ -29,7 +29,7 @@ Most "encrypted" chat apps ask you to trust their server. This one is built so t
 <tr>
 <td width="50%" valign="top">
   <img src="docs/assets/gallery-hero.png" width="100%" alt="the main start a chat screen">
-  <p align="center"><sub>the front door. no accounts, no signup, just start a chat or join one</sub></p>
+  <p align="center"><sub>the front door. (in every language) </sub></p>
 </td>
 <td width="50%" valign="top">
   <img src="docs/assets/gallery-chat.png" width="100%" alt="a real encrypted conversation">
@@ -39,11 +39,11 @@ Most "encrypted" chat apps ask you to trust their server. This one is built so t
 <tr>
 <td width="50%" valign="top">
   <img src="docs/assets/gallery-safety.png" width="100%" alt="the shared safety number screen">
-  <p align="center"><sub>the safety number, compare the digits with ur friend then drag to seal the channel</sub></p>
+  <p align="center"><sub>the safety number compare the digits with ur friend then drag to seal the channel (see what I did there)</sub></p>
 </td>
 <td width="50%" valign="top">
   <img src="docs/assets/gallery-loading.png" width="100%" alt="the kinetic cipher handshake screen">
-  <p align="center"><sub>the handshake doing its post quantum thing</sub></p>
+  <p align="center"><sub>the handshake doing its post quantum thingy</sub></p>
 </td>
 </tr>
 <tr>
@@ -53,7 +53,7 @@ Most "encrypted" chat apps ask you to trust their server. This one is built so t
 </td>
 <td width="50%" valign="top">
   <img src="docs/assets/gallery-error.png" width="100%" alt="the peer disconnected error screen">
-  <p align="center"><sub>even getting disconnected is kinda nice here</sub></p>
+  <p align="center"><sub>even getting disconnected is kinda nice here ngl</sub></p>
 </td>
 </tr>
 </table>
