@@ -39,11 +39,11 @@ Or just open the [live demo](https://trojan-troy.vercel.app) yourself, invite ur
 <table>
 <tr>
 <td width="50%" valign="top">
-  <img src="docs/assets/placeholder-chat.svg" width="100%" alt="the chat">
+  <img src="docs/assets/chat.png" width="100%" alt="the chat">
   <p align="center"><sub>the app ur friend sees</sub></p>
 </td>
 <td width="50%" valign="top">
-  <img src="docs/assets/placeholder-wire.svg" width="100%" alt="the wire">
+  <img src="docs/assets/wire.png" width="100%" alt="the wire">
   <p align="center"><sub>the exact same conversation but how the relay sees it</sub></p>
 </td>
 </tr>
