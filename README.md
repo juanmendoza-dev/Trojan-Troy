@@ -1,16 +1,4 @@
-<!--
-  ─────────────────────────────────────────────────────────────────────────────
-  DRAFT — voice pass done (Juan's casual register, heavy mix, no em dashes).
-  Three sections are still marked "WRITE THIS" and have no source to condense
-  from — they need the real first-person stories before merging.
 
-  Editing notes, because GitHub fails silently on both of these:
-    • Do not touch the <table>, <td>, <img> or <details> lines. One unclosed
-      tag makes GitHub drop the whole block with no error.
-    • The blank lines after <div align="center"> and after </summary> are
-      load-bearing. Without them GitHub stops parsing markdown inside.
-  ─────────────────────────────────────────────────────────────────────────────
--->
 
 <div align="center">
 
@@ -149,12 +137,8 @@ Three chat themes (Apple, Iris Glass, Pulse Slate), a kinetic cipher handshake s
 
 ---
 
-## The bug I found in my own protocol
+## the no bueno
 
-<!-- WRITE THIS. Nothing below is your voice — it's assembled from
-     docs/devlog/progress.md. This section does more for the "human-written"
-     rule than anything else in the file, because no one can fake having
-     found it. Keep it first person and keep the reproduction step. -->
 
 While auditing the v5 wire format I noticed the presence, read receipt and shared profile channels were derived from the raw `crypto_kx` output, which meant they were **X25519 only**. No ML-KEM, no transcript binding, while the message ratchet correctly took both. So every claim I had written about post quantum protection quietly did not apply to three of my own channels (ouch).
 
