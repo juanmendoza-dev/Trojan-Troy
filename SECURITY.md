@@ -1,11 +1,10 @@
 # Security
 
-Trojan Troy is a hackathon project, built with the discipline of a real one:
+Trojan Troy is a hackathon project, built with security at the forefront of it: 
 every primitive comes from an audited library ([libsodium](https://doc.libsodium.org/),
 [@noble/post-quantum](https://github.com/paulmillr/noble-post-quantum)), and
-nothing cryptographic is hand-rolled. It has **not** had a formal external
-audit — treat it as a demonstration of a design, not a product to bet your
-safety on.
+nothing cryptographic is made by me (from scratch). It has **not** had a formal external/3rd party audit
+treat it as a proof of concept, not a product to bet ur life on.
 
 ## Threat model in five lines
 
@@ -24,5 +23,5 @@ safety on.
 
 ## Reporting
 
-Found something mis-stated or broken? Open a GitHub issue on this repo — a
-security claim we can't defend is a bug, and we'd rather know.
+If you found something, please report it! I would love to try to fix it!!!!
+or even better try to fix urself and I can add it to the repo 
