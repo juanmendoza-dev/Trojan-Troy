@@ -28,6 +28,16 @@ Most "encrypted" chat apps ask you to trust their server. This one is built so t
 <table>
 <tr>
 <td width="50%" valign="top">
+  <img src="docs/assets/gallery-hero.png" width="100%" alt="the main start a chat screen">
+  <p align="center"><sub>the front door. no accounts, no signup, just start a chat or join one</sub></p>
+</td>
+<td width="50%" valign="top">
+  <img src="docs/assets/gallery-chat.png" width="100%" alt="a real encrypted conversation">
+  <p align="center"><sub>a real conversation over the real relay. and yes bro it went in the gallery</sub></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
   <img src="docs/assets/gallery-safety.png" width="100%" alt="the shared safety number screen">
   <p align="center"><sub>the safety number, compare the digits with ur friend then drag to seal the channel</sub></p>
 </td>
@@ -44,6 +54,25 @@ Most "encrypted" chat apps ask you to trust their server. This one is built so t
 <td width="50%" valign="top">
   <img src="docs/assets/gallery-error.png" width="100%" alt="the peer disconnected error screen">
   <p align="center"><sub>even getting disconnected is kinda nice here</sub></p>
+</td>
+</tr>
+</table>
+
+and it all works on ur phone too:
+
+<table>
+<tr>
+<td width="33%" valign="top">
+  <img src="docs/assets/gallery-mobile-chat.png" width="100%" alt="the chat on a phone">
+  <p align="center"><sub>the chat, phone sized</sub></p>
+</td>
+<td width="33%" valign="top">
+  <img src="docs/assets/gallery-mobile-drawer.png" width="100%" alt="the mobile drawer with the data visualizers">
+  <p align="center"><sub>the drawer, visualizers and all</sub></p>
+</td>
+<td width="33%" valign="top">
+  <img src="docs/assets/gallery-mobile-waiting.png" width="100%" alt="the QR invite on a phone">
+  <p align="center"><sub>scan to join, thats the whole onboarding</sub></p>
 </td>
 </tr>
 </table>
