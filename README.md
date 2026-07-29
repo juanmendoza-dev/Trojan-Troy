@@ -217,9 +217,6 @@ cd client && npm run test:e2e
 
 ## Eleven days, 271 commits
 
-<!-- WRITE THIS. The table is accurate but it reads like a changelog.
-     What a judge wants is which of these was hard, what you got wrong the
-     first time, and what you cut. Dates are in docs/devlog/progress.md. -->
 
 | Phase | What shipped |
 |---|---|
@@ -235,9 +232,6 @@ cd client && npm run test:e2e
 
 ## How I worked
 
-<!-- WRITE THIS. Judges will see .claude/ in the tree, so say it plainly and
-     own it. The strongest version points at decisions.md as evidence of your
-     calls — especially the ones where you rolled back working code. -->
 
 I used Claude Code as an implementation partner the whole way through, and this repo keeps the paper trail instead of hiding it (its right there in the tree, `.claude/` and everything). [docs/devlog/decisions.md](docs/devlog/decisions.md) records every non obvious call and why I made it, including the ones where I rolled back working code, like retiring the persistent identity branch for device local profiles. The architecture decisions, the security direction and every scope call were mine.
 
@@ -299,6 +293,6 @@ This repo keeps its reasoning, not just its code, [docs/](docs/) has the full in
 2. **The relay must be architecturally incapable of reading message content.** It only looks at `create` / `join`, everything else gets forwarded verbatim.
 3. Live calling and true peer to peer are out of scope for this version (next time!)
 
-<sub>The name: a trojan gets past the wall by not looking like a threat. so does every frame this thing sends.</sub>
+<sub>love from miamiiiiii 💙</sub>
 
 <sub>MIT licensed.</sub>
