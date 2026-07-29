@@ -341,12 +341,6 @@ This repo keeps its reasoning, not just its code, [docs/](docs/) has the full in
 | Relay | Node + `ws`, in-memory only, **no database** |
 | Wire | JSON over WebSocket, `PROTOCOL_VERSION 6` |
 
-### Hard constraints, every phase, no exceptions
-
-1. **Never implement custom cryptographic primitives.** Audited libraries only.
-2. **The relay must be architecturally incapable of reading message content.** It only looks at `create` / `join`, everything else gets forwarded verbatim.
-3. Live calling and true peer to peer are out of scope for this version (next time!)
-
 <sub>love from miamiiiiii 💙</sub>
 
 <sub>MIT licensed.</sub>
